@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: oksland-arena
+    runtime: node
+    plan: free
+    buildCommand: echo "no build needed"
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: ADMIN_KEY
+        sync: false
