@@ -192,7 +192,7 @@ const SHOPX = COOP ? SHOP : SHOP_BATTLE;
 const STN = COOP ? STATIONS : [];
 const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
 let teamsOn = COOP;
-const blessed = p => teamsOn && p.team != null && teamSt[p.team].buffUntil > Date.now();
+const blessed = p => teamsOn && !!teamSt[p.team] && teamSt[p.team].buffUntil > Date.now();
 function collide(x, z, rad) {
   for (const o of OBS) {
     const dx = x - o[0], dz = z - o[1], d = Math.hypot(dx, dz), m = o[2] + rad;
@@ -236,7 +236,7 @@ const stat = p => ({
   atk: Math.round((10 + (p.lv - 1) * 4 + p.wpn * 5) * (blessed(p) ? 1.3 : 1)),
   def: 1 - (1 - p.arm * .06) * (blessed(p) ? .8 : 1),
   cdr: (p.helm || 0) * .08,
-  spd: 7.6 * (1 + (p.lv - 1) * .04) * (1 + (p.boot || 0) * .07) * (p.dashT > 0 ? 1.8 : 1) * (blessed(p) ? 1.1 : 1)
+  spd: 7.6 * (1 + (Math.min(p.lv, MAXLV) - 1) * .04) * (p.gm ? 1.15 : 1) * (1 + (p.boot || 0) * .07) * (p.dashT > 0 ? 1.8 : 1) * (blessed(p) ? 1.1 : 1)
 });
 function newPlayer(c, name) {
   const [x, z] = freeSpot(10);
@@ -245,18 +245,23 @@ function newPlayer(c, name) {
   p.hp = stat(p).maxHp;
   return p;
 }
+/* 운영자(선생님): 관리자 비밀번호로 입장 → Lv 100, 최고 장비, 순위·보스 인원 계산에서 빠짐 */
+const GM_LV = 100;
+function applyGM(p) { p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
+const live = () => [...players.values()].filter(p => online(p) && !p.gm);
 function resetPlayer(p) {
   p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
+  if (p.gm) applyGM(p);
 }
 
 /* ======================= teams & tasks ======================= */
-function teamCount(ti) { let n = 0; for (const p of players.values()) if (online(p) && p.team === ti) n++; return n; }
+function teamCount(ti) { let n = 0; for (const p of players.values()) if (online(p) && !p.gm && p.team === ti) n++; return n; }
 function pickTeam() { let best = 0, bn = 1e9; const order = [0, 1, 2, 3].sort(() => Math.random() - .5); for (const i of order) { const n = teamCount(i); if (n < bn) { bn = n; best = i; } } return best; }
 const teamGoal = ti => 4 + 3 * Math.max(1, teamCount(ti));
 const sameTeam = (a, b) => a && b && a !== b && (COOP || (teamsOn && a.team === b.team));
 function shuffleTeams() {
-  const list = [...players.values()].filter(online).sort(() => Math.random() - .5);
+  const list = live().sort(() => Math.random() - .5);
   list.forEach((p, i) => { p.team = i % 4; });
   for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
 }
@@ -292,8 +297,8 @@ function answerTask(p, a) {
   { const st = stat(p); p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .25); }
   let tl = null;
   if (teamsOn) {
-    const ts = teamSt[p.team]; ts.pts++; ts.tasks++;
-    if (ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team; ts.buffUntil = now + BLESS_MS;
+    const ts = teamSt[p.team] || { pts: 0, tasks: 0 }; ts.pts++; ts.tasks++;
+    if (teamSt[p.team] && ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team; ts.buffUntil = now + BLESS_MS;
       for (const q of players.values()) if (online(q) && q.team === p.team && q.lv < MAXLV) gainXp(q, xpNeed(q.lv) - q.xp);
       broadcast({ t: 'tlv', team: p.team, by: p.name, n: ts.lvups }); }
   }
@@ -308,7 +313,7 @@ function ev(o) { evq.push(o); }
 
 function cleanName(n) { return String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 14); }
 function rankList() {
-  return [...players.values()].filter(online).sort((a, b) => b.lv - a.lv || b.xp - a.xp || b.coins - a.coins || b.kills - a.kills);
+  return live().sort((a, b) => b.lv - a.lv || b.xp - a.xp || b.coins - a.coins || b.kills - a.kills);
 }
 let king = null;  // current #1 id
 function bountyOf(p) { return 30 + p.lv * 6 + p.streak * 15; }
@@ -346,20 +351,20 @@ function killPlayer(v, src) {
   const vLv = v.lv;
   const wasKing = king === v.id, bounty = wasKing ? bountyOf(v) : 0;
   // penalties: 30% coins dropped, one gear tier dropped, XP loss (may level down)
-  const lost = Math.floor(v.coins * .3); v.coins -= lost;
+  const lost = v.gm ? 0 : Math.floor(v.coins * .3); v.coins -= lost;
   if (lost > 0) { const n = Math.min(6, Math.max(1, Math.ceil(lost / 15))); for (let i = 0; i < n; i++) dropPick('coin', Math.floor(lost / n) + (i < lost % n ? 1 : 0), v.x, v.z); }
   let gearLost = null;
-  { // drop one tier of the best piece (weapon/armour first on ties)
+  if (!v.gm) { // drop one tier of the best piece (weapon/armour first on ties)
     let best = null; for (const k of ['wpn', 'arm', 'boot', 'helm']) if ((v[k] || 0) > 0 && (!best || v[k] > v[best])) best = k;
     if (best) { dropPick(best, v[best], v.x, v.z); gearLost = SLOTN[best][v[best]]; v[best]--; }
   }
-  let partLost = 0; if ((v.parts || 0) > 0) { v.parts--; partLost = 1; dropPick('part', 1, v.x, v.z); }
-  const xpLoss = Math.round(xpNeed(v.lv) * .4); let lvDown = false;
-  v.xp -= xpLoss; if (v.xp < 0) { if (v.lv > 1) { v.lv--; v.xp = Math.max(0, xpNeed(v.lv) + v.xp); lvDown = true; } else v.xp = 0; }
+  let partLost = 0; if (!v.gm && (v.parts || 0) > 0) { v.parts--; partLost = 1; dropPick('part', 1, v.x, v.z); }
+  const xpLoss = v.gm ? 0 : Math.round(xpNeed(v.lv) * .4); let lvDown = false;
+  v.xp -= xpLoss; if (!v.gm && v.xp < 0) { if (v.lv > 1) { v.lv--; v.xp = Math.max(0, xpNeed(v.lv) + v.xp); lvDown = true; } else v.xp = 0; }
   v.streak = 0;
   let killer = null, helpers = [];
   if (src && src.kind === 'p' && src.p.id !== v.id) {
-    killer = src.p; killer.kills++; if (teamsOn) teamSt[killer.team].kills++; killer.streak++; killer.best = Math.max(killer.best, killer.streak);
+    killer = src.p; killer.kills++; if (teamsOn && teamSt[killer.team]) teamSt[killer.team].kills++; killer.streak++; killer.best = Math.max(killer.best, killer.streak);
     gainXp(killer, 20 + vLv * 8); addCoins(killer, 10 + vLv * 3);
   }
   if (bounty) {
@@ -471,7 +476,7 @@ let boss = null, bossCd = 0, bossChk = 0;
 const bossStrikes = [];
 function spawnBoss(why) {
   if (boss && !boss.dead) return;
-  const n = Math.max(1, [...players.values()].filter(online).length), max = BOSS.hp0 + BOSS.hpPer * n;
+  const n = Math.max(1, live().length), max = BOSS.hp0 + BOSS.hpPer * n;
   let x = 0, z = -20; for (let i = 0; i < 30; i++) { const a = Math.random() * 6.28, d = 14 + Math.random() * 20; x = Math.cos(a) * d; z = Math.sin(a) * d; if (!OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + 4)) break; }
   const id = nextId++;
   boss = { id, type: 'boss', x, z, hp: max, max, dir: 0, wT: 0, atkCd: 2, hitT: 0, tgt: null, whT: 6, btT: 9, sum: 0, enr: false, dmgBy: new Map(), seen: new Map(), born: Date.now() };
@@ -521,7 +526,7 @@ function tickBossStrikes(now, alive) {
 /* ======================= 2부 협동 퀘스트 (다같이) ======================= */
 const QSTAGES = [null, { n: '발전기 수리', d: '과제 기계에서 과제를 다 함께 해내세요' }, { n: '매연 정화', d: '섬의 매연 몬스터를 다 함께 정화하세요' }, { n: '태풍 마수 토벌', d: '태풍 마수 돌개를 모두 힘을 합쳐 쓰러뜨리세요!' }, { n: '옥정섬 완전 복구!', d: '축하해요! 자유롭게 사냥하고 장비를 모으세요' }];
 const quest = { stage: 1, prog: 0, goal: 10 };
-function questGoal() { const n = Math.max(1, [...players.values()].filter(online).length); return quest.stage === 1 ? Math.max(8, n * 2) : quest.stage === 2 ? Math.max(15, n * 4) : 1; }
+function questGoal() { const n = Math.max(1, live().length); return quest.stage === 1 ? Math.max(8, n * 2) : quest.stage === 2 ? Math.max(15, n * 4) : 1; }
 function questReset() { quest.stage = 1; quest.prog = 0; }
 function questAdvance() {
   for (const p of players.values()) if (online(p)) { if (p.lv < MAXLV) gainXp(p, xpNeed(p.lv) - p.xp); addCoins(p, 40); p.parts = (p.parts || 0) + 1; }
@@ -616,7 +621,7 @@ function step(dt) {
   // boss trigger (1부: 레벨이 높아지면 / 2부: 퀘스트 3단계)
   bossChk -= dt;
   if (bossChk <= 0) { bossChk = 5;
-    const on = [...players.values()].filter(online);
+    const on = live();
     if (!COOP && !boss && now > bossCd && on.length >= 2 && on.filter(p => p.lv >= 10).length >= on.length * .5) spawnBoss('level');
     if (COOP && quest.stage === 3 && !boss && now > bossCd - 200000) spawnBoss('quest');
   }
@@ -655,7 +660,7 @@ function step(dt) {
 }
 function sendSnap(rl) {
   const t = Date.now();
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0), p.wpn, p.arm, p.team]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2)]);
@@ -667,12 +672,12 @@ function sendSnap(rl) {
     const p = c.pid && players.get(c.pid); if (!p) continue;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
     c.send(base);
   }
 }
 function sendBoard(rl) {
-  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: rl.map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0]) });
+  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: [...rl, ...[...players.values()].filter(p => online(p) && p.gm)].map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0, p.gm ? 1 : 0]) });
 }
 function endRound() {
   const rl = rankList();
@@ -705,6 +710,7 @@ function onConnect(c) {
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
+      if (code === ADMIN_KEY) applyGM(p);
       c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
       broadcast({ t: 'ro', joined: p.id, name });
       return;

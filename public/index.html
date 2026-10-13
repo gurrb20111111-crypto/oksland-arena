@@ -744,7 +744,7 @@ function renderMe() {
   $('#lvT').textContent = 'Lv ' + mp.lv; $('#lvr').style.setProperty('--xp', mp.lv >= 10 ? 100 : Math.round(s.xp / s.need * 100));
   $('#hpB').style.width = clamp(mp.hp / mp.max * 100, 0, 100) + '%'; $('#hpT').textContent = `${mp.hp}/${mp.max}`;
   $('#coinT').textContent = s.coins; $('#partT').textContent = s.parts || 0;
-  { const bt = $('#blessT'), T = TEAMS[s.team]; bt.hidden = !s.bless; if (s.bless && T) { bt.style.background = T.c; bt.textContent = `🌪 바람의 축복 ${s.bless}초 · 공격 +30% · 받는 피해 −20% · 속도 +10%`; } } $('#rankT').textContent = `#${s.rank} / ${s.n}`;
+  { const bt = $('#blessT'), T = TEAMS[s.team]; bt.hidden = !s.bless; if (s.bless && T) { bt.style.background = T.c; bt.textContent = `🌪 바람의 축복 ${s.bless}초 · 공격 +30% · 받는 피해 −20% · 속도 +10%`; } } $('#rankT').textContent = s.gm ? '🛡 운영자' : `#${s.rank} / ${s.n}`;
   $('#bntT').hidden = !s.bounty; if (s.bounty) $('#bntT').textContent = `👑 현상금 ${s.bounty}`;
   $('#gearT').textContent = [GEARN[s.wpn], ARMN[s.arm], SHOP && s.boot ? SHOP.boot.names[s.boot] : '', SHOP && s.helm ? SHOP.helm.names[s.helm] : ''].filter(Boolean).join(' · ');
   if (s.pot != null) { $('#potN').textContent = s.potCd ? `${s.pot}(${s.potCd})` : s.pot; $('#bPot').disabled = !s.pot; }
@@ -767,8 +767,8 @@ function renderMe() {
 }
 function renderLb() {
   const dot = r => teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : '';
-  const rows = lb.slice(0, 6).map((r, i) => `<div class="lbr ${r[0] === myId ? 'me2' : ''}"><span>${r[0] === king ? '👑' : i + 1}</span><span class="n">${dot(r)}${esc(r[1])}</span><span class="l">Lv${r[2]}</span><span class="c">${r[3]}</span></div>`).join('');
-  const myIdx = lb.findIndex(r => r[0] === myId);
+  const rows = lb.filter(r => !r[12]).slice(0, 6).map((r, i) => `<div class="lbr ${r[0] === myId ? 'me2' : ''}"><span>${r[0] === king ? '👑' : i + 1}</span><span class="n">${dot(r)}${esc(r[1])}</span><span class="l">Lv${r[2]}</span><span class="c">${r[3]}</span></div>`).join('');
+  const myIdx = lb.findIndex(r => r[0] === myId && !r[12]);
   $('#lbL').innerHTML = rows + (myIdx >= 6 ? `<div class="lbr me2"><span>${myIdx + 1}</span><span class="n">${esc(lb[myIdx][1])}</span><span class="l">Lv${lb[myIdx][2]}</span><span class="c">${lb[myIdx][3]}</span></div>` : '');
   $('#lbN').textContent = lb.length + '명';
   if (!$('#modal').hidden && $('#mCard').dataset.kind === 'rank') openRank();
@@ -854,7 +854,7 @@ function openTask(m) {
 }
 function openRank() {
   const ts = teamsOn && TEAMS.length ? `<div class="tstand">${TEAMS.map((T, i) => { const t = teamInfo[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점<small>${t.n}명 · 과제 ${t.tasks} · 처치 ${t.kills} · 레벨 업 ${t.lvups}<br>게이지 ${t.pts}/${t.goal}${t.bless ? ` · 🌪축복 ${t.bless}초` : ''}</small></div>`; }).join('')}</div>` : '';
-  const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
+  const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[12] ? '🛡' : r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
   openModal('rank', `<h2>순위</h2>${ts ? `<p style="font-size:13px">팀 점수 = 과제 ×3 + 처치 ×1 + 팀 레벨 업 ×10 · 결승 라운드가 끝나면 점수가 가장 높은 팀이 우승!</p>${ts}` : ''}<p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="gfxB">그래픽: ${GFX === 'high' ? '고급' : '가볍게'}</button><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal); $('#gfxB').addEventListener('click', () => { setGfx(GFX === 'high' ? 'low' : 'high'); openRank(); });
 }
@@ -941,7 +941,7 @@ function loop(now) {
     moving = alive && ml > .05;
     sendT -= dt; const key = mx.toFixed(2) + ',' + mz.toFixed(2);
     if (key !== lastSent || sendT <= 0) { send({ t: 'in', mx: +mx.toFixed(2), mz: +mz.toFixed(2) }); lastSent = key; sendT = .25; }
-    if (moving) { const spd = 7.6 * (1 + (mp.lv - 1) * .04) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1); [local.x, local.z] = collideLocal(local.x + mx * spd * dt, local.z + mz * spd * dt, .45); local.dir = Math.atan2(mx, mz); }
+    if (moving) { const spd = 7.6 * (1 + (Math.min(mp.lv, 15) - 1) * .04) * (mp.f & 128 ? 1.15 : 1) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1); [local.x, local.z] = collideLocal(local.x + mx * spd * dt, local.z + mz * spd * dt, .45); local.dir = Math.atan2(mx, mz); }
     // players
     for (const [id, o] of PL) {
       if (id === myId && !mp) continue;
@@ -960,7 +960,7 @@ function loop(now) {
       o.aura.visible = !!(e.f & 64); if (e.f & 64) { o.aura.material.color.set(tc || '#FFFFFF'); o.aura.rotation.y += dt * 2; o.aura.material.opacity = .18 + .1 * Math.sin(clockT * 6); }
       o.ring.material.color.set(e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc;
       const nm = names.get(id) || (id === myId ? me.name : '');
-      drawTag(o.tag, `${e.f & 32 ? '⚙ ' : ''}Lv${e.lv} ${nm}`, e.hp, e.max, e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
+      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 32 ? '⚙ ' : ''}Lv${e.lv} ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0, e.z);
