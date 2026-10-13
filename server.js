@@ -323,6 +323,47 @@ function startTask(p) {
   p.task = { sid: t.id, type: t.type, ans, at: now };
   p.c && p.c.send({ t: 'task', sid: t.id, type: t.type, name: TASKN[t.type], q });
 }
+/* ======================= 보물 상자 이벤트 ======================= */
+const CHEST = { every: 150, fall: 6, life: 60, open: 3, r: 2.4 };
+let chest = null, chestT = 45;
+function dropChest(why) {
+  if (chest) return;
+  let x = 0, z = 20, y = 0;
+  if (Math.random() < .35) { const st = STRUCTS[Math.floor(Math.random() * STRUCTS.length)], [x0, x1, z0, z1, h] = st.plat; x = (x0 + x1) / 2; z = (z0 + z1) / 2; y = h; }
+  else for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = 10 + Math.random() * (zoneR() * .8 - 10); x = Math.cos(a) * d; z = Math.sin(a) * d; if (OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + 2) || onStruct(x, z, 1.5) || SHOPS.some(q => Math.hypot(q.x - x, q.z - z) < 8)) continue; break; }
+  const now = Date.now();
+  chest = { id: nextId++, x: +x.toFixed(2), z: +z.toFixed(2), y, landAt: now + CHEST.fall * 1000, expireAt: now + (CHEST.fall + CHEST.life) * 1000, opener: null, openAt: 0 };
+  broadcast({ t: 'chest', s: 'drop', x: chest.x, z: chest.z, y, high: y > 0, why });
+}
+function startOpen(p) {
+  const now = Date.now();
+  if (!chest || now < chest.landAt || !p.alive) return;
+  if (Math.hypot(p.x - chest.x, p.z - chest.z) > CHEST.r || Math.abs((p.y || 0) - chest.y) > 1.2) return tell(p, '보물 상자 가까이 가야 열 수 있어요.');
+  if (chest.opener && chest.opener !== p.id && players.get(chest.opener) && players.get(chest.opener).alive) return tell(p, '다른 사람이 상자를 열고 있어요! 공격해서 막아 보세요.');
+  chest.opener = p.id; chest.openAt = now; p.lastHurtAtOpen = p.lastHurt;
+  ev({ k: 'fx', s: 'chestopen', id: p.id, x: chest.x, z: chest.z });
+}
+function tickChest(dt, now) {
+  chestT -= dt;
+  if (!chest && chestT <= 0) { chestT = CHEST.every; if (live().length) dropChest('auto'); }
+  if (!chest) return;
+  if (now > chest.expireAt) { broadcast({ t: 'chest', s: 'gone' }); chest = null; return; }
+  if (chest.opener) {
+    const p = players.get(chest.opener);
+    const ok = p && p.alive && online(p) && Math.hypot(p.x - chest.x, p.z - chest.z) <= CHEST.r + .4 && p.lastHurt === p.lastHurtAtOpen;
+    if (!ok) { if (p && p.c) p.c.send({ t: 'msg', s: '상자 열기가 끊겼어요! 다시 시도하세요.' }); chest.opener = null; return; }
+    if (now - chest.openAt >= CHEST.open * 1000) {
+      const coins = 90 + Math.floor(Math.random() * 61); addCoins(p, coins);
+      const slots = ['wpn', 'arm', 'boot', 'helm'].filter(k => (p[k] || 0) < (k === 'wpn' || k === 'arm' ? 4 : 3)); let gear = null;
+      if (slots.length) { const k = slots[Math.floor(Math.random() * slots.length)]; p[k] = (p[k] || 0) + 1; gear = SLOTN[k][p[k]]; if (k === 'arm') p.hp += 22; }
+      p.pot = Math.min(POT.max, (p.pot || 0) + 1); if (COOP) p.parts = (p.parts || 0) + 3;
+      p.hp = stat(p).maxHp;
+      broadcast({ t: 'chest', s: 'open', by: p.name, id: p.id, coins, gear, x: chest.x, z: chest.z });
+      ev({ k: 'fx', s: 'bossdie', x: chest.x, z: chest.z });
+      chest = null;
+    }
+  }
+}
 function cancelTask(p, why) { if (!p.task) return; p.task = null; p.c && p.c.send({ t: 'tx', s: why || '' }); }
 function answerTask(p, a) {
   const tk = p.task; if (!tk) return;
@@ -695,6 +736,7 @@ function step(dt) {
     if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, def.dmg, { kind: 'm', m }); }
   }
   tickBossStrikes(now, alive);
+  tickChest(dt, now);
   // boss trigger (1부: 레벨이 높아지면 / 2부: 퀘스트 3단계)
   bossChk -= dt;
   if (bossChk <= 0) { bossChk = 5;
@@ -744,7 +786,7 @@ function sendSnap(rl) {
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);
-  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
+  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
   const rankOf = new Map(rl.map((p, i) => [p.id, i + 1]));
   for (const c of conns) {
     if (!c.open) continue;
@@ -809,6 +851,7 @@ function onConnect(c) {
     else if (msg.t === 'buy') { if (msg.s === 'pot') buyPot(p); else if (SHOPX[msg.s]) buy(p, msg.s, msg.v); }
     else if (msg.t === 'pot') drinkPot(p);
     else if (msg.t === 'task') startTask(p);
+    else if (msg.t === 'open') startOpen(p);
     else if (msg.t === 'job') changeJob(p, String(msg.job));
     else if (msg.t === 'ans') answerTask(p, msg.a);
     else if (msg.t === 'tcancel') cancelTask(p);
@@ -820,13 +863,14 @@ function adminCmd(c, msg) {
     const min = Math.max(2, Math.min(30, +msg.min || 10));
     for (const p of players.values()) resetPlayer(p);
     for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
-    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0; boss = null; bossStrikes.length = 0; bossCd = 0; if (COOP) questReset();
+    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0; chest = null; chestT = 45; boss = null; bossStrikes.length = 0; bossCd = 0; if (COOP) questReset();
     round.phase = 'play'; round.len = min * 60; round.endsAt = Date.now() + min * 60000;
     broadcast({ t: 'round', s: `${min}분 결승 라운드 시작! 모두 Lv 1부터 다시 시작해요. 마지막에는 바람의 벽이 좁혀져요.` });
   } else if (msg.c === 'stop') { if (round.phase === 'play') endRound(); }
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
   else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) questReset(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
   else if (msg.c === 'boss') { bossCd = 0; spawnBoss('teacher'); }
+  else if (msg.c === 'chest') { if (chest) { broadcast({ t: 'chest', s: 'gone' }); chest = null; } dropChest('teacher'); }
   else if (msg.c === 'qreset') { questReset(); broadcast({ t: 'quest', s: 'reset', stage: 1, name: QSTAGES[1].n, desc: QSTAGES[1].d }); }
   else if (msg.c === 'qnext') { if (COOP && quest.stage < 4) questAdvance(); }
   else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }

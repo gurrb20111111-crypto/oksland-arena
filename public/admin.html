@@ -68,7 +68,8 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
     <div class="panel">
       <h2>레이드 보스 · 협동 퀘스트</h2>
       <div id="bossBox" class="muted" style="font-size:16px;margin-bottom:8px">보스 없음</div>
-      <div class="rowx"><button class="btn r" id="bossGo">🌪 태풍 마수 돌개 소환</button></div>
+      <div class="rowx"><button class="btn r" id="bossGo">🌪 태풍 마수 돌개 소환</button><button class="btn" id="chestGo">📦 보물 상자 떨어뜨리기</button></div>
+      <p class="muted">보물 상자는 2분 30초마다 자동으로 섬 어딘가(가끔 건물 위)에 떨어져요. 3초 동안 열면 코인 90~150 · 장비 1단계 · 회복 음료 · 체력 가득. 여는 중에 맞으면 끊겨요.</p>
       <p class="muted" id="bossHelp">1부: 접속자 절반 이상이 Lv 10이 되면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원. 지금 바로 부르려면 위 버튼.</p>
       <div id="questBox" hidden>
         <div class="addr" id="qTxt" style="font-size:20px;color:#FFD45A"></div>
@@ -126,6 +127,7 @@ function renderBQ(m) {
   $('#bossBox').innerHTML = m.bs ? `<b style="color:#FF8A7A;font-size:22px">🌪 돌개 체력 ${m.bs[1].toLocaleString()} / ${m.bs[2].toLocaleString()}${m.bs[3] ? ' · 분노!' : ''}</b>` : '보스 없음';
   $('#questBox').hidden = !m.q; if (m.q) $('#qTxt').textContent = `협동 퀘스트 ${QN[m.q[0]]}${m.q[0] <= 2 ? ` · ${m.q[1]} / ${m.q[2]}` : ''}`;
 }
+$('#chestGo').addEventListener('click', () => cmd({ c: 'chest' }));
 $('#bossGo').addEventListener('click', () => { if (confirm('레이드 보스 태풍 마수 돌개를 지금 소환할까요?')) cmd({ c: 'boss' }); });
 $('#qNext').addEventListener('click', () => { if (confirm('협동 퀘스트를 다음 단계로 넘길까요? (모두 보상을 받아요)')) cmd({ c: 'qnext' }); });
 $('#qReset').addEventListener('click', () => { if (confirm('협동 퀘스트를 1단계부터 다시 시작할까요?')) cmd({ c: 'qreset' }); });
