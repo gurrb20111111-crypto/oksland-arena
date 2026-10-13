@@ -699,7 +699,7 @@ function onConnect(c) {
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
-      if (gate && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d), SALT) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
+      if (gate && code !== ADMIN_KEY && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d), SALT) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
       const same = [...players.values()].find(p => p.name === name && !online(p));
       if (same) players.delete(same.id);
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }

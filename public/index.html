@@ -168,7 +168,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
     <h1 id="jTitle">클리어 <em>아레나</em></h1>
     <p>옥정섬을 구한 기술자들만 들어올 수 있는 대결의 섬. 매연 몬스터를 정화하고, 서로 겨루고, <b style="color:#FFD45A">1등을 함께 쓰러뜨려</b> 현상금을 나눠 가지세요!</p>
     <label>이름 <small style="font-weight:500;opacity:.75">· 클리어 화면에 나온 이름 그대로</small><input id="jName" maxlength="14" autocomplete="off" placeholder="예: 2-8 김옥정"></label>
-    <label>입장 코드 <small style="font-weight:500;opacity:.75" id="jCodeHint">· 클리어 화면의 숫자 4자리</small><input id="jCode" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000"></label>
+    <label>입장 코드 <small style="font-weight:500;opacity:.75" id="jCodeHint">· 클리어 화면의 숫자 4자리</small><input id="jCode" maxlength="24" autocomplete="off" placeholder="0000"></label>
     <div class="err" id="jErr"></div>
     <button class="btn" id="jGo">입장하기</button>
     <div class="rules" id="jRules">· <b>4개 팀</b>으로 자동으로 나뉘어요. 같은 팀은 서로 공격되지 않아요. 섬 곳곳의 <b>과제 기계(!)</b>에서 미션을 성공하면 경험치·코인을 받고, 팀 게이지가 가득 차면 <b>팀 모두 레벨 업 + 바람의 축복</b>! 좋은 장비에 필요한 <b>부품 ⚙</b>도 과제에서만 나와요.<br>· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨이 오를수록 새 스킬이 열려요. Lv 8이면 스킬 8개 모두!</div>
@@ -244,12 +244,18 @@ if (ROOM2) {
   $('#jTitle').innerHTML = '클리어 아레나 <em>1부 대결</em>';
   $('#jRules').innerHTML = '· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨 10이 넘는 친구가 많아지면 <b>레이드 보스 태풍 마수 돌개</b>가 나타나요. 힘을 합쳐 쓰러뜨리세요!';
 }
+let joinTries = 0;
 function connect(join) {
   const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (ROOM2 ? '/ws2' : '/ws');
   ws = new WebSocket(url);
   ws.onopen = () => ws.send(JSON.stringify(join));
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (er) { return; } onMsg(m); };
-  ws.onclose = () => { if (me) { toast('연결이 끊겼어요. 다시 연결하는 중…', 4000); setTimeout(() => connect({ t: 'join', tok: localStorage.getItem(LS('arena-tok')) || '', name: me.name, code: $('#jCode').value }), 1500); } else $('#jErr').textContent = '서버에 연결할 수 없어요. 주소를 확인해 주세요.'; };
+  let opened = false; ws.addEventListener('open', () => { opened = true; joinTries = 0; });
+  ws.onclose = ev => {
+    if (me) { toast('연결이 끊겼어요. 다시 연결하는 중…', 4000); setTimeout(() => connect({ t: 'join', tok: localStorage.getItem(LS('arena-tok')) || '', name: me.name, code: $('#jCode').value }), 1500); return; }
+    if (!opened && joinTries < 4) { joinTries++; $('#jErr').textContent = `서버를 깨우는 중이에요… (${joinTries}/4) 잠시만 기다려 주세요.`; setTimeout(() => connect(join), 2500 * joinTries); return; }
+    $('#jErr').innerHTML = opened ? '연결이 끊겼어요. 다시 [입장하기]를 눌러 주세요.' : `서버에 연결할 수 없어요 (코드 ${ev.code}).<br><small>학교 와이파이가 실시간 연결(WebSocket)을 막고 있을 수 있어요. 휴대폰 데이터로도 해 보세요.</small>`; joinTries = 0;
+  };
 }
 $('#jGo').addEventListener('click', () => {
   const name = $('#jName').value.trim(), code = $('#jCode').value.trim();
