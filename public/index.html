@@ -273,13 +273,13 @@ const canvas = $('#gl');
 const COARSE = matchMedia('(pointer: coarse)').matches;
 let GFX = 'high'; try { GFX = localStorage.getItem('arena-gfx') || 'high'; } catch (e) { /* ignore */ }
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX === 'high' ? (COARSE ? 1.5 : 2) : 1));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX === 'high' ? (COARSE ? 1.25 : 2) : 1));
 renderer.shadowMap.enabled = GFX === 'high'; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#CFE5EE'); scene.fog = new THREE.Fog('#CFE5EE', 95, 330);
 const camera = new THREE.PerspectiveCamera(55, 1, .1, 900);
 const hemi = new THREE.HemisphereLight('#DCEFFF', '#56704A', .78); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#FFF0D6', .9); sun.position.set(40, 70, 30);
-sun.castShadow = true; sun.shadow.mapSize.set(COARSE ? 1024 : 2048, COARSE ? 1024 : 2048);
+sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.autoUpdate = true;
 Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 200 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .04;
 scene.add(sun, sun.target);
 const LMAT = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: .86, metalness: 0, flatShading: true }, o));
@@ -298,7 +298,7 @@ function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h
 addEventListener('resize', resize); resize();
 function setGfx(v, auto) {
   GFX = v; try { localStorage.setItem('arena-gfx', v); } catch (e) { /* ignore */ }
-  renderer.shadowMap.enabled = v === 'high'; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, v === 'high' ? (COARSE ? 1.5 : 2) : 1)); resize();
+  renderer.shadowMap.enabled = v === 'high'; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, v === 'high' ? (COARSE ? 1.25 : 2) : 1)); resize();
   scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { m.needsUpdate = true; }); } });
   for (const g of GRASS) g.visible = v === 'high';
   if (auto) toast('화면이 조금 느려서 그래픽을 <b>가볍게</b>로 바꿨어요. 순위(Tab) 창에서 다시 바꿀 수 있어요.', 4200);
@@ -410,7 +410,7 @@ function buildWorld() {
   }
   /* grass tufts & flowers (skip paths, obstacles, shop, stations) */
   { const r = rng(11), tufts = [], flowers = [];
-    for (let i = 0; i < 9000 && tufts.length + flowers.length < 1400; i++) {
+    for (let i = 0; i < 9000 && tufts.length + flowers.length < (COARSE ? 800 : 1400); i++) {
       const a = r() * TAU, d = Math.sqrt(r()) * (R - 3), x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (d < SHOP_R + 1.5 || pathD(x, z) < 1.9) continue;
       if (OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + .6)) continue;
@@ -628,7 +628,7 @@ const PL = new Map(), MO = new Map(), PK = new Map(), PJ = new Map();
 const local = { x: 0, z: 0, dir: 0, init: false };
 function interp(id, kind) {
   // returns interpolated [x,z,dir] of entity at render time from snapshot buffer
-  const rt = performance.now() - 120;
+  const rt = performance.now() - interpDelay;
   let a = null, b = null;
   for (let i = snaps.length - 1; i >= 0; i--) { if (snaps[i].at <= rt) { a = snaps[i]; b = snaps[i + 1] || null; break; } }
   if (!a) a = snaps[0];
@@ -676,8 +676,10 @@ function onMsg(m) {
   if (m.t === 'teams') { teamsOn = m.teamsOn; if (m.s) toast('<b>' + esc(m.s) + '</b>', 4000); return; }
   if (m.t === 'end') return showEnd(m.top, m.teams);
 }
+let interpDelay = 120, lastArr = 0, jit = 0;
 function onSnap(m) {
   const at = performance.now();
+  if (lastArr) { const gap = at - lastArr; jit = jit * .9 + Math.abs(gap - 100) * .1; interpDelay = Math.max(110, Math.min(260, 105 + jit * 2.5)); } lastArr = at;
   const s = { at, P: new Map(), M: new Map(), J: new Map(), K: new Map() };
   for (const p of m.P) s.P.set(p[0], { x: p[1], z: p[2], dir: p[3], hp: p[4], max: p[5], lv: p[6], f: p[7], wpn: p[8], arm: p[9], team: p[10] });
   for (const q of m.M) s.M.set(q[0], { type: q[1], x: q[2], z: q[3], dir: q[4], hp: q[5], max: q[6] });
@@ -922,7 +924,7 @@ function collideLocal(x, z, rad) {
   for (const o of OBS) { const dx = x - o[0], dz = z - o[1], d = Math.hypot(dx, dz), m = o[2] + rad; if (d < m && d > 1e-4) { x = o[0] + dx / d * m; z = o[1] + dz / d * m; } }
   const d = Math.hypot(x, z), lim = R - 1.2; if (d > lim) { x *= lim / d; z *= lim / d; } return [x, z];
 }
-let fpsT = 0, fpsN = 0, fpsDone = false;
+let fpsT = 0, fpsN = 0, fpsDone = false, fpsChecks = 0;
 let lastT = performance.now(), sendT = 0, lastSent = '', clockT = 0;
 const mmc = $('#mm').getContext('2d');
 function loop(now) {
@@ -982,7 +984,7 @@ function loop(now) {
   } else { const a = clockT * .05; camera.position.set(Math.sin(a) * 90, 50, Math.cos(a) * 90); camera.lookAt(0, 0, 0); }
   for (const r of turbines) r.rotation.z -= dt * 1.2;
   waterU.uTime.value = clockT; clouds.rotation.y += dt * .004;
-  fpsT += dt; fpsN++; if (!fpsDone && me && fpsT > 5) { fpsDone = true; if (fpsN / fpsT < 26 && GFX === 'high') setGfx('low', true); } if (!me) { fpsT = 0; fpsN = 0; }
+  fpsT += dt; fpsN++; if (!fpsDone && me && fpsT > 4) { const f = fpsN / fpsT; fpsT = 0; fpsN = 0; fpsChecks++; if (f < 40 && GFX === 'high') { setGfx('low', true); fpsDone = true; } else if (fpsChecks >= 3) fpsDone = true; } if (!me) { fpsT = 0; fpsN = 0; }
   tickFx(dt);
   renderer.render(scene, camera);
 }
