@@ -46,7 +46,7 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
 <body>
 <div class="login" id="login">
   <div class="lc">
-    <h1>아레나 관리 · TV 순위판</h1>
+    <h1 id="aTitle">아레나 관리 · TV 순위판</h1>
     <p class="muted">서버 창에 나온 관리자 비밀번호를 적어 주세요.</p>
     <input id="key" autocomplete="off" placeholder="비밀번호">
     <div id="err" style="color:#FFB3A8;font-weight:700"></div>
@@ -64,6 +64,16 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
       <h2>학생 접속 주소</h2>
       <div id="addr" class="addr"></div>
       <p class="muted">학생 태블릿이 이 컴퓨터와 같은 와이파이에 있어야 해요. 클라우드에 올렸다면 그 주소를 쓰세요.</p>
+    </div>
+    <div class="panel">
+      <h2>레이드 보스 · 협동 퀘스트</h2>
+      <div id="bossBox" class="muted" style="font-size:16px;margin-bottom:8px">보스 없음</div>
+      <div class="rowx"><button class="btn r" id="bossGo">🌪 태풍 마수 돌개 소환</button></div>
+      <p class="muted" id="bossHelp">1부: 접속자 절반 이상이 Lv 10이 되면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원. 지금 바로 부르려면 위 버튼.</p>
+      <div id="questBox" hidden>
+        <div class="addr" id="qTxt" style="font-size:20px;color:#FFD45A"></div>
+        <div class="rowx" style="margin-top:8px"><button class="btn g" id="qNext">다음 단계로 넘기기</button><button class="btn g" id="qReset">퀘스트 처음부터</button></div>
+      </div>
     </div>
     <div class="panel">
       <h2>라운드</h2>
@@ -89,18 +99,20 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
 (() => {
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ROOM2 = /\/(admin|tv)2\/?$/.test(location.pathname);
+document.title = ROOM2 ? '2부 협동 아레나 관리' : '1부 대결 아레나 관리';
 const GEAR = ['맨손', '스패너', '토크 렌치', '돌풍 해머', '태풍 블레이드'], ARM = ['작업복', '작업 조끼', '방풍 재킷', '탄소섬유 슈트', '태풍 갑옷'];
 let ws, R = 62, OBS = [], lb = [], king = null, last = null, TEAMS = [], STN = [], teams = [], teamsOn = true;
 const qk = new URLSearchParams(location.search).get('key'); if (qk) $('#key').value = qk;
 function go() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (ROOM2 ? '/ws2' : '/ws'));
   ws.onopen = () => ws.send(JSON.stringify({ t: 'admin', key: $('#key').value.trim() }));
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
-    if (m.t === 'adminok') { R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(esc).join('<br>'); return; }
+    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
     if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
-    if (m.t === 's') { last = m; const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
+    if (m.t === 's') { last = m; renderBQ(m); const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
     if (m.t === 'code') { $('#code').textContent = m.code; return; }
   };
   ws.onclose = () => { $('#err').textContent = '연결이 끊겼어요. 새로고침해 주세요.'; $('#login').hidden = false; $('#main').hidden = true; };
@@ -108,6 +120,14 @@ function go() {
 $('#go').addEventListener('click', go); $('#key').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 if (qk) go();
 const cmd = o => ws && ws.send(JSON.stringify({ t: 'cmd', ...o }));
+const QN = ['', '① 발전기 수리 (과제)', '② 매연 정화 (몬스터)', '③ 태풍 마수 토벌 (보스)', '🎉 옥정섬 완전 복구!'];
+function renderBQ(m) {
+  $('#bossBox').innerHTML = m.bs ? `<b style="color:#FF8A7A;font-size:22px">🌪 돌개 체력 ${m.bs[1].toLocaleString()} / ${m.bs[2].toLocaleString()}${m.bs[3] ? ' · 분노!' : ''}</b>` : '보스 없음';
+  $('#questBox').hidden = !m.q; if (m.q) $('#qTxt').textContent = `협동 퀘스트 ${QN[m.q[0]]}${m.q[0] <= 2 ? ` · ${m.q[1]} / ${m.q[2]}` : ''}`;
+}
+$('#bossGo').addEventListener('click', () => { if (confirm('레이드 보스 태풍 마수 돌개를 지금 소환할까요?')) cmd({ c: 'boss' }); });
+$('#qNext').addEventListener('click', () => { if (confirm('협동 퀘스트를 다음 단계로 넘길까요? (모두 보상을 받아요)')) cmd({ c: 'qnext' }); });
+$('#qReset').addEventListener('click', () => { if (confirm('협동 퀘스트를 1단계부터 다시 시작할까요?')) cmd({ c: 'qreset' }); });
 $('#start').addEventListener('click', () => { if (confirm('모두 Lv 1로 다시 시작해요. 결승 라운드를 시작할까요?')) cmd({ c: 'start', min: +$('#min').value }); });
 $('#stop').addEventListener('click', () => cmd({ c: 'stop' }));
 $('#free').addEventListener('click', () => cmd({ c: 'free' }));

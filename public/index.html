@@ -44,6 +44,15 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 .bnty{background:rgba(255,107,90,.22);color:#FFB3A8;border-radius:999px;padding:1px 8px}
 .top{position:absolute;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);border-radius:999px;padding:7px 16px;font-weight:800;font-size:14px;white-space:nowrap}
 .top.warn{background:rgba(150,40,120,.7)}
+.raid{position:absolute;left:50%;top:calc(56px + env(safe-area-inset-top));transform:translateX(-50%);width:min(560px,calc(100vw - 420px));min-width:260px;border-radius:16px;padding:8px 14px 10px;background:rgba(40,8,24,.72);border:1px solid rgba(255,120,120,.35);text-align:center}
+.raid b{font-size:16px;color:#FFD7D0;letter-spacing:.02em}.raid small{font:700 12px var(--mono);color:#FFB3A8;margin-left:6px}
+.raid .rb{height:12px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}.raid .rb i{display:block;height:100%;background:linear-gradient(90deg,#FF4D3D,#FFB020);transition:width .2s}
+.raid.enr{animation:enr .6s ease-in-out infinite alternate}@keyframes enr{to{box-shadow:0 0 24px rgba(255,60,40,.7)}}
+.qbar{position:absolute;left:50%;top:calc(52px + env(safe-area-inset-top));transform:translateX(-50%);width:min(520px,calc(100vw - 420px));min-width:250px;border-radius:16px;padding:8px 14px 10px;text-align:center}
+.qbar b{font-size:15px}.qbar small{display:block;font-size:12px;color:#CFE3E1;margin-top:2px}
+.qbar .qb{height:9px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:6px}.qbar .qb i{display:block;height:100%;background:linear-gradient(90deg,#5FF0D8,#FFC21A);transition:width .3s}
+.qsteps{display:flex;justify-content:center;gap:6px;margin-bottom:4px}.qsteps span{width:26px;height:6px;border-radius:9px;background:rgba(255,255,255,.2)}.qsteps span.on{background:#FFC21A}.qsteps span.done{background:#5FF0D8}
+@media (max-width:760px){.raid,.qbar{left:calc(12px + env(safe-area-inset-left));transform:none;top:calc(186px + env(safe-area-inset-top));width:calc(100vw - 150px);min-width:0;padding:6px 10px 8px}.raid b,.qbar b{font-size:13px}.qbar small{display:none}}
 .lb{position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));border-radius:16px;padding:8px 10px;width:220px;font-size:13px}
 .lb h4{margin:0 0 4px;font-size:11px;color:#9FC3C0;letter-spacing:.06em;display:flex;justify-content:space-between}
 .lbr{display:grid;grid-template-columns:20px 1fr auto auto;gap:6px;align-items:center;padding:3px 2px;border-radius:7px}
@@ -156,13 +165,13 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 
 <div id="join">
   <div class="jcard glass">
-    <h1>클리어 <em>아레나</em></h1>
+    <h1 id="jTitle">클리어 <em>아레나</em></h1>
     <p>옥정섬을 구한 기술자들만 들어올 수 있는 대결의 섬. 매연 몬스터를 정화하고, 서로 겨루고, <b style="color:#FFD45A">1등을 함께 쓰러뜨려</b> 현상금을 나눠 가지세요!</p>
     <label>이름 <small style="font-weight:500;opacity:.75">· 클리어 화면에 나온 이름 그대로</small><input id="jName" maxlength="14" autocomplete="off" placeholder="예: 2-8 김옥정"></label>
-    <label>입장 코드 <small style="font-weight:500;opacity:.75">· 클리어 화면의 숫자 4자리</small><input id="jCode" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000"></label>
+    <label>입장 코드 <small style="font-weight:500;opacity:.75" id="jCodeHint">· 클리어 화면의 숫자 4자리</small><input id="jCode" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000"></label>
     <div class="err" id="jErr"></div>
     <button class="btn" id="jGo">입장하기</button>
-    <div class="rules">· <b>4개 팀</b>으로 자동으로 나뉘어요. 같은 팀은 서로 공격되지 않아요. 섬 곳곳의 <b>과제 기계(!)</b>에서 미션을 성공하면 경험치·코인을 받고, 팀 게이지가 가득 차면 <b>팀 모두 레벨 업 + 바람의 축복</b>! 좋은 장비에 필요한 <b>부품 ⚙</b>도 과제에서만 나와요.<br>· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨이 오를수록 새 스킬이 열려요. Lv 8이면 스킬 8개 모두!</div>
+    <div class="rules" id="jRules">· <b>4개 팀</b>으로 자동으로 나뉘어요. 같은 팀은 서로 공격되지 않아요. 섬 곳곳의 <b>과제 기계(!)</b>에서 미션을 성공하면 경험치·코인을 받고, 팀 게이지가 가득 차면 <b>팀 모두 레벨 업 + 바람의 축복</b>! 좋은 장비에 필요한 <b>부품 ⚙</b>도 과제에서만 나와요.<br>· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨이 오를수록 새 스킬이 열려요. Lv 8이면 스킬 8개 모두!</div>
   </div>
 </div>
 
@@ -176,6 +185,8 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
     <div class="tline" id="tLine" hidden><span class="tchip" id="tChip">팀</span><span class="tbar"><i id="tBar"></i></span><small id="tTxt">0/0</small></div>
   </div>
   <div class="top glass" id="topT">자유 대전</div>
+  <div class="qbar glass" id="qBar" hidden><div class="qsteps" id="qSteps"></div><b id="qName">발전기 수리</b> <span id="qNum" style="font:800 13px var(--mono);color:#FFD45A"></span><small id="qDesc"></small><div class="qb"><i id="qFill"></i></div></div>
+  <div class="raid" id="raid" hidden><b>🌪 태풍 마수 돌개</b><small id="raidT"></small><div class="rb"><i id="raidB"></i></div></div>
   <div class="lb glass"><h4><span>순위</span><span id="lbN">0명</span></h4><div id="lbL"></div></div>
   <canvas id="mm" class="glass" width="280" height="280"></canvas>
   <div class="feed" id="feed"></div>
@@ -209,7 +220,8 @@ const SK = [
   { id: 'tornado', key: '7', name: '토네이도', ic: '🌀', lv: 8 }
 ];
 const MONC = { snail: '#93A08A', slime: '#7D6CB0', bee: '#3E3F48', boar: '#5B4A42', golem: '#5A5F66' };
-const MONN = { snail: '매연 달팽이', slime: '스모그 슬라임', bee: '미세먼지 벌', boar: '매연 멧돼지', golem: '스모그 골렘' };
+const MONN = { snail: '매연 달팽이', slime: '스모그 슬라임', bee: '미세먼지 벌', boar: '매연 멧돼지', golem: '스모그 골렘', weasel: '회오리 족제비', flower: '매연 대포꽃', crab: '녹슨 집게게', bat: '연기 박쥐', turtle: '강철 매연거북', boss: '태풍 마수 돌개' };
+let QST = null, qState = null, bossInfo = null;
 const TIERC = ['#B9C4C8', '#8FD3FF', '#5FA8FF', '#B07CF0', '#FFC21A'];
 let ws = null, me = null, myId = 0, R = 62, OBS = [], GEARN = [], ARMN = [], UPG = [], SHOP = null, POTI = { price: 25, max: 3, heal: .45 }, SHOP_R = 9, names = new Map(), lb = [], king = null;
 let TEAMS = [], teamsOn = true, STN = [], TASKN = {}, TASK_R = 3, teamInfo = [], nearSt = null, curTask = null;
@@ -220,20 +232,32 @@ let snaps = [], meS = null, phase = 'free', zr = 62, leftS = null, lastSnapAt = 
 const qs = new URLSearchParams(location.search);
 $('#jName').value = qs.get('name') || localStorage.getItem('arena-name') || '';
 $('#jCode').value = qs.get('code') || '';
+const ROOM2 = location.pathname.replace(/\/+$/, '') === '/2';
+const LS = k => ROOM2 ? k + '-2' : k;
+if (ROOM2) {
+  document.title = '클리어 아레나 2부 · 협동 퀘스트';
+  $('#jTitle').innerHTML = '2부 아레나 <em>협동 퀘스트</em>';
+  $('#jCodeHint').textContent = '· 2부 CLEAR(또는 ALL CLEAR) 화면의 숫자 4자리';
+  $('#jRules').innerHTML = '· <b>모두가 한편!</b> 친구끼리는 공격되지 않아요. 4개 팀은 <b>팀 점수</b>로만 겨뤄요.<br>· 다 함께 3단계 퀘스트: ① 과제 기계에서 <b>발전기 수리</b> → ② <b>매연 정화</b>(몬스터) → ③ 레이드 보스 <b>태풍 마수 돌개</b> 토벌!<br>· 좋은 장비에는 과제로만 얻는 <b>부품 ⚙</b>이 필요해요.';
+} else {
+  document.title = '클리어 아레나 1부 · 대결';
+  $('#jTitle').innerHTML = '클리어 아레나 <em>1부 대결</em>';
+  $('#jRules').innerHTML = '· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨 10이 넘는 친구가 많아지면 <b>레이드 보스 태풍 마수 돌개</b>가 나타나요. 힘을 합쳐 쓰러뜨리세요!';
+}
 function connect(join) {
-  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (ROOM2 ? '/ws2' : '/ws');
   ws = new WebSocket(url);
   ws.onopen = () => ws.send(JSON.stringify(join));
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (er) { return; } onMsg(m); };
-  ws.onclose = () => { if (me) { toast('연결이 끊겼어요. 다시 연결하는 중…', 4000); setTimeout(() => connect({ t: 'join', tok: localStorage.getItem('arena-tok') || '', name: me.name, code: $('#jCode').value }), 1500); } else $('#jErr').textContent = '서버에 연결할 수 없어요. 주소를 확인해 주세요.'; };
+  ws.onclose = () => { if (me) { toast('연결이 끊겼어요. 다시 연결하는 중…', 4000); setTimeout(() => connect({ t: 'join', tok: localStorage.getItem(LS('arena-tok')) || '', name: me.name, code: $('#jCode').value }), 1500); } else $('#jErr').textContent = '서버에 연결할 수 없어요. 주소를 확인해 주세요.'; };
 }
 $('#jGo').addEventListener('click', () => {
   const name = $('#jName').value.trim(), code = $('#jCode').value.trim();
   if (!name) return ($('#jErr').textContent = '이름을 적어 주세요.');
   localStorage.setItem('arena-name', name);
   $('#jErr').textContent = '연결 중…';
-  const tok = localStorage.getItem('arena-tok') || '';
-  connect({ t: 'join', name, code, tok: localStorage.getItem('arena-tokname') === name ? tok : '' });
+  const tok = localStorage.getItem(LS('arena-tok')) || '';
+  connect({ t: 'join', name, code, tok: localStorage.getItem(LS('arena-tokname')) === name ? tok : '' });
 });
 ['#jName', '#jCode'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') $('#jGo').click(); }));
 if (qs.get('name') && qs.get('code')) setTimeout(() => $('#jGo').click(), 300);
@@ -483,13 +507,58 @@ function makeMon(type) {
     for (const sx of [-.2, .2]) add(new THREE.SphereGeometry(.07, 6, 5), new THREE.MeshBasicMaterial({ color: '#FF5A3C' }), sx, 1.06, 1.3);
     for (const [x, z] of [[-.3, -.5], [.3, -.5], [-.3, .5], [.3, .5]]) add(new THREE.BoxGeometry(.2, .5, .2), mm('#3E312B'), x, .25, z);
     add(new THREE.BoxGeometry(.2, .32, .5), mm('#2E2522'), 0, 1.3, -.1);
+  } else if (type === 'weasel') {   // 회오리 족제비: 날렵하고 빠름
+    const b = add(new THREE.SphereGeometry(.3, 10, 8), mm('#C98A4A'), 0, .45, 0); b.scale.set(.9, .8, 2.1);
+    add(new THREE.SphereGeometry(.26, 10, 8), mm('#D9A066'), 0, .62, .62);
+    for (const sx of [-.13, .13]) { add(new THREE.ConeGeometry(.08, .2, 5), mm('#8E5E30'), sx, .86, .56); eye(sx, .68, .82, .06); }
+    const tail = add(new THREE.ConeGeometry(.16, .9, 6), mm('#F2E3C8'), 0, .62, -.85); tail.rotation.x = -1.9; parts.tail = tail;
+    for (const [x, z] of [[-.16, -.3], [.16, -.3], [-.16, .3], [.16, .3]]) add(new THREE.CylinderGeometry(.05, .05, .3, 5), mm('#8E5E30'), x, .15, z);
+    const sw = add(new THREE.TorusGeometry(.5, .04, 4, 16), new THREE.MeshBasicMaterial({ color: '#E8F4F7', transparent: true, opacity: .55 }), 0, .45, -.2); sw.rotation.x = Math.PI / 2; parts.spin = sw;
+  } else if (type === 'flower') {  // 매연 대포꽃: 멀리서 쏨
+    add(new THREE.CylinderGeometry(.09, .14, 1.1, 6), mm('#4E7A3A'), 0, .55, 0);
+    for (let i = 0; i < 3; i++) { const l = add(new THREE.SphereGeometry(.28, 8, 6), mm('#5E9A45'), Math.cos(i * 2.1) * .32, .18, Math.sin(i * 2.1) * .32); l.scale.set(1, .25, 1.6); l.rotation.y = i * 2.1; }
+    const head = new THREE.Group(); head.position.y = 1.25; body.add(head); parts.head = head;
+    const pet = mm('#7D5BA8'); for (let i = 0; i < 6; i++) { const pm = new THREE.Mesh(new THREE.SphereGeometry(.24, 8, 6), pet); pm.position.set(Math.cos(i * 1.047) * .3, Math.sin(i * 1.047) * .3, 0); pm.scale.z = .35; head.add(pm); }
+    const mouth = new THREE.Mesh(new THREE.CylinderGeometry(.16, .22, .4, 10, 1, true), mm('#2E2236')); mouth.rotation.x = Math.PI / 2; mouth.position.z = .15; head.add(mouth);
+    const ey = new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 5), new THREE.MeshBasicMaterial({ color: '#FFD45A' })); ey.position.set(0, .2, .2); head.add(ey);
+  } else if (type === 'crab') {    // 녹슨 집게게: 단단함
+    const b = add(new THREE.SphereGeometry(.7, 12, 8), mm('#A0523A'), 0, .55, 0); b.scale.set(1.25, .55, .95);
+    add(new THREE.SphereGeometry(.5, 10, 6, 0, TAU, 0, Math.PI / 2), mm('#7E6A5E'), 0, .72, -.05).scale.set(1.3, .6, 1);
+    for (const sx of [-1, 1]) { const arm = add(new THREE.CylinderGeometry(.08, .1, .6, 6), mm('#8C4632'), sx * .8, .55, .45); arm.rotation.z = sx * .9; const cl = add(new THREE.SphereGeometry(.26, 8, 6), mm('#B8603F'), sx * 1.05, .75, .7); cl.scale.set(1, .7, 1.4); for (let k = 0; k < 3; k++) { const lg = add(new THREE.CylinderGeometry(.04, .04, .5, 4), mm('#6E3828'), sx * (.6 + k * .02), .25, -.3 + k * .3); lg.rotation.z = sx * 1.1; } }
+    for (const sx of [-.2, .2]) { add(new THREE.CylinderGeometry(.03, .03, .3, 4), mm('#6E3828'), sx, .95, .45); eye(sx, 1.12, .45, .07); }
+  } else if (type === 'bat') {     // 연기 박쥐: 떼로 날아옴
+    body.position.y = 1.7;
+    add(new THREE.SphereGeometry(.24, 10, 8), mm('#2E2A36'), 0, 0, 0);
+    for (const sx of [-.12, .12]) { add(new THREE.ConeGeometry(.06, .18, 4), mm('#2E2A36'), sx, .24, 0); add(new THREE.SphereGeometry(.04, 6, 5), new THREE.MeshBasicMaterial({ color: '#FF5A3C' }), sx * .8, .05, .2); }
+    const wm = LMAT({ color: '#45405A', side: THREE.DoubleSide });
+    parts.wl = add(new THREE.PlaneGeometry(.6, .32), wm, -.4, .02, 0); parts.wr = add(new THREE.PlaneGeometry(.6, .32), wm, .4, .02, 0); parts.wl.rotation.x = parts.wr.rotation.x = -Math.PI / 2;
+  } else if (type === 'turtle') {  // 강철 매연거북: 느리지만 한 방
+    const sh = add(new THREE.SphereGeometry(1.25, 14, 8, 0, TAU, 0, Math.PI / 2), mm('#5E6B70'), 0, .55, 0); sh.scale.set(1, .85, 1.15);
+    for (let i = 0; i < 6; i++) { const sp = add(new THREE.ConeGeometry(.18, .5, 5), mm('#8A9599'), Math.cos(i * 1.05) * .7, 1.35, Math.sin(i * 1.05) * .75); sp.rotation.z = -Math.cos(i * 1.05) * .5; sp.rotation.x = Math.sin(i * 1.05) * .5; }
+    add(new THREE.CylinderGeometry(1.28, 1.3, .25, 16), mm('#3E4A4F'), 0, .55, 0).scale.z = 1.15;
+    const hd = add(new THREE.SphereGeometry(.45, 10, 8), mm('#6F7F5A'), 0, .75, 1.45); hd.scale.set(1, .85, 1.1); parts.head = hd;
+    for (const sx of [-.18, .18]) add(new THREE.SphereGeometry(.07, 6, 5), new THREE.MeshBasicMaterial({ color: '#FF9A3C' }), sx, .92, 1.85);
+    for (const [x, z] of [[-.85, -.75], [.85, -.75], [-.85, .75], [.85, .75]]) add(new THREE.CylinderGeometry(.25, .3, .5, 8), mm('#6F7F5A'), x, .25, z);
+    for (let i = 0; i < 3; i++) add(new THREE.SphereGeometry(.2 + i * .05, 6, 5), LMAT({ color: '#5A5E66', transparent: true, opacity: .55 }), -.3 + i * .25, 1.9 + i * .35, -.6);
+  } else if (type === 'boss') {    // 태풍 마수 돌개 (레이드 보스)
+    body.scale.setScalar(1.25);
+    const dark = mm('#2C3442'), mid = mm('#3E4A5E'), glow = new THREE.MeshBasicMaterial({ color: '#FFE45A' });
+    for (const [r, x, y, z] of [[1.6, 0, 2.4, 0], [1.3, .9, 3.4, -.2], [1.25, -.9, 3.3, .1], [1.1, 0, 4.4, .1], [1.2, 0, 1.3, 0]]) add(new THREE.IcosahedronGeometry(r, 1), r > 1.25 ? dark : mid, x, y, z);
+    for (const sx of [-.42, .42]) { add(new THREE.SphereGeometry(.22, 10, 8), glow, sx, 4.5, .95); }
+    const mouth = add(new THREE.BoxGeometry(.9, .12, .2), glow, 0, 3.95, 1.0);
+    for (let i = 0; i < 5; i++) { const sp = add(new THREE.ConeGeometry(.16, .9, 5), glow, -1 + i * .5, 5.4 - Math.abs(i - 2) * .25, -.1); sp.rotation.z = (i - 2) * -.25; }
+    parts.fl = add(new THREE.DodecahedronGeometry(.85, 0), mm('#56606E'), -2.3, 2.6, .4); parts.fr = add(new THREE.DodecahedronGeometry(.85, 0), mm('#56606E'), 2.3, 2.6, .4);
+    const ringM = new THREE.MeshBasicMaterial({ color: '#BFD6E6', transparent: true, opacity: .45, depthWrite: false });
+    parts.ring = new THREE.Group(); parts.ring.position.y = 2.6; body.add(parts.ring);
+    for (let i = 0; i < 3; i++) { const t = new THREE.Mesh(new THREE.TorusGeometry(2.6 + i * .5, .12, 6, 40), ringM); t.rotation.x = Math.PI / 2 + (i - 1) * .18; t.position.y = (i - 1) * .7; parts.ring.add(t); }
+    const aura = new THREE.Mesh(new THREE.CircleGeometry(3.6, 40), new THREE.MeshBasicMaterial({ color: '#FF5A3C', transparent: true, opacity: .18, depthWrite: false })); aura.rotation.x = -Math.PI / 2; aura.position.y = .06; g.add(aura); parts.aura = aura;
   } else {
     add(new THREE.DodecahedronGeometry(.95, 0), mm('#4F5358'), 0, .95, 0); add(new THREE.DodecahedronGeometry(1.15, 0), mm('#62676D'), 0, 2.35, 0); add(new THREE.DodecahedronGeometry(.62, 0), mm('#55595F'), 0, 3.65, .1);
     parts.al = add(new THREE.DodecahedronGeometry(.52, 0), mm('#4F5358'), -1.45, 2.2, .1); parts.ar = add(new THREE.DodecahedronGeometry(.52, 0), mm('#4F5358'), 1.45, 2.2, .1);
     for (const sx of [-.2, .2]) add(new THREE.SphereGeometry(.1, 6, 5), new THREE.MeshBasicMaterial({ color: '#FF9A3C' }), sx, 3.72, .62);
   }
   body.traverse(m => { if (m.isMesh && m.material.isMeshStandardMaterial && !m.material.transparent) m.castShadow = true; });
-  const tag = makeTag(); tag.s.position.y = { snail: 1.6, slime: 1.7, bee: 2.6, boar: 2.2, golem: 4.8 }[type]; tag.s.scale.set(3.2, .84, 1); g.add(tag.s);
+  const tag = makeTag(); tag.s.position.y = { snail: 1.6, slime: 1.7, bee: 2.6, boar: 2.2, golem: 4.8, weasel: 1.5, flower: 2.2, crab: 1.8, bat: 2.6, turtle: 2.8, boss: 8.2 }[type] || 2.4; tag.s.scale.set(3.2, .84, 1); g.add(tag.s);
   scene.add(g); return { g, tag, type, parts, body };
 }
 function makePick(kind, val) {
@@ -502,7 +571,8 @@ function makePick(kind, val) {
 }
 function makeProj(kind) {
   let m;
-  if (kind === 'cannon') { const geo = new THREE.ConeGeometry(.55, 1.8, 10); geo.rotateX(Math.PI / 2); m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#BFF3EC', transparent: true, opacity: .85 })); m.position.y = 1.2; }
+  if (kind === 'spit') { m = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 1), new THREE.MeshStandardMaterial({ color: '#6B5A8A', emissive: '#3A2A55', roughness: .9 })); m.position.y = 1.1; }
+  else if (kind === 'cannon') { const geo = new THREE.ConeGeometry(.55, 1.8, 10); geo.rotateX(Math.PI / 2); m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#BFF3EC', transparent: true, opacity: .85 })); m.position.y = 1.2; }
   else { m = new THREE.Mesh(new THREE.ConeGeometry(1.8, 4, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#CFE8F2', transparent: true, opacity: .45, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = Math.PI; m.position.y = 2; }
   const g = new THREE.Group(); g.add(m); g.userData.m = m; scene.add(g); return g;
 }
@@ -523,9 +593,25 @@ function fxBolt(x, z) {
   m.position.set(x, 15, z); scene.add(m); FX.push({ o: m, t: 0, life: .35, u: k => { m.material.opacity = 1 - k; } });
   fxRing(x, z, '#FFE066', .5, 3.4, .5);
 }
-function fxWarn(x, z, r) {
-  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({ color: '#FFDD55', transparent: true, opacity: .35, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(x, .08, z); scene.add(m); FX.push({ o: m, t: 0, life: .8, u: k => { m.material.opacity = .2 + .3 * Math.abs(Math.sin(k * 12)); } });
+function fxWarn(x, z, r, t = .8) {
+  const big = r > 4, col = big ? '#FF5A3C' : '#FFDD55';
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .3, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, .09, z); scene.add(m);
+  const e = new THREE.Mesh(new THREE.RingGeometry(r - .15, r, 48), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .9, depthWrite: false })); e.rotation.x = -Math.PI / 2; e.position.set(x, .1, z); scene.add(e);
+  FX.push({ o: e, t: 0, life: t, u: () => {} });
+  FX.push({ o: m, t: 0, life: t, u: k => { m.scale.setScalar(Math.max(.05, k)); m.material.opacity = .25 + .25 * Math.abs(Math.sin(k * 10)); } });
+}
+function bossFlash() { document.body.animate([{ boxShadow: 'inset 0 0 140px rgba(255,60,40,.75)' }, { boxShadow: 'inset 0 0 0 rgba(0,0,0,0)' }], { duration: 1200 }); }
+function renderRaid() {
+  const rd = $('#raid'), qb = $('#qBar');
+  if (bossInfo) { rd.hidden = false; const [, hp, max, enr] = bossInfo; $('#raidB').style.width = Math.max(0, hp / max * 100) + '%'; $('#raidT').textContent = `${hp.toLocaleString()} / ${max.toLocaleString()}${enr ? ' · 분노!' : ''}`; rd.classList.toggle('enr', !!enr); }
+  else rd.hidden = true;
+  if (qState && QST && !bossInfo) {
+    const [st, pr, gl] = qState; qb.hidden = false;
+    $('#qSteps').innerHTML = [1, 2, 3].map(i => `<span class="${i < st ? 'done' : i === st ? 'on' : ''}"></span>`).join('');
+    $('#qName').textContent = st >= 4 ? '🎉 ' + QST[4].n : `협동 퀘스트 ${st}/3 · ${QST[st].n}`; $('#qNum').textContent = st <= 2 ? `${pr} / ${gl}` : '';
+    $('#qDesc').textContent = QST[Math.min(4, st)].d; $('#qFill').style.width = (st >= 3 ? 100 : Math.min(100, pr / gl * 100)) + '%';
+  } else qb.hidden = true;
 }
 function tickFx(dt) {
   for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.u(k); if (k >= 1) { scene.remove(f.o); f.o.material && f.o.material.dispose(); f.o.geometry && f.o.geometry.dispose(); f.tex && f.tex.dispose(); FX.splice(i, 1); } }
@@ -552,8 +638,8 @@ function interp(id, kind) {
 function onMsg(m) {
   if (m.t === 'err') { $('#jErr').textContent = m.s; if (me) toast(m.s, 5000); return; }
   if (m.t === 'welcome') {
-    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3;
-    me = { name: m.name }; localStorage.setItem('arena-tok', m.tok); localStorage.setItem('arena-tokname', $('#jName').value.trim());
+    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3; QST = m.qst || null;
+    me = { name: m.name }; localStorage.setItem(LS('arena-tok'), m.tok); localStorage.setItem(LS('arena-tokname'), $('#jName').value.trim());
     buildWorld(); buildPad();
     $('#join').hidden = true; $('#hud').hidden = false;
     toast(m.resumed ? '다시 연결됐어요!' : `<b>${esc(m.name)}</b> 입장! 몬스터를 정화하고 1등을 노려 보세요.`, 3500);
@@ -569,6 +655,18 @@ function onMsg(m) {
   if (m.t === 'tx') { if (curTask) { curTask = null; closeModal(); } if (m.s) toast(esc(m.s), 3200); return; }
   if (m.t === 'tres') { curTask = null; closeModal(); toast(m.ok ? `<b>✔ ${esc(m.s)}</b>` : esc(m.s), 3200); if (m.ok) { fxRing(local.x, local.z, '#5FF0D8', .5, 3, .8); fxText(`+${m.xp} XP`, local.x, 3.4, local.z, '#7FF0E0'); } return; }
   if (m.t === 'tlv') { const T = TEAMS[m.team] || { n: '?', c: '#fff' }; const mine = meS && meS.team === m.team; toast(mine ? `🎉 <b style="color:${T.c}">${T.n} 팀 레벨 업!</b> ${esc(m.by)}의 과제로 팀 게이지 완성 → 우리 팀 모두 <b>+1 레벨</b>, <b>🌪 바람의 축복 60초</b> (공격 +30%)!` : `<b style="color:${T.c}">${T.n} 팀</b>이 팀 레벨 업 했어요! (${m.n}번째)`, 4200); feed(`<span class="tdot" style="background:${T.c}"></span><b>${T.n} 팀</b> 레벨 업!`); if (mine) fxRing(local.x, local.z, T.c, .6, 4, 1); return; }
+  if (m.t === 'boss') {
+    if (m.s === 'spawn') { toast(`🌪 <b>레이드 보스 '태풍 마수 돌개'</b>가 나타났어요! 모두 힘을 합쳐 쓰러뜨리세요! ${m.why === 'level' ? '(레벨 10 친구가 많아졌어요)' : ''}`, 6000); feed('🌪 <b>태풍 마수 돌개</b> 등장!'); bossFlash(); }
+    if (m.s === 'enrage') { toast('🔥 <b>돌개가 분노했어요!</b> 더 빠르고 강해졌어요. 노란 원을 피하세요!', 4000); }
+    if (m.s === 'summon') { toast('돌개가 <b>부하 몬스터</b>를 불렀어요!', 2600); }
+    if (m.s === 'die') { toast(`🏆 <b>태풍 마수 돌개 토벌 성공!</b> ${m.n}명이 힘을 합쳤어요.<br>기여 1위 ${m.top.map(t => `${esc(t[0])} ${t[1]}%`).join(' · ')}`, 7000); feed(`🏆 <b>${esc(m.by)}</b>의 마지막 일격으로 돌개 토벌!`); }
+    return;
+  }
+  if (m.t === 'quest') {
+    if (m.s === 'next') toast(m.stage >= 4 ? `🎉 <b>옥정섬 완전 복구!</b> 2부 협동 퀘스트를 모두 해냈어요! 모두 레벨 업 + 코인 + 부품!` : `✅ <b>${esc(m.done)} 완료!</b> 모두 레벨 업 + 40코인 + 부품 ⚙1<br>다음 퀘스트: <b>${esc(m.name)}</b> — ${esc(m.desc)}`, 6500);
+    if (m.s === 'reset') toast('선생님이 협동 퀘스트를 처음부터 다시 시작했어요.', 3000);
+    return;
+  }
   if (m.t === 'teams') { teamsOn = m.teamsOn; if (m.s) toast('<b>' + esc(m.s) + '</b>', 4000); return; }
   if (m.t === 'end') return showEnd(m.top, m.teams);
 }
@@ -580,7 +678,7 @@ function onSnap(m) {
   for (const j of m.J) s.J.set(j[0], { kind: j[1], x: j[2], z: j[3], dir: 0 });
   for (const k of m.K) s.K.set(k[0], { kind: k[1], val: k[2], x: k[3], z: k[4] });
   snaps.push(s); while (snaps.length > 12) snaps.shift();
-  zr = m.zr; phase = m.ph; leftS = m.left; lastSnapAt = at;
+  zr = m.zr; phase = m.ph; leftS = m.left; lastSnapAt = at; qState = m.q || null; bossInfo = m.bs || null; renderRaid();
   if (m.me) { meS = m.me; renderMe(); }
   const mp = s.P.get(myId);
   if (mp) {
@@ -609,7 +707,9 @@ function onEv(e) {
     if (e.s === 'heal') fxRing(p.x, p.z, '#7BD88F', 1.4, .4, .7, 1);
     if (e.s === 'shield') fxRing(p.x, p.z, '#7FF0E0', .4, 1.6, .5, 1.2);
     if (e.s === 'upg') fxRing(p.x, p.z, '#FFC21A', .4, 2.4, .8, 1.5);
-    if (e.s === 'warn') fxWarn(e.x, e.z, e.r);
+    if (e.s === 'warn') fxWarn(e.x, e.z, e.r, e.t);
+    if (e.s === 'slam') { fxRing(e.x, e.z, '#FFB070', .5, e.r || 3, .45, .3); fxRing(e.x, e.z, '#FFFFFF', .3, (e.r || 3) * .7, .35, .5); }
+    if (e.s === 'bossdie') { for (let i = 0; i < 5; i++) setTimeout(() => fxRing(e.x, e.z, ['#FFC21A', '#5FF0D8', '#FFFFFF'][i % 3], 1, 9 + i * 2, .9, .5 + i), i * 120); }
     if (e.s === 'thunder') fxBolt(e.x, e.z);
   } else if (e.k === 'mdie') { fxRing(e.x, e.z, '#E9F1F2', .4, 2.2, .5, .8); if (e.by === myId) fxText('정화!', e.x, 3, e.z, '#7FF0E0'); }
   else if (e.k === 'kill') {
@@ -654,7 +754,7 @@ function renderMe() {
   const tp = $('#topT');
   if (phase === 'play') { const l = leftS || 0; tp.textContent = `결승 라운드 ${Math.floor(l / 60)}:${String(l % 60).padStart(2, '0')}${zr < R - .5 ? ' · 바람의 벽이 좁혀져요!' : ''}`; tp.classList.toggle('warn', zr < R - .5); }
   else if (phase === 'end') { tp.textContent = '라운드 종료'; tp.classList.remove('warn'); }
-  else { tp.textContent = '자유 대전'; tp.classList.remove('warn'); }
+  else { tp.textContent = ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나'; tp.classList.remove('warn'); }
   if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') renderUpg();
 }
 function renderLb() {
@@ -701,7 +801,7 @@ function renderUpg() {
   const potSec = `<section><h3>회복 음료<small>${s.pot} / ${POTI.max}개</small></h3><div class="si"><span class="tc" style="background:#7BD88F"></span><b>회복 음료</b><small>체력 ${Math.round(POTI.heal * 100)}% 회복 · <b>R</b> 키 · 싸우는 중에도 OK</small><button data-s="pot" ${!ok || s.coins < POTI.price || s.pot >= POTI.max ? 'disabled' : ''}>${POTI.price}</button></div></section>`;
   const c = $('#mCard');
   c.innerHTML = `<h2>바람상회</h2><div class="stl"><span>코인 ${s.coins}</span><span>공격 ${s.atk}</span><span>받는 피해 −${s.def}%</span><span>속도 +${s.spdB || 0}%</span><span>스킬 대기 −${s.cdr || 0}%</span></div>
-<p style="font-size:13px"><b>좋은 장비는 부품 ⚙이 필요해요</b> (지금 ⚙ ${s.parts || 0}개) — 부품은 <b>과제 기계</b>에서만 받아요. 원하는 단계를 바로 살 수 있어요. 코인을 쓰면 순위(코인)가 내려가고, 쓰러지면 가장 좋은 장비를 1단계 떨어뜨려요.</p>${why ? `<div class="shopw">${why}</div>` : ''}
+<p style="font-size:13px">${SHOP.wpn.parts && SHOP.wpn.parts.some(Boolean) ? `<b>좋은 장비는 부품 ⚙이 필요해요</b> (지금 ⚙ ${s.parts || 0}개) — 부품은 <b>과제 기계</b>에서만 받아요. ` : ''}원하는 단계를 바로 살 수 있어요. 코인을 쓰면 순위(코인)가 내려가고, 쓰러지면 가장 좋은 장비를 1단계 떨어뜨려요.</p>${why ? `<div class="shopw">${why}</div>` : ''}
 <div class="shop">${sec('wpn')}${sec('arm')}${sec('boot')}${sec('helm')}${potSec}</div><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>B</kbd></button></div>`;
   $('#mX').addEventListener('click', closeModal);
 }
@@ -857,8 +957,12 @@ function loop(now) {
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0, e.z);
       if (o.parts.wl) { o.parts.wl.rotation.z = Math.sin(clockT * 40) * .6; o.parts.wr.rotation.z = -Math.sin(clockT * 40) * .6; o.body.position.y = 1.6 + Math.sin(clockT * 3 + id) * .3; }
+      if (o.parts.spin) o.parts.spin.rotation.z += dt * 14;
+      if (o.parts.tail) o.parts.tail.rotation.y = Math.sin(clockT * 12 + id) * .5;
+      if (o.parts.head && o.type === 'flower') o.parts.head.rotation.y = Math.sin(clockT * 1.5 + id) * .6;
+      if (o.parts.ring) { o.parts.ring.rotation.y += dt * (bossInfo && bossInfo[3] ? 5 : 2.5); o.parts.fl.position.y = 2.6 + Math.sin(clockT * 2.4) * .35; o.parts.fr.position.y = 2.6 - Math.sin(clockT * 2.4) * .35; o.parts.aura.material.opacity = .14 + .1 * Math.sin(clockT * 4); o.tag.s.visible = false; }
       if (o.parts.al) { o.parts.al.position.y = 2.2 + Math.sin(clockT * 3) * .15; o.parts.ar.position.y = 2.2 - Math.sin(clockT * 3) * .15; }
-      if (o.parts.body) { const hop = Math.max(0, Math.sin(clockT * 5 + id)); o.parts.body.scale.set(1 + (1 - hop) * .12, .78 - (1 - hop) * .14, 1 + (1 - hop) * .12); } let dr = ((e.dir - o.g.rotation.y + Math.PI * 3) % TAU) - Math.PI; o.g.rotation.y += dr * Math.min(1, dt * 8); drawTag(o.tag, MONN[o.type], e.hp, e.max, '#E6F2F2', false); o.tag.s.visible = Math.hypot(e.x - local.x, e.z - local.z) < 24; }
+      if (o.parts.body) { const hop = Math.max(0, Math.sin(clockT * 5 + id)); o.parts.body.scale.set(1 + (1 - hop) * .12, .78 - (1 - hop) * .14, 1 + (1 - hop) * .12); } let dr = ((e.dir - o.g.rotation.y + Math.PI * 3) % TAU) - Math.PI; o.g.rotation.y += dr * Math.min(1, dt * 8); drawTag(o.tag, MONN[o.type], e.hp, e.max, '#E6F2F2', false); o.tag.s.visible = o.type !== 'boss' && Math.hypot(e.x - local.x, e.z - local.z) < 24; }
     for (const [id, g] of PK) { const e = last.K.get(id); if (!e) continue; g.position.set(e.x, .6 + Math.sin(clockT * 3 + id) * .15, e.z); g.userData.m.rotation.y += dt * 3; g.rotation.y += dt * 2; }
     for (const [id, g] of PJ) { const e = interp(id, 'J'); if (!e) continue; const ox = g.position.x, oz = g.position.z; g.position.set(e.x, 0, e.z); if (Math.hypot(e.x - ox, e.z - oz) > .01) g.rotation.y = Math.atan2(e.x - ox, e.z - oz); g.userData.m.rotation.y += dt * (last.J.get(id) && last.J.get(id).kind === 'tornado' ? 14 : 0); }
     for (const t of STN) { const o = STNO.get(t.id); if (!o) continue; const ready = !meS || !meS.tcd || !meS.tcd[t.id]; o.mark.visible = ready; o.mark.position.y = 3.5 + Math.sin(clockT * 3 + t.id) * .2; o.bulb.material.color.set(ready && Math.sin(clockT * 5 + t.id) > 0 ? '#5FF0D8' : '#2A5A54'); o.scr.material.color.set(ready ? '#5FF0D8' : '#41545B'); o.pad.material.opacity = ready ? .5 + .2 * Math.sin(clockT * 4) : .15; }
@@ -883,7 +987,7 @@ function drawMini(last) {
   if (zr < R - .3) { mmc.strokeStyle = '#B44CFF'; mmc.lineWidth = 3; mmc.beginPath(); mmc.arc(N / 2, N / 2, zr * s, 0, TAU); mmc.stroke(); }
   mmc.fillStyle = '#FFC21A'; mmc.fillRect(X(0) - 4, Z(0) - 4, 8, 8);
   for (const t of STN) { const ready = !meS || !meS.tcd || !meS.tcd[t.id]; mmc.save(); mmc.translate(X(t.x), Z(t.z)); mmc.rotate(Math.PI / 4); mmc.fillStyle = ready ? '#5FF0D8' : 'rgba(65,84,91,.8)'; mmc.fillRect(-5, -5, 10, 10); mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 1.5; mmc.strokeRect(-5, -5, 10, 10); mmc.restore(); }
-  for (const [, m] of last.M) { mmc.fillStyle = m.type === 'golem' || m.type === 'boar' ? '#FF6B5A' : '#E9A3FF'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 3, 0, TAU); mmc.fill(); }
+  for (const [, m] of last.M) { if (m.type === 'boss') { mmc.fillStyle = '#FF2D1A'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 9 + Math.sin(clockT * 6) * 2, 0, TAU); mmc.fill(); mmc.strokeStyle = '#FFE45A'; mmc.lineWidth = 2; mmc.stroke(); continue; } mmc.fillStyle = m.type === 'golem' || m.type === 'boar' || m.type === 'turtle' ? '#FF6B5A' : '#E9A3FF'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 3, 0, TAU); mmc.fill(); }
   for (const [id, p] of last.P) { if (id === myId || !(p.f & 1)) continue; const kingP = p.f & 16; mmc.fillStyle = kingP ? '#FFC21A' : teamsOn && TEAMS[p.team] ? TEAMS[p.team].c : '#FFFFFF'; mmc.beginPath(); mmc.arc(X(p.x), Z(p.z), kingP ? 7 : 4.5, 0, TAU); mmc.fill(); mmc.strokeStyle = '#10242B'; mmc.lineWidth = 1.5; mmc.stroke(); }
   mmc.save(); mmc.translate(X(local.x), Z(local.z)); mmc.rotate(-local.dir + Math.PI); mmc.fillStyle = '#3FE0C5'; mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 2;
   mmc.beginPath(); mmc.moveTo(0, -9); mmc.lineTo(6.5, 7); mmc.lineTo(0, 3.5); mmc.lineTo(-6.5, 7); mmc.closePath(); mmc.fill(); mmc.stroke(); mmc.restore(); mmc.restore();

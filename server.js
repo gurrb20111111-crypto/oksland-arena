@@ -17,8 +17,8 @@ const PUB = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent((req.url || '/').split('?')[0]);
-  if (p === '/' || p === '') p = '/index.html';
-  if (p === '/admin' || p === '/tv') p = '/admin.html';
+  if (p === '/' || p === '' || p === '/2' || p === '/2/') p = '/index.html';
+  if (p === '/admin' || p === '/tv' || p === '/admin2' || p === '/tv2') p = '/admin.html';
   if (p === '/healthz') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
   const f = path.normalize(path.join(PUB, p));
   if (!f.startsWith(PUB)) { res.writeHead(403); return res.end(); }
@@ -58,7 +58,7 @@ class Conn {
       if (op === 1 || op === 0) {
         this.frag = this.frag ? Buffer.concat([this.frag, payload]) : payload;
         if (this.frag.length > MAX_MSG) return this.close();
-        if (fin) { const s = this.frag.toString('utf8'); this.frag = null; let msg; try { msg = JSON.parse(s); } catch (e) { continue; } if (this.onmsg) this.onmsg(msg); }
+        if (fin) { const s = this.frag.toString('utf8'); this.frag = null; let msg; try { msg = JSON.parse(s); } catch (e) { continue; } if (this.onmsg) { try { this.onmsg(msg); } catch (e) { console.error('msg error', e); } } }
       }
     }
   }
@@ -80,14 +80,15 @@ server.on('upgrade', (req, sock) => {
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   sock.setNoDelay(true);
-  onConnect(new Conn(sock));
+  const room = (req.url || '').startsWith('/ws2') ? ROOMS.coop : ROOMS.battle;
+  room.onConnect(new Conn(sock));
 });
-setInterval(() => { for (const c of conns) { if (!c.alive) { c.close(); continue; } c.alive = false; c.ping(); } }, 20000);
+setInterval(() => { for (const r of Object.values(ROOMS)) for (const c of r.conns) { if (!c.alive) { c.close(); continue; } c.alive = false; c.ping(); } }, 20000);
 
 /* ======================= game constants ======================= */
 const R = 62;                          // island radius
 const TICK = 1 / 20;
-const MAXLV = 10;
+const MAXLV = 15;
 const xpNeed = lv => 30 + (lv - 1) * 25;
 const SKILLS = {
   punch: { lv: 1, cd: .45 }, dash: { lv: 2, cd: 8 }, whirl: { lv: 3, cd: 7 }, cannon: { lv: 4, cd: 6 },
@@ -98,8 +99,14 @@ const MON = {
   slime: { hp: 46, spd: 2.4, dmg: 8, xp: 16, coins: [5, 8], r: .8, aggro: 11, lv: 2 },
   bee: { hp: 32, spd: 5, dmg: 7, xp: 20, coins: [7, 11], r: .6, aggro: 15, lv: 3 },
   boar: { hp: 90, spd: 3.2, dmg: 14, xp: 38, coins: [14, 20], r: 1, aggro: 15, lv: 5 },
-  golem: { hp: 220, spd: 2.2, dmg: 24, xp: 80, coins: [30, 44], r: 1.5, aggro: 12, lv: 7 }
+  golem: { hp: 220, spd: 2.2, dmg: 24, xp: 80, coins: [30, 44], r: 1.5, aggro: 12, lv: 7 },
+  weasel: { hp: 28, spd: 6.6, dmg: 7, xp: 18, coins: [6, 9], r: .55, aggro: 16, lv: 2, beh: 'dart' },       // 빠름: 휙휙 돌진
+  flower: { hp: 44, spd: .7, dmg: 12, xp: 24, coins: [8, 12], r: .8, aggro: 15, lv: 3, beh: 'ranged' },     // 멀리서 매연탄
+  crab: { hp: 150, spd: 2.4, dmg: 15, xp: 36, coins: [12, 18], r: 1, aggro: 11, lv: 4, beh: 'armor' },     // 단단함(피해 40% 덜 받음)
+  bat: { hp: 22, spd: 8, dmg: 6, xp: 12, coins: [4, 6], r: .5, aggro: 18, lv: 5, beh: 'swarm' },           // 떼로 다님
+  turtle: { hp: 230, spd: 1.1, dmg: 48, xp: 62, coins: [22, 32], r: 1.4, aggro: 10, lv: 6, beh: 'heavy' }  // 느리지만 한 방
 };
+const BOSS = { hp0: 5000, hpPer: 9000, spd: 2.5, r: 2.6, melee: 60, whirl: 80, bolt: 55, coins: 80, pool: 900 };   // HP = hp0 + hpPer × 접속 인원
 const GEARN = ['맨손', '스패너', '토크 렌치', '돌풍 해머', '태풍 블레이드'];
 const ARMN = ['작업복', '작업 조끼', '방풍 재킷', '탄소섬유 슈트', '태풍 갑옷'];
 const BOOTN = ['맨발', '운동화', '방수 장화', '바람 부츠'];
@@ -112,17 +119,15 @@ const SHOP = {
   helm: { label: '모자', names: HELMN, price: [0, 50, 120, 220], parts: [0, 0, 1, 2], eff: '스킬 대기 −8%' }
 };
 const SLOTN = { wpn: GEARN, arm: ARMN, boot: BOOTN, helm: HELMN };
+const SHOP_BATTLE = Object.fromEntries(Object.entries(SHOP).map(([k, v]) => [k, { ...v, parts: v.parts.map(() => 0) }]));
 const POT = { price: 25, max: 3, heal: .45, cd: 4 };
 const SHOP_R = 9;                      // must stand this close to the centre to buy
 const UPG = [60, 120, 200, 300];       // legacy (old clients)
-const ARENA_SALT = 'oksland-arena';
+const ARENA_SALT = 'oksland-arena';            // 1부 아레나 코드 (2부 아레나는 + '-2')
 /* ---- teams ---- */
 const TEAMS = [{ n: '바람', c: '#3FB6FF' }, { n: '태양', c: '#FFA51F' }, { n: '바다', c: '#22CFA0' }, { n: '번개', c: '#B57BFF' }];
-const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
 const BLESS_MS = 60000;                                         // team buff after the gauge fills
 const teamScore = t => t.tasks * 3 + t.kills + t.lvups * 10;
-const blessed = p => teamsOn && p.team != null && teamSt[p.team].buffUntil > Date.now();
-let teamsOn = true;
 /* ---- tasks (Among Us style stations) ---- */
 const TASK_CD = 45000, TASK_WRONG_CD = 8000, TASK_R = 3;
 const TASKN = { wires: '전선 연결', nacelle: '나셀 돌리기', order: '부품 순서', quiz: '바람 퀴즈' };
@@ -150,9 +155,9 @@ const QUIZ = [
 
 /* ======================= map ======================= */
 function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
-const OBS = [];
+const OBS_ALL = [];
 (function buildMap() {
-  const r = rng(20261012);
+  const r = rng(20261012); const OBS = OBS_ALL;
   OBS.push([0, 0, 3.2, 'forge']);
   for (const t of STATIONS) OBS.push([t.x, t.z, .9, 'station']);
   for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + .3; OBS.push([Math.cos(a) * 38, Math.sin(a) * 38, 1.1, 'turbine']); }
@@ -165,6 +170,29 @@ const OBS = [];
     OBS.push([+x.toFixed(2), +z.toFixed(2), +rad.toFixed(2), kind]);
   }
 })();
+const OBS_BATTLE = OBS_ALL.filter(o => o[3] !== 'station');
+function addresses() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
+  return out;
+}
+function kstYmd(offsetDays = 0) { return new Date(Date.now() + 9 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10).replace(/-/g, ''); }
+function clearCode(name, ymd, salt = ARENA_SALT) {
+  const s = String(name).replace(/\s+/g, '') + '|' + ymd + '|' + salt;
+  let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return String(1000 + (h % 9000));
+}
+
+/* ======================= one arena room (1부 대결 / 2부 협동) ======================= */
+function makeRoom(MODE) {
+const COOP = MODE === 'coop';
+const SALT = COOP ? ARENA_SALT + '-2' : ARENA_SALT;
+const OBS = COOP ? OBS_ALL : OBS_BATTLE;
+const SHOPX = COOP ? SHOP : SHOP_BATTLE;
+const STN = COOP ? STATIONS : [];
+const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
+let teamsOn = COOP;
+const blessed = p => teamsOn && p.team != null && teamSt[p.team].buffUntil > Date.now();
 function collide(x, z, rad) {
   for (const o of OBS) {
     const dx = x - o[0], dz = z - o[1], d = Math.hypot(dx, dz), m = o[2] + rad;
@@ -226,7 +254,7 @@ function resetPlayer(p) {
 function teamCount(ti) { let n = 0; for (const p of players.values()) if (online(p) && p.team === ti) n++; return n; }
 function pickTeam() { let best = 0, bn = 1e9; const order = [0, 1, 2, 3].sort(() => Math.random() - .5); for (const i of order) { const n = teamCount(i); if (n < bn) { bn = n; best = i; } } return best; }
 const teamGoal = ti => 4 + 3 * Math.max(1, teamCount(ti));
-const sameTeam = (a, b) => teamsOn && a && b && a !== b && a.team === b.team;
+const sameTeam = (a, b) => a && b && a !== b && (COOP || (teamsOn && a.team === b.team));
 function shuffleTeams() {
   const list = [...players.values()].filter(online).sort(() => Math.random() - .5);
   list.forEach((p, i) => { p.team = i % 4; });
@@ -234,9 +262,9 @@ function shuffleTeams() {
 }
 const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startTask(p) {
-  if (!p.alive || p.task) return;
+  if (!COOP || !p.alive || p.task) return;
   const now = Date.now();
-  const st = STATIONS.map(t => [t, Math.hypot(t.x - p.x, t.z - p.z)]).filter(([, d]) => d <= TASK_R).sort((a, b) => a[1] - b[1])[0];
+  const st = STN.map(t => [t, Math.hypot(t.x - p.x, t.z - p.z)]).filter(([, d]) => d <= TASK_R).sort((a, b) => a[1] - b[1])[0];
   if (!st) return tell(p, '과제 기계 가까이 가야 해요.');
   const t = st[0];
   if ((p.tcd[t.id] || 0) > now) return tell(p, `이 기계는 ${Math.ceil((p.tcd[t.id] - now) / 1000)}초 뒤에 다시 할 수 있어요. 다른 기계를 찾아보세요!`);
@@ -259,7 +287,7 @@ function answerTask(p, a) {
   else ok = +a === tk.ans;
   p.task = null;
   if (!ok) { p.tcd[t.id] = now + TASK_WRONG_CD; p.c && p.c.send({ t: 'tres', ok: false, s: '앗, 틀렸어요! 8초 뒤에 다시 도전하거나 다른 기계로 가세요.' }); return; }
-  p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1;
+  p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1; questTask();
   const xp = Math.round(xpNeed(p.lv) * .4); gainXp(p, xp); addCoins(p, 12);
   { const st = stat(p); p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .25); }
   let tl = null;
@@ -277,12 +305,7 @@ function answerTask(p, a) {
 function broadcast(obj) { const s = JSON.stringify(obj); const buf = Buffer.from(s); for (const c of conns) if (c.open && (c.pid || c.admin)) c.raw(0x81, buf); }
 const evq = [];
 function ev(o) { evq.push(o); }
-function kstYmd(offsetDays = 0) { return new Date(Date.now() + 9 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10).replace(/-/g, ''); }
-function clearCode(name, ymd) {
-  const s = String(name).replace(/\s+/g, '') + '|' + ymd + '|' + ARENA_SALT;
-  let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
-  return String(1000 + (h % 9000));
-}
+
 function cleanName(n) { return String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 14); }
 function rankList() {
   return [...players.values()].filter(online).sort((a, b) => b.lv - a.lv || b.xp - a.xp || b.coins - a.coins || b.kills - a.kills);
@@ -351,14 +374,18 @@ function killPlayer(v, src) {
 }
 function hurtMon(m, dmg, p) {
   if (m.dead) return;
+  if (m.type === 'crab') dmg = Math.max(1, Math.round(dmg * .6));
   m.hp -= dmg; m.tgt = p.id; m.hitT = .15;
+  if (m.type === 'boss') { m.dmgBy.set(p.id, (m.dmgBy.get(p.id) || 0) + dmg); m.seen.set(p.id, Date.now()); }
   ev({ k: 'hit', t: 'm', id: m.id, d: dmg, x: +m.x.toFixed(1), z: +m.z.toFixed(1) });
+  if (m.hp <= 0 && m.type === 'boss') { m.dead = true; mons.delete(m.id); return bossDie(m, p); }
   if (m.hp <= 0) {
     m.dead = true; mons.delete(m.id);
     const def = MON[m.type];
+    if (COOP) questKill();
     gainXp(p, def.xp); addCoins(p, def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1)));
-    const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6 }[m.type];
-    if (r < gearP) { const tier = Math.min(4, 1 + Math.floor(Math.random() * ({ snail: 1, slime: 1.6, bee: 2, boar: 3, golem: 4 }[m.type]))); const sl = ['wpn', 'arm', 'wpn', 'arm', 'boot', 'helm'][Math.floor(Math.random() * 6)]; dropPick(sl, sl === 'boot' || sl === 'helm' ? Math.min(3, tier) : tier, m.x, m.z); }
+    const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6, weasel: .1, flower: .14, crab: .25, bat: .05, turtle: .45 }[m.type] || .1;
+    if (r < gearP) { const tier = Math.min(4, 1 + Math.floor(Math.random() * ({ snail: 1, slime: 1.6, bee: 2, boar: 3, golem: 4, weasel: 1.6, flower: 2, crab: 3, bat: 1, turtle: 3.6 }[m.type] || 1))); const sl = ['wpn', 'arm', 'wpn', 'arm', 'boot', 'helm'][Math.floor(Math.random() * 6)]; dropPick(sl, sl === 'boot' || sl === 'helm' ? Math.min(3, tier) : tier, m.x, m.z); }
     else if (r < gearP + .22) dropPick('heal', 30, m.x, m.z);
     ev({ k: 'mdie', id: m.id, x: +m.x.toFixed(1), z: +m.z.toFixed(1), by: p.id, type: m.type });
   }
@@ -368,7 +395,7 @@ function hurtMon(m, dmg, p) {
 function enemiesNear(p, range) {
   const out = [];
   for (const q of players.values()) if (q !== p && q.alive && online(q) && Date.now() >= q.prot && !sameTeam(p, q)) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d <= range) out.push({ kind: 'p', o: q, d }); }
-  for (const m of mons.values()) { const d = Math.hypot(m.x - p.x, m.z - p.z); if (d <= range + MON[m.type].r * .5) out.push({ kind: 'm', o: m, d }); }
+  for (const m of mons.values()) { const d = Math.hypot(m.x - p.x, m.z - p.z); if (d <= range + (m.type === 'boss' ? BOSS.r : MON[m.type].r) * .5) out.push({ kind: 'm', o: m, d }); }
   return out.sort((a, b) => a.d - b.d);
 }
 function hitTarget(p, t, dmg) { if (t.kind === 'p' && sameTeam(p, t.o)) return; if (t.kind === 'p') hurtPlayer(t.o, dmg, { kind: 'p', p }); else hurtMon(t.o, dmg, p); }
@@ -412,7 +439,7 @@ function shopCheck(p) {
   return true;
 }
 function buy(p, slot, tier) {
-  const it = SHOP[slot]; tier = Math.floor(+tier);
+  const it = SHOPX[slot]; tier = Math.floor(+tier);
   if (!it || !(tier >= 1 && tier < it.price.length)) return;
   const cur = p[slot] || 0;
   if (tier <= cur) return tell(p, '이미 그보다 좋은 장비를 갖고 있어요.');
@@ -438,6 +465,72 @@ function drinkPot(p) {
   ev({ k: 'fx', s: 'heal', id: p.id, x: p.x, z: p.z });
 }
 function upgrade(p, what) { buy(p, what, (p[what] || 0) + 1); }   // legacy 'up' message
+
+/* ======================= raid boss: 태풍 마수 돌개 ======================= */
+let boss = null, bossCd = 0, bossChk = 0;
+const bossStrikes = [];
+function spawnBoss(why) {
+  if (boss && !boss.dead) return;
+  const n = Math.max(1, [...players.values()].filter(online).length), max = BOSS.hp0 + BOSS.hpPer * n;
+  let x = 0, z = -20; for (let i = 0; i < 30; i++) { const a = Math.random() * 6.28, d = 14 + Math.random() * 20; x = Math.cos(a) * d; z = Math.sin(a) * d; if (!OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + 4)) break; }
+  const id = nextId++;
+  boss = { id, type: 'boss', x, z, hp: max, max, dir: 0, wT: 0, atkCd: 2, hitT: 0, tgt: null, whT: 6, btT: 9, sum: 0, enr: false, dmgBy: new Map(), seen: new Map(), born: Date.now() };
+  mons.set(id, boss);
+  broadcast({ t: 'boss', s: 'spawn', hp: max, why });
+}
+function bossDie(m, killer) {
+  const now = Date.now(), list = [...m.dmgBy.entries()].filter(([id]) => players.has(id)).map(([id, d]) => [players.get(id), d]);
+  const tot = list.reduce((a, [, d]) => a + d, 0) || 1;
+  list.sort((a, b) => b[1] - a[1]);
+  for (const [p, d] of list) {
+    const share = d / tot, c = BOSS.coins + Math.round(BOSS.pool * share) + (p === killer ? 50 : 0);
+    addCoins(p, c); if (p.lv < MAXLV) gainXp(p, xpNeed(p.lv) - p.xp); if (COOP) p.parts = (p.parts || 0) + 3;
+    if (p.alive) p.hp = stat(p).maxHp;
+    p.c && p.c.send({ t: 'msg', s: `<b>태풍 마수 돌개</b> 토벌! 기여 ${Math.round(share * 100)}% → 코인 +${c} · 레벨 업${COOP ? ' · 부품 ⚙+3' : ''}` });
+  }
+  for (let i = 0; i < 8; i++) dropPick(i < 4 ? 'heal' : 'coin', i < 4 ? 30 : 25, m.x, m.z);
+  broadcast({ t: 'boss', s: 'die', by: killer.name, n: list.length, top: list.slice(0, 3).map(([p, d]) => [p.name, Math.round(d / tot * 100)]) });
+  ev({ k: 'fx', s: 'bossdie', x: +m.x.toFixed(1), z: +m.z.toFixed(1) });
+  boss = null; bossCd = now + 240000;
+  if (COOP && quest.stage === 3) questAdvance();
+}
+function bossAI(m, dt, alive, now) {
+  const enr = m.hp < m.max * .3; if (enr && !m.enr) { m.enr = true; broadcast({ t: 'boss', s: 'enrage' }); }
+  // summons at 60% / 30%
+  const sumAt = [.6, .3]; if (m.sum < 2 && m.hp < m.max * sumAt[m.sum]) { m.sum++; for (let i = 0; i < 4; i++) { const a = i / 4 * 6.28, type = i % 2 ? 'bat' : 'weasel', id = nextId++, d = MON[type]; mons.set(id, { id, type, x: m.x + Math.cos(a) * 4, z: m.z + Math.sin(a) * 4, hp: d.hp, max: d.hp, dir: a, wT: 0, atkCd: 1, tgt: null, hitT: 0 }); } broadcast({ t: 'boss', s: 'summon' }); }
+  // target: biggest recent contributor nearby, else nearest
+  let tgt = null, best = -1;
+  for (const p of alive) { if (now < p.prot) continue; const d = Math.hypot(p.x - m.x, p.z - m.z); if (d > 45) continue; const sc = (m.dmgBy.get(p.id) || 0) * (now - (m.seen.get(p.id) || 0) < 8000 ? 1 : 0) + (45 - d) * 3; if (sc > best) { best = sc; tgt = p; } }
+  const spd = BOSS.spd * (enr ? 1.35 : 1);
+  if (tgt) { const d = Math.hypot(tgt.x - m.x, tgt.z - m.z); m.dir = Math.atan2(tgt.x - m.x, tgt.z - m.z); if (d > BOSS.r + 1) { const nx = m.x + Math.sin(m.dir) * spd * dt, nz = m.z + Math.cos(m.dir) * spd * dt; [m.x, m.z] = collide(nx, nz, BOSS.r * .6); } }
+  else { m.wT -= dt; if (m.wT <= 0) { m.wT = 3; m.dir = Math.atan2(-m.x, -m.z) + (Math.random() - .5); } const nx = m.x + Math.sin(m.dir) * spd * .4 * dt, nz = m.z + Math.cos(m.dir) * spd * .4 * dt; [m.x, m.z] = collide(nx, nz, BOSS.r * .6); }
+  m.atkCd -= dt; m.whT -= dt; m.btT -= dt;
+  if (m.atkCd <= 0) { const near = alive.filter(p => now >= p.prot && Math.hypot(p.x - m.x, p.z - m.z) < BOSS.r + 1.8); if (near.length) { m.atkCd = enr ? 1.2 : 1.6; for (const p of near) hurtPlayer(p, BOSS.melee, { kind: 'm', m }); ev({ k: 'fx', s: 'slam', x: +m.x.toFixed(1), z: +m.z.toFixed(1), r: BOSS.r + 1.8 }); } }
+  if (m.whT <= 0 && tgt) { m.whT = enr ? 5 : 7; const r = 7.5; ev({ k: 'fx', s: 'warn', x: +m.x.toFixed(1), z: +m.z.toFixed(1), r, t: 1.3 }); bossStrikes.push({ at: now + 1300, x: m.x, z: m.z, r, dmg: BOSS.whirl, kb: 5, fx: 'whirl' }); }
+  if (m.btT <= 0 && tgt) { m.btT = enr ? 7 : 10; const ts = alive.filter(p => now >= p.prot && Math.hypot(p.x - m.x, p.z - m.z) < 32).sort(() => Math.random() - .5).slice(0, enr ? 7 : 5);
+    for (const p of ts) { const x = p.x + (Math.random() - .5) * 2, z = p.z + (Math.random() - .5) * 2; ev({ k: 'fx', s: 'warn', x: +x.toFixed(1), z: +z.toFixed(1), r: 3, t: 1.4 }); bossStrikes.push({ at: now + 1400, x, z, r: 3, dmg: BOSS.bolt, fx: 'thunder' }); } }
+}
+function tickBossStrikes(now, alive) {
+  for (let i = bossStrikes.length - 1; i >= 0; i--) {
+    const s = bossStrikes[i]; if (now < s.at) continue; bossStrikes.splice(i, 1);
+    ev({ k: 'fx', s: s.fx, x: +s.x.toFixed(1), z: +s.z.toFixed(1), r: s.r });
+    const src = boss ? { kind: 'm', m: boss } : { kind: 'm', m: { type: 'boss' } };
+    for (const p of alive) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d > s.r || now < p.prot) continue; if (s.kb && d > .1) { [p.x, p.z] = collide(p.x + (p.x - s.x) / d * s.kb, p.z + (p.z - s.z) / d * s.kb, .45); } hurtPlayer(p, s.dmg, src); }
+  }
+}
+/* ======================= 2부 협동 퀘스트 (다같이) ======================= */
+const QSTAGES = [null, { n: '발전기 수리', d: '과제 기계에서 과제를 다 함께 해내세요' }, { n: '매연 정화', d: '섬의 매연 몬스터를 다 함께 정화하세요' }, { n: '태풍 마수 토벌', d: '태풍 마수 돌개를 모두 힘을 합쳐 쓰러뜨리세요!' }, { n: '옥정섬 완전 복구!', d: '축하해요! 자유롭게 사냥하고 장비를 모으세요' }];
+const quest = { stage: 1, prog: 0, goal: 10 };
+function questGoal() { const n = Math.max(1, [...players.values()].filter(online).length); return quest.stage === 1 ? Math.max(8, n * 2) : quest.stage === 2 ? Math.max(15, n * 4) : 1; }
+function questReset() { quest.stage = 1; quest.prog = 0; }
+function questAdvance() {
+  for (const p of players.values()) if (online(p)) { if (p.lv < MAXLV) gainXp(p, xpNeed(p.lv) - p.xp); addCoins(p, 40); p.parts = (p.parts || 0) + 1; }
+  const done = QSTAGES[quest.stage].n; quest.stage = Math.min(4, quest.stage + 1); quest.prog = 0;
+  broadcast({ t: 'quest', s: 'next', done, stage: quest.stage, name: QSTAGES[quest.stage].n, desc: QSTAGES[quest.stage].d });
+  if (quest.stage === 3) setTimeout(() => spawnBoss('quest'), 4000);
+}
+function questTask() { if (COOP && quest.stage === 1) { quest.prog++; if (quest.prog >= questGoal()) questAdvance(); } }
+function questKill() { if (quest.stage === 2) { quest.prog++; if (quest.prog >= questGoal()) questAdvance(); } }
 
 /* ======================= simulation ======================= */
 let monT = 0, lbT = 0, snapT = 0;
@@ -487,42 +580,57 @@ function step(dt) {
     monT = 1.2;
     const avgLv = alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
     const pool = Object.entries(MON).filter(([, d]) => d.lv <= Math.max(2, avgLv + 2));
-    const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' ? .5 + (avgLv - 7) * .3 : 2);
+    const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' || k === 'turtle' ? .6 + (avgLv - d.lv) * .25 : k === 'bat' ? 1 : 2);
     let r = Math.random() * w.reduce((a, b) => a + b, 0), type = pool[0][0];
     for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { type = pool[i][0]; break; } }
     for (let i = 0; i < 20; i++) {
       const a = Math.random() * Math.PI * 2, d = 8 + Math.random() * (zr - 12), x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + 2)) continue;
       if (alive.some(p => Math.hypot(p.x - x, p.z - z) < 11)) continue;
-      const def = MON[type]; const id = nextId++;
-      mons.set(id, { id, type, x, z, hp: def.hp, max: def.hp, dir: Math.random() * 6.28, wT: 0, atkCd: 1, tgt: null, hitT: 0 });
+      const def = MON[type];
+      for (let k = 0; k < (def.beh === 'swarm' ? 3 : 1); k++) { const id = nextId++; mons.set(id, { id, type, x: x + k * .9, z: z + (k % 2) * .9, hp: def.hp, max: def.hp, dir: Math.random() * 6.28, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 1 + Math.random() * 2 }); }
       break;
     }
   }
   // monsters move/attack
   for (const m of mons.values()) {
+    if (m.type === 'boss') { bossAI(m, dt, alive, now); continue; }
     const def = MON[m.type];
     let tgt = null, td = def.aggro;
     for (const p of alive) { if (now < p.prot) continue; const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < td || (m.tgt === p.id && d < def.aggro * 1.6)) { if (d < td || !tgt) { tgt = p; td = d; } } }
-    let spd = def.spd;
-    if (tgt) m.dir = Math.atan2(tgt.x - m.x, tgt.z - m.z) + (m.type === 'bee' ? Math.sin(now / 200 + m.id) * .6 : 0);
+    let spd = def.spd; m.cd2 = (m.cd2 || 0) - dt;
+    if (tgt) m.dir = Math.atan2(tgt.x - m.x, tgt.z - m.z) + (m.type === 'bee' || m.type === 'bat' ? Math.sin(now / 200 + m.id) * .6 : 0);
     else { spd *= .4; m.wT -= dt; if (m.wT <= 0) { m.wT = 2 + Math.random() * 3; m.dir = Math.random() * 6.28; } }
+    if (def.beh === 'dart' && tgt) { if (m.dash > 0) { m.dash -= dt; spd = 15; } else if (td < 10 && m.cd2 <= 0) { m.dash = .4; m.cd2 = 2.6; } }
+    if (def.beh === 'ranged' && tgt) { spd = td < 7 ? -def.spd * 1.5 : 0; if (td < 14 && m.cd2 <= 0) { m.cd2 = 2.6; const a = Math.atan2(tgt.x - m.x, tgt.z - m.z); projs.push({ id: nextId++, kind: 'spit', mon: true, x: m.x, z: m.z, dx: Math.sin(a), dz: Math.cos(a), spd: 13, life: 1.3, dmg: def.dmg, r: .7 }); } }
+    if (def.beh === 'heavy') { if (m.wind > 0) { m.wind -= dt; spd = 0; if (m.wind <= 0) { const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'slam', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8 }); for (const p of alive) if (now >= p.prot && Math.hypot(p.x - fx, p.z - fz) < 2.8) hurtPlayer(p, def.dmg, { kind: 'm', m }); m.atkCd = 2.4; } }
+      else if (tgt && td < def.r + 1.6 && m.atkCd <= 0) { m.wind = 1.0; const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'warn', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8, t: 1 }); } }
+    if (spd < 0) { m.dir += Math.PI; spd = -spd; }
     const nx = m.x + Math.sin(m.dir) * spd * dt, nz = m.z + Math.cos(m.dir) * spd * dt;
     [m.x, m.z] = collide(nx, nz, def.r * .7);
     if (Math.hypot(m.x, m.z) > zr + 4) { m.dir += Math.PI; }
     m.atkCd -= dt;
-    if (tgt && td < def.r + .6 && m.atkCd <= 0) { m.atkCd = 1.1; hurtPlayer(tgt, def.dmg, { kind: 'm', m }); }
+    if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0) { m.atkCd = 1.1; hurtPlayer(tgt, def.dmg, { kind: 'm', m }); }
+  }
+  tickBossStrikes(now, alive);
+  // boss trigger (1부: 레벨이 높아지면 / 2부: 퀘스트 3단계)
+  bossChk -= dt;
+  if (bossChk <= 0) { bossChk = 5;
+    const on = [...players.values()].filter(online);
+    if (!COOP && !boss && now > bossCd && on.length >= 2 && on.filter(p => p.lv >= 10).length >= on.length * .5) spawnBoss('level');
+    if (COOP && quest.stage === 3 && !boss && now > bossCd - 200000) spawnBoss('quest');
   }
   // projectiles
   for (let i = projs.length - 1; i >= 0; i--) {
     const pr = projs[i], owner = players.get(pr.by); pr.life -= dt;
     pr.x += pr.dx * pr.spd * dt; pr.z += pr.dz * pr.spd * dt;
+    if (pr.mon) { let hit = false; for (const p of alive) if (now >= p.prot && Math.hypot(p.x - pr.x, p.z - pr.z) < pr.r + .45) { hurtPlayer(p, pr.dmg, { kind: 'm', m: { type: 'flower' } }); hit = true; break; } if (hit || pr.life <= 0) projs.splice(i, 1); continue; }
     if (!owner) { projs.splice(i, 1); continue; }
     if (pr.kind === 'cannon') {
       for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r + .6)) { if (t.kind === 'p' && t.o.id === pr.by) continue; const key = t.kind + t.o.id; if (pr.hit.has(key)) continue; pr.hit.add(key); hitTarget(owner, t, pr.dmg); }
     } else {
       pr.tick -= dt;
-      if (pr.tick <= 0) { pr.tick = .3; for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r)) { if (t.kind === 'p' && t.o.id === pr.by) continue; hitTarget(owner, t, pr.dmg); if (t.kind === 'm') { t.o.x += (pr.x - t.o.x) * .15; t.o.z += (pr.z - t.o.z) * .15; } } }
+      if (pr.tick <= 0) { pr.tick = .3; for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r)) { if (t.kind === 'p' && t.o.id === pr.by) continue; hitTarget(owner, t, pr.dmg); if (t.kind === 'm' && t.o.type !== 'boss') { t.o.x += (pr.x - t.o.x) * .15; t.o.z += (pr.z - t.o.z) * .15; } } }
     }
     if (pr.life <= 0 || Math.hypot(pr.x, pr.z) > R + 4) projs.splice(i, 1);
   }
@@ -538,7 +646,7 @@ function step(dt) {
   // king
   const rl = rankList();
   const top = rl[0];
-  king = top && rl.length >= 2 && top.lv >= 3 && (!rl[1] || top.lv > rl[1].lv || top.coins > rl[1].coins) ? top.id : null;
+  king = !COOP && top && rl.length >= 2 && top.lv >= 3 && (!rl[1] || top.lv > rl[1].lv || top.coins > rl[1].coins) ? top.id : null;
   // snapshots 10 Hz
   snapT -= dt;
   if (snapT <= 0) { snapT = .1; sendSnap(rl); }
@@ -551,7 +659,7 @@ function sendSnap(rl) {
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2)]);
-  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
+  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
   const rankOf = new Map(rl.map((p, i) => [p.id, i + 1]));
   for (const c of conns) {
     if (!c.open) continue;
@@ -559,7 +667,7 @@ function sendSnap(rl) {
     const p = c.pid && players.get(c.pid); if (!p) continue;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STATIONS.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
     c.send(base);
   }
 }
@@ -587,23 +695,23 @@ function onConnect(c) {
     if (msg.t === 'join' && !c.pid && !c.admin) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
-      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STATIONS, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
-      if (gate && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d)) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
+      if (gate && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d), SALT) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
       const same = [...players.values()].find(p => p.name === name && !online(p));
       if (same) players.delete(same.id);
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
-      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STATIONS, taskN: TASKN, taskR: TASK_R, ph: round.phase });
+      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
       broadcast({ t: 'ro', joined: p.id, name });
       return;
     }
     if (msg.t === 'admin') {
       if (msg.key !== ADMIN_KEY) return c.send({ t: 'err', s: '관리자 비밀번호가 틀렸어요.' });
-      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, teams: TEAMS, stations: STATIONS, ph: round.phase, addr: addresses() }); sendBoard(rankList());
+      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, teams: TEAMS, stations: STN, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
       return;
     }
     if (c.admin && msg.t === 'cmd') return adminCmd(c, msg);
@@ -612,7 +720,7 @@ function onConnect(c) {
     if (msg.t === 'in') { const mx = +msg.mx || 0, mz = +msg.mz || 0, l = Math.hypot(mx, mz); p.mx = l > 1 ? mx / l : mx; p.mz = l > 1 ? mz / l : mz; }
     else if (msg.t === 'sk') useSkill(p, String(msg.id));
     else if (msg.t === 'up') upgrade(p, msg.w === 'arm' ? 'arm' : 'wpn');
-    else if (msg.t === 'buy') { if (msg.s === 'pot') buyPot(p); else if (SHOP[msg.s]) buy(p, msg.s, msg.v); }
+    else if (msg.t === 'buy') { if (msg.s === 'pot') buyPot(p); else if (SHOPX[msg.s]) buy(p, msg.s, msg.v); }
     else if (msg.t === 'pot') drinkPot(p);
     else if (msg.t === 'task') startTask(p);
     else if (msg.t === 'ans') answerTask(p, msg.a);
@@ -625,28 +733,31 @@ function adminCmd(c, msg) {
     const min = Math.max(2, Math.min(30, +msg.min || 10));
     for (const p of players.values()) resetPlayer(p);
     for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
-    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0;
+    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0; boss = null; bossStrikes.length = 0; bossCd = 0; if (COOP) questReset();
     round.phase = 'play'; round.len = min * 60; round.endsAt = Date.now() + min * 60000;
     broadcast({ t: 'round', s: `${min}분 결승 라운드 시작! 모두 Lv 1부터 다시 시작해요. 마지막에는 바람의 벽이 좁혀져요.` });
   } else if (msg.c === 'stop') { if (round.phase === 'play') endRound(); }
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
-  else if (msg.c === 'reset') { for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) questReset(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'boss') { bossCd = 0; spawnBoss('teacher'); }
+  else if (msg.c === 'qreset') { questReset(); broadcast({ t: 'quest', s: 'reset', stage: 1, name: QSTAGES[1].n, desc: QSTAGES[1].d }); }
+  else if (msg.c === 'qnext') { if (COOP && quest.stage < 4) questAdvance(); }
   else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
   else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'kick') { const p = players.get(+msg.id); if (p && p.c) { p.c.send({ t: 'err', s: '선생님이 퇴장시켰어요.' }); setTimeout(() => p.c.close(), 200); } }
+  else if (msg.c === 'spawn' && process.env.ARENA_TEST && MON[msg.type]) { const d = MON[msg.type], id = nextId++; mons.set(id, { id, type: msg.type, x: +msg.x, z: +msg.z, hp: d.hp, max: d.hp, dir: 0, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 2 }); }
   else if (msg.c === 'dbg' && process.env.ARENA_TEST) { const p = players.get(+msg.id); if (p) Object.assign(p, msg.set); }
-  else if (msg.c === 'code') { c.send({ t: 'code', name: cleanName(msg.name), code: clearCode(cleanName(msg.name), kstYmd(0)) }); }
+  else if (msg.c === 'code') { c.send({ t: 'code', name: cleanName(msg.name), code: clearCode(cleanName(msg.name), kstYmd(0), SALT) }); }
 }
-function addresses() {
-  const out = [];
-  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
-  return out;
+return { onConnect, step, conns, MODE };
 }
+const ROOMS = { battle: makeRoom('battle'), coop: makeRoom('coop') };
 
 /* ======================= loop & start ======================= */
 let last = Date.now();
-setInterval(() => { const now = Date.now(), dt = Math.min(.1, (now - last) / 1000); last = now; try { step(dt); } catch (e) { console.error(e); } }, TICK * 1000);
+setInterval(() => { const now = Date.now(), dt = Math.min(.1, (now - last) / 1000); last = now; for (const r of Object.values(ROOMS)) { try { r.step(dt); } catch (e) { console.error(r.MODE, e); } } }, TICK * 1000);
+process.on('uncaughtException', e => console.error('uncaught', e));
 server.listen(PORT, () => {
   const addr = addresses();
   console.log('\n  옥정섬 SOS · 클리어 아레나 서버가 켜졌어요!\n');
@@ -656,4 +767,4 @@ server.listen(PORT, () => {
   console.log('\n  선생님 관리·TV 화면: 위 주소 뒤에 /admin  →  비밀번호: ' + ADMIN_KEY);
   console.log('  (끄려면 이 창에서 Ctrl + C)\n');
 });
-module.exports = { clearCode, kstYmd };
+module.exports = { clearCode, kstYmd, ROOMS };
