@@ -74,7 +74,7 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
     <div class="panel">
       <h2>팀전</h2>
       <div class="rowx"><label><input type="checkbox" id="teamsOn" checked> 4팀 팀전 (같은 팀 공격 안 됨)</label><button class="btn g" id="shuffle">팀 다시 나누기</button></div>
-      <p class="muted">학생이 들어오면 인원이 적은 팀에 자동으로 들어가요. 섬의 과제 기계 8곳에서 미션을 성공하면 팀 게이지가 차고, 가득 차면 그 팀 모두 레벨 업. 팀을 다시 나누면 팀 게이지·기록이 0이 돼요.</p>
+      <p class="muted">팀 점수 = 과제 ×3 + 처치 ×1 + 팀 레벨 업 ×10. 결승 라운드가 끝나면 1위 팀을 발표해요. 팀 게이지가 차면 그 팀은 레벨 업 + 60초 '바람의 축복'(공격 +30%). 좋은 장비에는 과제로만 얻는 부품 ⚙이 필요해요.</p><p class="muted">학생이 들어오면 인원이 적은 팀에 자동으로 들어가요. 섬의 과제 기계 8곳에서 미션을 성공하면 팀 게이지가 차고, 가득 차면 그 팀 모두 레벨 업. 팀을 다시 나누면 팀 게이지·기록이 0이 돼요.</p>
     </div>
     <div class="panel">
       <h2>입장 코드</h2>
@@ -118,7 +118,7 @@ $('#shuffle').addEventListener('click', () => { if (confirm('팀을 무작위로
 $('#cgo').addEventListener('click', () => cmd({ c: 'code', name: $('#cname').value }));
 function render() {
   $('#teams').hidden = !teamsOn || !TEAMS.length;
-  $('#teams').innerHTML = TEAMS.map((T, i) => { const t = teams[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 <small>${t.n}명 · 팀 레벨 업 ${t.lvups}번<br>과제 ${t.tasks} · 처치 ${t.kills}</small><i><b style="width:${Math.min(100, t.pts / t.goal * 100)}%"></b></i><small>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('');
+  $('#teams').innerHTML = TEAMS.map((T, i) => { const t = teams[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점 <small>${t.n}명 · 팀 레벨 업 ${t.lvups}번${t.bless ? ` · 🌪 축복 ${t.bless}초` : ''}<br>과제 ${t.tasks} · 처치 ${t.kills}</small><i><b style="width:${Math.min(100, t.pts / t.goal * 100)}%"></b></i><small>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('');
   $('#tb').innerHTML = lb.map((r, i) => `<tr class="${r[0] === king ? 'k' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="dot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[10] || 0}</td><td style="font-size:14px">${GEAR[r[7]]} · ${ARM[r[8]]}</td><td><button class="kick" data-id="${r[0]}">퇴장</button></td></tr>`).join('') || '<tr><td colspan="9" style="color:#8FB3B0">아직 아무도 없어요</td></tr>';
   document.querySelectorAll('.kick').forEach(b => b.addEventListener('click', () => { if (confirm('이 학생을 퇴장시킬까요?')) cmd({ c: 'kick', id: +b.dataset.id }); }));
 }

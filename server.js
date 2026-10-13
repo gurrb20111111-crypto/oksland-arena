@@ -106,10 +106,10 @@ const BOOTN = ['맨발', '운동화', '방수 장화', '바람 부츠'];
 const HELMN = ['맨머리', '안전모', '고글 헬멧', '정비반장 헬멧'];
 /* 바람상회 (island centre): buy any higher tier directly. price[t] = cost of tier t */
 const SHOP = {
-  wpn: { label: '무기', names: GEARN, price: [0, 60, 150, 280, 450], eff: '공격 +5' },
-  arm: { label: '갑옷', names: ARMN, price: [0, 60, 150, 280, 450], eff: '체력 +22 · 받는 피해 −6%' },
-  boot: { label: '신발', names: BOOTN, price: [0, 50, 120, 220], eff: '이동 속도 +7%' },
-  helm: { label: '모자', names: HELMN, price: [0, 50, 120, 220], eff: '스킬 대기 −8%' }
+  wpn: { label: '무기', names: GEARN, price: [0, 60, 150, 280, 450], parts: [0, 0, 1, 3, 5], eff: '공격 +5' },
+  arm: { label: '갑옷', names: ARMN, price: [0, 60, 150, 280, 450], parts: [0, 0, 1, 3, 5], eff: '체력 +22 · 받는 피해 −6%' },
+  boot: { label: '신발', names: BOOTN, price: [0, 50, 120, 220], parts: [0, 0, 1, 2], eff: '이동 속도 +7%' },
+  helm: { label: '모자', names: HELMN, price: [0, 50, 120, 220], parts: [0, 0, 1, 2], eff: '스킬 대기 −8%' }
 };
 const SLOTN = { wpn: GEARN, arm: ARMN, boot: BOOTN, helm: HELMN };
 const POT = { price: 25, max: 3, heal: .45, cd: 4 };
@@ -118,7 +118,10 @@ const UPG = [60, 120, 200, 300];       // legacy (old clients)
 const ARENA_SALT = 'oksland-arena';
 /* ---- teams ---- */
 const TEAMS = [{ n: '바람', c: '#3FB6FF' }, { n: '태양', c: '#FFA51F' }, { n: '바다', c: '#22CFA0' }, { n: '번개', c: '#B57BFF' }];
-const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0 }));
+const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
+const BLESS_MS = 60000;                                         // team buff after the gauge fills
+const teamScore = t => t.tasks * 3 + t.kills + t.lvups * 10;
+const blessed = p => teamsOn && p.team != null && teamSt[p.team].buffUntil > Date.now();
 let teamsOn = true;
 /* ---- tasks (Among Us style stations) ---- */
 const TASK_CD = 45000, TASK_WRONG_CD = 8000, TASK_R = 3;
@@ -202,20 +205,20 @@ function zoneR() {
 const online = p => !!(p.c && p.c.open);
 const stat = p => ({
   maxHp: 100 + (p.lv - 1) * 15 + p.arm * 22,
-  atk: 10 + (p.lv - 1) * 4 + p.wpn * 5,
-  def: p.arm * .06,
+  atk: Math.round((10 + (p.lv - 1) * 4 + p.wpn * 5) * (blessed(p) ? 1.3 : 1)),
+  def: 1 - (1 - p.arm * .06) * (blessed(p) ? .8 : 1),
   cdr: (p.helm || 0) * .08,
-  spd: 7.6 * (1 + (p.lv - 1) * .04) * (1 + (p.boot || 0) * .07) * (p.dashT > 0 ? 1.8 : 1)
+  spd: 7.6 * (1 + (p.lv - 1) * .04) * (1 + (p.boot || 0) * .07) * (p.dashT > 0 ? 1.8 : 1) * (blessed(p) ? 1.1 : 1)
 });
 function newPlayer(c, name) {
   const [x, z] = freeSpot(10);
-  const p = { id: nextId++, c, name, x, z, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, team: pickTeam(), tcd: {}, task: null, tasks: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
+  const p = { id: nextId++, c, name, x, z, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, team: pickTeam(), tcd: {}, task: null, tasks: 0, parts: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
     alive: true, respawnAt: 0, prot: Date.now() + 3000, cds: {}, dashT: 0, shieldT: 0, lastHurt: 0, dmgBy: new Map(), joined: Date.now(), lastIn: Date.now() };
   p.hp = stat(p).maxHp;
   return p;
 }
 function resetPlayer(p) {
-  p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
+  p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
 }
 
@@ -227,7 +230,7 @@ const sameTeam = (a, b) => teamsOn && a && b && a !== b && a.team === b.team;
 function shuffleTeams() {
   const list = [...players.values()].filter(online).sort(() => Math.random() - .5);
   list.forEach((p, i) => { p.team = i % 4; });
-  for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 });
+  for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
 }
 const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startTask(p) {
@@ -256,16 +259,17 @@ function answerTask(p, a) {
   else ok = +a === tk.ans;
   p.task = null;
   if (!ok) { p.tcd[t.id] = now + TASK_WRONG_CD; p.c && p.c.send({ t: 'tres', ok: false, s: '앗, 틀렸어요! 8초 뒤에 다시 도전하거나 다른 기계로 가세요.' }); return; }
-  p.tcd[t.id] = now + TASK_CD; p.tasks++;
+  p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1;
   const xp = Math.round(xpNeed(p.lv) * .4); gainXp(p, xp); addCoins(p, 12);
+  { const st = stat(p); p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .25); }
   let tl = null;
   if (teamsOn) {
     const ts = teamSt[p.team]; ts.pts++; ts.tasks++;
-    if (ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team;
+    if (ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team; ts.buffUntil = now + BLESS_MS;
       for (const q of players.values()) if (online(q) && q.team === p.team && q.lv < MAXLV) gainXp(q, xpNeed(q.lv) - q.xp);
       broadcast({ t: 'tlv', team: p.team, by: p.name, n: ts.lvups }); }
   }
-  p.c && p.c.send({ t: 'tres', ok: true, xp, coins: 12, s: `과제 성공! 경험치 +${xp} · 코인 +12${teamsOn ? ' · 팀 게이지 +1' : ''}` });
+  p.c && p.c.send({ t: 'tres', ok: true, xp, coins: 12, s: `과제 성공! 부품 ⚙+1 · 경험치 +${xp} · 코인 +12 · 체력 회복${teamsOn ? ' · 팀 게이지 +1' : ''}` });
   ev({ k: 'task', id: p.id, sid: t.id, team: p.team, tl });
 }
 
@@ -326,6 +330,7 @@ function killPlayer(v, src) {
     let best = null; for (const k of ['wpn', 'arm', 'boot', 'helm']) if ((v[k] || 0) > 0 && (!best || v[k] > v[best])) best = k;
     if (best) { dropPick(best, v[best], v.x, v.z); gearLost = SLOTN[best][v[best]]; v[best]--; }
   }
+  let partLost = 0; if ((v.parts || 0) > 0) { v.parts--; partLost = 1; dropPick('part', 1, v.x, v.z); }
   const xpLoss = Math.round(xpNeed(v.lv) * .4); let lvDown = false;
   v.xp -= xpLoss; if (v.xp < 0) { if (v.lv > 1) { v.lv--; v.xp = Math.max(0, xpNeed(v.lv) + v.xp); lvDown = true; } else v.xp = 0; }
   v.streak = 0;
@@ -342,7 +347,7 @@ function killPlayer(v, src) {
   }
   v.dmgBy.clear();
   ev({ k: 'kill', v: v.id, a: killer ? killer.id : null, src: src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : null, bounty, helpers: helpers.map(h => h.id) });
-  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : '?', lost, gearLost, lvDown, xpLoss, respawn: 5 });
+  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : '?', lost, gearLost, partLost, lvDown, xpLoss, respawn: 5 });
 }
 function hurtMon(m, dmg, p) {
   if (m.dead) return;
@@ -412,8 +417,10 @@ function buy(p, slot, tier) {
   const cur = p[slot] || 0;
   if (tier <= cur) return tell(p, '이미 그보다 좋은 장비를 갖고 있어요.');
   if (!shopCheck(p)) return;
-  const cost = it.price[tier]; if (p.coins < cost) return tell(p, `코인이 모자라요 (${cost}코인 필요)`);
-  p.coins -= cost; p[slot] = tier; if (slot === 'arm') p.hp += (tier - cur) * 22;
+  const cost = it.price[tier], need = it.parts[tier] || 0;
+  if ((p.parts || 0) < need) return tell(p, `<b>부품 ⚙ ${need}개</b>가 필요해요 (지금 ${p.parts || 0}개). 과제 기계에서 과제를 하면 부품을 받아요!`);
+  if (p.coins < cost) return tell(p, `코인이 모자라요 (${cost}코인 필요)`);
+  p.coins -= cost; p.parts -= need; p[slot] = tier; if (slot === 'arm') p.hp += (tier - cur) * 22;
   tell(p, `<b>${it.names[tier]}</b>을(를) 샀어요! −${cost}코인`);
   ev({ k: 'fx', s: 'upg', id: p.id, x: p.x, z: p.z });
 }
@@ -461,6 +468,7 @@ function step(dt) {
     for (const k of picks.values()) {
       if (Math.hypot(k.x - p.x, k.z - p.z) > 1.6) continue;
       if (k.kind === 'coin') addCoins(p, k.val);
+      else if (k.kind === 'part') { p.parts = (p.parts || 0) + k.val; p.c && p.c.send({ t: 'msg', s: '부품 ⚙ 1개를 주웠어요!' }); }
       else if (k.kind === 'heal') p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .3);
       else if (SLOTN[k.kind]) {
         const cur = p[k.kind] || 0;
@@ -539,7 +547,7 @@ function step(dt) {
 }
 function sendSnap(rl) {
   const t = Date.now();
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0), p.wpn, p.arm, p.team]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0), p.wpn, p.arm, p.team]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2)]);
@@ -551,17 +559,19 @@ function sendSnap(rl) {
     const p = c.pid && players.get(c.pid); if (!p) continue;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STATIONS.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STATIONS.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
     c.send(base);
   }
 }
 function sendBoard(rl) {
-  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ ...s, goal: teamGoal(i), n: teamCount(i) })), list: rl.map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks]) });
+  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: rl.map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0]) });
 }
 function endRound() {
   const rl = rankList();
   round.phase = 'end'; round.final = rl.slice(0, 10).map(p => ({ name: p.name, lv: p.lv, coins: p.coins, kills: p.kills, deaths: p.deaths }));
-  broadcast({ t: 'end', top: round.final });
+  const tr = teamsOn ? TEAMS.map((T, i) => ({ i, n: T.n, c: T.c, score: teamScore(teamSt[i]), tasks: teamSt[i].tasks, kills: teamSt[i].kills, lvups: teamSt[i].lvups })).filter(t => teamCount(t.i) > 0).sort((a, b) => b.score - a.score) : null;
+  round.teamFinal = tr;
+  broadcast({ t: 'end', top: round.final, teams: tr });
   setTimeout(() => { if (round.phase === 'end') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전으로 돌아왔어요.' }); } }, 30000);
 }
 
@@ -614,13 +624,13 @@ function adminCmd(c, msg) {
   if (msg.c === 'start') {
     const min = Math.max(2, Math.min(30, +msg.min || 10));
     for (const p of players.values()) resetPlayer(p);
-    for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 });
+    for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
     mons.clear(); projs.length = 0; picks.clear(); pending.length = 0;
     round.phase = 'play'; round.len = min * 60; round.endsAt = Date.now() + min * 60000;
     broadcast({ t: 'round', s: `${min}분 결승 라운드 시작! 모두 Lv 1부터 다시 시작해요. 마지막에는 바람의 벽이 좁혀져요.` });
   } else if (msg.c === 'stop') { if (round.phase === 'play') endRound(); }
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
-  else if (msg.c === 'reset') { for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'reset') { for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
   else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
   else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, ph: round.phase, addr: addresses() }); }
