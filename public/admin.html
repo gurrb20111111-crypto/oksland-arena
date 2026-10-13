@@ -102,6 +102,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const ROOM2 = /\/(admin|tv)2\/?$/.test(location.pathname);
 document.title = ROOM2 ? '2부 협동 아레나 관리' : '1부 대결 아레나 관리';
 const GEAR = ['맨손', '스패너', '토크 렌치', '돌풍 해머', '태풍 블레이드'], ARM = ['작업복', '작업 조끼', '방풍 재킷', '탄소섬유 슈트', '태풍 갑옷'];
+let STRUCTS = [];
 let ws, R = 62, OBS = [], lb = [], king = null, last = null, TEAMS = [], STN = [], teams = [], teamsOn = true;
 const qk = new URLSearchParams(location.search).get('key'); if (qk) $('#key').value = qk;
 function go() {
@@ -110,7 +111,7 @@ function go() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
-    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
+    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
     if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
     if (m.t === 's') { last = m; renderBQ(m); const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
     if (m.t === 'code') { $('#code').textContent = m.code; return; }
@@ -149,7 +150,8 @@ function draw() {
   cx.clearRect(0, 0, N, N); cx.fillStyle = '#4FA3D1'; cx.fillRect(0, 0, N, N);
   cx.fillStyle = '#8CC47C'; cx.beginPath(); cx.arc(N / 2, N / 2, R * s, 0, 7); cx.fill();
   if (last.zr < R - .3) { cx.strokeStyle = '#B44CFF'; cx.lineWidth = 4; cx.beginPath(); cx.arc(N / 2, N / 2, last.zr * s, 0, 7); cx.stroke(); }
-  for (const o of OBS) { if (o[3] === 'station') continue; cx.fillStyle = o[3] === 'tree' ? '#3E8E57' : o[3] === 'forge' ? '#FFC21A' : '#9AA6AC'; cx.beginPath(); cx.arc(X(o[0]), Z(o[1]), Math.max(2, o[2] * s), 0, 7); cx.fill(); }
+  for (const o of OBS) { if (o[3] === 'station') continue; cx.fillStyle = o[3] === 'tree' ? '#3E8E57' : o[3] === 'forge' || o[3] === 'shop' ? '#FFC21A' : o[3] === 'shrine' ? '#8FD3FF' : '#9AA6AC'; cx.beginPath(); cx.arc(X(o[0]), Z(o[1]), Math.max(2, o[2] * s), 0, 7); cx.fill(); }
+  for (const st of STRUCTS) { const [x0, x1, z0, z1] = st.plat; cx.fillStyle = '#B07A4A'; cx.fillRect(X(x0), Z(z0), (x1 - x0) * s, (z1 - z0) * s); }
   for (const t of STN) { cx.save(); cx.translate(X(t.x), Z(t.z)); cx.rotate(Math.PI / 4); cx.fillStyle = '#5FF0D8'; cx.fillRect(-6, -6, 12, 12); cx.restore(); }
   for (const m of last.M) { cx.fillStyle = '#E9A3FF'; cx.beginPath(); cx.arc(X(m[2]), Z(m[3]), 3, 0, 7); cx.fill(); }
   cx.font = '700 11px sans-serif'; cx.textAlign = 'center';
