@@ -84,6 +84,18 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 .card .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .card .btn{padding:0 20px}
 .card .btn.ghost{background:#E6F0EE;color:#10242B;border:0}
+.shop{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.shop section{border:1.5px solid #D3DFDD;border-radius:16px;padding:10px 12px;display:grid;gap:6px;background:#fff}
+.shop h3{margin:0;font-size:16px;display:flex;justify-content:space-between;align-items:baseline;gap:6px}.shop h3 small{font-size:11.5px;color:#5F7378;font-weight:600}
+.si{display:grid;grid-template-columns:12px 1fr auto;grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:4px 0;border-top:1px dashed #E1EAE8}
+.si .tc{grid-row:1/3;width:12px;height:12px;border-radius:4px}.si b{font-size:14px}.si small{grid-column:2;font-size:11.5px;color:#5F7378}
+.si button,.si em{grid-column:3;grid-row:1/3}.si em{font-style:normal;font-size:11.5px;font-weight:800;color:#127A6C}.si.own b{color:#5F7378}
+.si button{min-width:76px;min-height:40px;border-radius:12px;border:0;background:#10242B;color:#FFC21A;font-weight:900;font-size:14px}
+.si button::before{content:'';display:inline-block;width:10px;height:10px;border-radius:50%;background:#FFC21A;margin-right:5px;vertical-align:-1px}
+.si button:disabled{opacity:.3}
+.shopw{margin:8px 0 0;padding:9px 12px;border-radius:12px;background:#FFF1D6;color:#7A4A00;font-weight:700;font-size:13.5px}
+.stl{display:flex;flex-wrap:wrap;gap:4px 12px;font:700 12.5px var(--mono);color:#3F5259}
+@media (max-width:620px){.shop{grid-template-columns:1fr}}
 .upg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .upg div{border:1.5px solid #D3DFDD;border-radius:16px;padding:12px;display:grid;gap:6px}
 .upg b{font-size:17px}
@@ -141,7 +153,8 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
   <div class="joy glass pe" id="joy"><i id="joyK"></i></div>
   <div class="emo pe" id="emo" hidden></div>
   <div class="mid pe">
-    <button class="glass" id="bUpg">강화 <kbd>U</kbd></button>
+    <button class="glass" id="bUpg">상점 <kbd>B</kbd></button>
+    <button class="glass" id="bPot">음료 <b id="potN">1</b> <kbd>R</kbd></button>
     <button class="glass" id="bRank">순위 <kbd>Tab</kbd></button>
     <button class="glass" id="bEmo">말풍선 <kbd>T</kbd></button>
   </div>
@@ -167,7 +180,7 @@ const SK = [
 const MONC = { snail: '#93A08A', slime: '#7D6CB0', bee: '#3E3F48', boar: '#5B4A42', golem: '#5A5F66' };
 const MONN = { snail: '매연 달팽이', slime: '스모그 슬라임', bee: '미세먼지 벌', boar: '매연 멧돼지', golem: '스모그 골렘' };
 const TIERC = ['#B9C4C8', '#8FD3FF', '#5FA8FF', '#B07CF0', '#FFC21A'];
-let ws = null, me = null, myId = 0, R = 62, OBS = [], GEARN = [], ARMN = [], UPG = [], names = new Map(), lb = [], king = null;
+let ws = null, me = null, myId = 0, R = 62, OBS = [], GEARN = [], ARMN = [], UPG = [], SHOP = null, POTI = { price: 25, max: 3, heal: .45 }, SHOP_R = 9, names = new Map(), lb = [], king = null;
 let snaps = [], meS = null, phase = 'free', zr = 62, leftS = null, lastSnapAt = 0;
 
 /* ================= join ================= */
@@ -229,7 +242,10 @@ function buildWorld() {
       const base = new THREE.Mesh(new THREE.CylinderGeometry(r, r + .4, .6, 16), M('#8A8F95')); base.position.y = .3; g.add(base);
       const anv = new THREE.Mesh(new THREE.BoxGeometry(1.6, .8, .8), M('#4A4F55')); anv.position.y = 1; g.add(anv);
       const fire = new THREE.Mesh(new THREE.SphereGeometry(.7, 10, 8), new THREE.MeshBasicMaterial({ color: '#FF9A3C' })); fire.position.set(-1.6, 1, 0); g.add(fire);
-      const lab = label('대장간 · 강화(U)', '#FFC21A'); lab.position.y = 3.2; g.add(lab);
+      const lab = label('바람상회 · 상점(B)', '#FFC21A'); lab.position.y = 4.6; g.add(lab);
+      for (const [px, pz] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]]) { const po = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 3, 6), M('#7A5636')); po.position.set(px, 1.5, pz); g.add(po); }
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(3.4, 1.3, 4), M('#FFC21A')); roof.position.y = 3.6; roof.rotation.y = Math.PI / 4; g.add(roof);
+      const area = new THREE.Mesh(new THREE.RingGeometry(SHOP_R - .25, SHOP_R, 48), new THREE.MeshBasicMaterial({ color: '#FFC21A', transparent: true, opacity: .55 })); area.rotation.x = -Math.PI / 2; area.position.y = .08; g.add(area);
     }
     scene.add(g);
   }
@@ -346,7 +362,7 @@ function interp(id, kind) {
 function onMsg(m) {
   if (m.t === 'err') { $('#jErr').textContent = m.s; if (me) toast(m.s, 5000); return; }
   if (m.t === 'welcome') {
-    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph;
+    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R;
     me = { name: m.name }; localStorage.setItem('arena-tok', m.tok); localStorage.setItem('arena-tokname', $('#jName').value.trim());
     buildWorld(); buildPad();
     $('#join').hidden = true; $('#hud').hidden = false;
@@ -356,7 +372,7 @@ function onMsg(m) {
   if (m.t === 's') return onSnap(m);
   if (m.t === 'lb') { lb = m.list; king = m.king; for (const r of lb) names.set(r[0], r[1]); renderLb(); return; }
   if (m.t === 'ro') { if (m.joined && m.joined !== myId) feed(`<b>${esc(m.name)}</b> 입장`); if (m.gone) feed(`${esc(m.name)} 퇴장`); return; }
-  if (m.t === 'msg') return toast(esc(m.s), 2800);
+  if (m.t === 'msg') { toast(esc(m.s).replace(/&lt;(\/?)b&gt;/g, '<$1b>'), 2800); if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') { shopSig = ''; renderUpg(); } return; }
   if (m.t === 'round') { $('#modal').hidden = true; return toast('<b>' + esc(m.s) + '</b>', 6000); }
   if (m.t === 'dead') return showDead(m);
   if (m.t === 'end') return showEnd(m.top);
@@ -426,7 +442,9 @@ function renderMe() {
   $('#hpB').style.width = clamp(mp.hp / mp.max * 100, 0, 100) + '%'; $('#hpT').textContent = `${mp.hp}/${mp.max}`;
   $('#coinT').textContent = s.coins; $('#rankT').textContent = `#${s.rank} / ${s.n}`;
   $('#bntT').hidden = !s.bounty; if (s.bounty) $('#bntT').textContent = `👑 현상금 ${s.bounty}`;
-  $('#gearT').textContent = `${GEARN[s.wpn]} · ${ARMN[s.arm]}`; $('#kdT').textContent = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}`;
+  $('#gearT').textContent = [GEARN[s.wpn], ARMN[s.arm], SHOP && s.boot ? SHOP.boot.names[s.boot] : '', SHOP && s.helm ? SHOP.helm.names[s.helm] : ''].filter(Boolean).join(' · ');
+  if (s.pot != null) { $('#potN').textContent = s.potCd ? `${s.pot}(${s.potCd})` : s.pot; $('#bPot').disabled = !s.pot; }
+  { const inShop = Math.hypot(local.x, local.z) <= SHOP_R; if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼으로 장비를 사세요.', 2600); wasInShop = inShop; } $('#kdT').textContent = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}`;
   for (const b of document.querySelectorAll('.sk')) {
     const sk = SK.find(k => k.id === b.dataset.id), lock = mp.lv < sk.lv, cd = s.cds[sk.id] || 0, full = { dash: 8, whirl: 7, cannon: 6, heal: 18, shield: 16, thunder: 10, tornado: 14 }[sk.id];
     b.classList.toggle('lock', lock); b.style.setProperty('--cd', lock ? 0 : cd / full);
@@ -468,21 +486,31 @@ function skill(id, btn) { send({ t: 'sk', id }); if (btn) { btn.classList.add('p
 function openModal(kind, html) { const c = $('#mCard'); c.dataset.kind = kind; c.innerHTML = html; $('#modal').hidden = false; }
 function closeModal() { $('#modal').hidden = true; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+let shopSig = '', wasInShop = false;
+const EFF = { wpn: t => `공격 +${t * 5}`, arm: t => `체력 +${t * 22} · 피해 −${t * 6}%`, boot: t => `이동 속도 +${t * 7}%`, helm: t => `스킬 대기 −${t * 8}%` };
 function renderUpg() {
-  const s = meS; if (!s) return;
-  const box = (w, cur, names) => `<div><span style="font-size:12px;font-weight:800;color:#5F7378">${w === 'wpn' ? '무기 (공격력)' : '갑옷 (체력·방어)'}</span><b>${names[cur]}</b>${cur < 4 ? `<span style="font-size:13px;color:#3F5259">다음: ${names[cur + 1]} · ${w === 'wpn' ? '공격 +5' : '체력 +22, 피해 −6%'}</span><button data-w="${w}" ${s.coins < UPG[cur] || !s.safe ? 'disabled' : ''}>● ${UPG[cur]}코인으로 강화</button>` : '<span style="color:#127A6C;font-weight:800">최고 단계!</span>'}</div>`;
+  const s = meS; if (!s || !SHOP) return;
+  const near = Math.hypot(local.x, local.z) <= SHOP_R, ok = near && s.safe;
+  const sig = [s.coins, s.wpn, s.arm, s.boot, s.helm, s.pot, near, s.safe].join('|'); if (sig === shopSig) return; shopSig = sig;
+  const why = !near ? '🧭 섬 <b>가운데 바람상회</b>(미니맵의 노란 네모)까지 가야 살 수 있어요.' : !s.safe ? '⚔ 싸우는 중이라 지금은 살 수 없어요. 4초만 숨으세요!' : '';
+  const sec = k => { const it = SHOP[k], cur = s[k] || 0;
+    const rows = it.names.map((n, t) => t === 0 ? '' : `<div class="si ${t <= cur ? 'own' : ''}"><span class="tc" style="background:${TIERC[t]}"></span><b>${esc(n)}</b><small>${EFF[k](t)}</small>${t === cur ? '<em>착용 중</em>' : t < cur ? '<em>✓</em>' : `<button data-s="${k}" data-v="${t}" ${!ok || s.coins < it.price[t] ? 'disabled' : ''}>${it.price[t]}</button>`}</div>`).join('');
+    return `<section><h3>${it.label}<small>${esc(it.names[cur])}</small></h3>${rows}</section>`; };
+  const potSec = `<section><h3>회복 음료<small>${s.pot} / ${POTI.max}개</small></h3><div class="si"><span class="tc" style="background:#7BD88F"></span><b>회복 음료</b><small>체력 ${Math.round(POTI.heal * 100)}% 회복 · <b>R</b> 키 · 싸우는 중에도 OK</small><button data-s="pot" ${!ok || s.coins < POTI.price || s.pot >= POTI.max ? 'disabled' : ''}>${POTI.price}</button></div></section>`;
   const c = $('#mCard');
-  c.innerHTML = `<h2>대장간 강화</h2><p>코인 <b>${s.coins}</b> · 공격 ${s.atk} · 받는 피해 −${s.def}%</p><p style="font-size:13px">강화하면 코인이 줄어 순위가 내려갈 수 있어요. 대신 더 강해지죠! ${s.safe ? '' : '<b style="color:#C9473A">지금은 싸우는 중이라 강화할 수 없어요 (4초 숨기).</b>'}</p><div class="upg">${box('wpn', s.wpn, GEARN)}${box('arm', s.arm, ARMN)}</div><p style="font-size:12.5px;margin-top:10px">쓰러지면 더 높은 장비가 한 단계 내려가고, 떨어진 장비는 다른 사람이 주울 수 있어요.</p><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>U</kbd></button></div>`;
-  c.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => send({ t: 'up', w: b.dataset.w })));
+  c.innerHTML = `<h2>바람상회</h2><div class="stl"><span>코인 ${s.coins}</span><span>공격 ${s.atk}</span><span>받는 피해 −${s.def}%</span><span>속도 +${s.spdB || 0}%</span><span>스킬 대기 −${s.cdr || 0}%</span></div>
+<p style="font-size:13px">원하는 단계를 바로 살 수 있어요. 코인을 쓰면 순위(코인)가 내려가고, 쓰러지면 가장 좋은 장비를 1단계 떨어뜨려요.</p>${why ? `<div class="shopw">${why}</div>` : ''}
+<div class="shop">${sec('wpn')}${sec('arm')}${sec('boot')}${sec('helm')}${potSec}</div><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>B</kbd></button></div>`;
   $('#mX').addEventListener('click', closeModal);
 }
-function openUpg() { openModal('upg', ''); renderUpg(); }
+$('#mCard').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b || b.disabled) return; if (b.dataset.s === 'pot') send({ t: 'buy', s: 'pot' }); else send({ t: 'buy', s: b.dataset.s, v: +b.dataset.v }); b.disabled = true; });
+function openUpg() { openModal('upg', ''); shopSig = ''; renderUpg(); }
 function openRank() {
   const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td><b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
   openModal('rank', `<h2>순위</h2><p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal);
 }
-$('#bUpg').addEventListener('click', openUpg); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
+$('#bUpg').addEventListener('click', openUpg); $('#bPot').addEventListener('click', () => send({ t: 'pot' })); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
 let deadT = 0;
 function showDead(m) {
   $('#dead').hidden = false; closeModal();
@@ -510,7 +538,8 @@ addEventListener('keydown', e => {
   if (e.repeat && e.code !== 'Space') return;
   if (e.code === 'Space' || e.code === 'KeyF') { e.preventDefault(); skill('punch', $('#atk')); }
   const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(e.code); if (i >= 0) skill(SK[i].id, document.querySelector(`.sk[data-id="${SK[i].id}"]`));
-  if (e.code === 'KeyU') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') closeModal(); else openUpg(); }
+  if (e.code === 'KeyR') send({ t: 'pot' });
+  if (e.code === 'KeyU' || e.code === 'KeyB') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') closeModal(); else openUpg(); }
   if (e.code === 'Tab' || e.code === 'KeyL') { e.preventDefault(); if (!$('#modal').hidden && $('#mCard').dataset.kind === 'rank') closeModal(); else openRank(); }
   if (e.code === 'KeyT') $('#emo').hidden = !$('#emo').hidden;
   if (e.code === 'Escape') closeModal();
