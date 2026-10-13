@@ -116,6 +116,34 @@ const POT = { price: 25, max: 3, heal: .45, cd: 4 };
 const SHOP_R = 9;                      // must stand this close to the centre to buy
 const UPG = [60, 120, 200, 300];       // legacy (old clients)
 const ARENA_SALT = 'oksland-arena';
+/* ---- teams ---- */
+const TEAMS = [{ n: '바람', c: '#3FB6FF' }, { n: '태양', c: '#FFA51F' }, { n: '바다', c: '#22CFA0' }, { n: '번개', c: '#B57BFF' }];
+const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0 }));
+let teamsOn = true;
+/* ---- tasks (Among Us style stations) ---- */
+const TASK_CD = 45000, TASK_WRONG_CD = 8000, TASK_R = 3;
+const TASKN = { wires: '전선 연결', nacelle: '나셀 돌리기', order: '부품 순서', quiz: '바람 퀴즈' };
+const STATIONS = [];
+(function () { const types = ['wires', 'nacelle', 'order', 'quiz', 'wires', 'nacelle', 'order', 'quiz'];
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8, d = i % 2 ? 46 : 25; STATIONS.push({ id: i, x: +(Math.cos(a) * d).toFixed(1), z: +(Math.sin(a) * d).toFixed(1), type: types[i] }); } })();
+const PARTS = ['날개', '회전축·기어', '발전기', '전선'];
+const QUIZ = [
+  ['낮에 바닷가에서 부는 바람은?', '해풍 (바다 → 육지)', '육풍 (육지 → 바다)', '바람이 안 분다'],
+  ['밤에 바닷가에서 부는 바람은?', '육풍 (육지 → 바다)', '해풍 (바다 → 육지)', '바람이 안 분다'],
+  ['바람을 만드는 에너지는 어디서 왔을까?', '태양', '달', '지구 자석'],
+  ['풍력발전기의 에너지 전환 순서는?', '바람 → 회전 → 전기', '전기 → 회전 → 바람', '열 → 빛 → 전기'],
+  ['큰 풍력발전기 날개를 돌리는 주된 힘은?', '양력', '항력(미는 힘)', '중력'],
+  ['풍속이 2배가 되면 바람의 동력은?', '8배', '2배', '4배'],
+  ['날개 길이가 2배가 되면 회전 면적은?', '4배', '2배', '8배'],
+  ['풍속이 25 m/s를 넘는 태풍이 오면 발전기는?', '멈춘다 (날개 보호)', '최대로 발전한다', '날개를 더 빨리 돌린다'],
+  ['발전기가 멈춘 동안 꼭 필요한 곳에 전기를 보내는 것은?', '배터리 (ESS)', '선풍기', '풍향계'],
+  ['나셀(발전기 머리)은 어느 쪽을 봐야 할까?', '바람이 불어오는 쪽', '바람이 불어 가는 쪽', '상관없다'],
+  ['큰 발전용 풍력발전기 날개는 보통 몇 장일까?', '3장', '2장', '12장'],
+  ['풍력발전기 자리를 정할 때 따지지 않아도 되는 것은?', '학교 급식 메뉴', '주민 소음·그림자', '철새 길목'],
+  ['발전을 시작하는 풍속(컷인)에 가까운 것은?', '약 3 m/s', '약 30 m/s', '0 m/s'],
+  ['수직축 풍력발전기의 장점은?', '바람 방향과 상관없이 돈다', '효율이 가장 높다', '날개가 필요 없다'],
+  ['선풍기와 풍력발전기의 관계는?', '에너지 전환 방향이 반대', '완전히 같은 기계', '아무 관계 없다']
+];
 
 /* ======================= map ======================= */
 function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
@@ -123,12 +151,14 @@ const OBS = [];
 (function buildMap() {
   const r = rng(20261012);
   OBS.push([0, 0, 3.2, 'forge']);
+  for (const t of STATIONS) OBS.push([t.x, t.z, .9, 'station']);
   for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + .3; OBS.push([Math.cos(a) * 38, Math.sin(a) * 38, 1.1, 'turbine']); }
   let tries = 0;
   while (OBS.length < 70 && tries++ < 4000) {
     const a = r() * Math.PI * 2, d = 9 + Math.sqrt(r()) * (R - 14), x = Math.cos(a) * d, z = Math.sin(a) * d;
     const kind = r() < .55 ? 'tree' : 'rock', rad = kind === 'tree' ? .7 + r() * .3 : .9 + r() * 1.4;
     if (OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + rad + 3)) continue;
+    if (STATIONS.some(t => Math.hypot(t.x - x, t.z - z) < rad + 4.5)) continue;
     OBS.push([+x.toFixed(2), +z.toFixed(2), +rad.toFixed(2), kind]);
   }
 })();
@@ -179,14 +209,64 @@ const stat = p => ({
 });
 function newPlayer(c, name) {
   const [x, z] = freeSpot(10);
-  const p = { id: nextId++, c, name, x, z, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
+  const p = { id: nextId++, c, name, x, z, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, team: pickTeam(), tcd: {}, task: null, tasks: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
     alive: true, respawnAt: 0, prot: Date.now() + 3000, cds: {}, dashT: 0, shieldT: 0, lastHurt: 0, dmgBy: new Map(), joined: Date.now(), lastIn: Date.now() };
   p.hp = stat(p).maxHp;
   return p;
 }
 function resetPlayer(p) {
-  p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
+  p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
+}
+
+/* ======================= teams & tasks ======================= */
+function teamCount(ti) { let n = 0; for (const p of players.values()) if (online(p) && p.team === ti) n++; return n; }
+function pickTeam() { let best = 0, bn = 1e9; const order = [0, 1, 2, 3].sort(() => Math.random() - .5); for (const i of order) { const n = teamCount(i); if (n < bn) { bn = n; best = i; } } return best; }
+const teamGoal = ti => 4 + 3 * Math.max(1, teamCount(ti));
+const sameTeam = (a, b) => teamsOn && a && b && a !== b && a.team === b.team;
+function shuffleTeams() {
+  const list = [...players.values()].filter(online).sort(() => Math.random() - .5);
+  list.forEach((p, i) => { p.team = i % 4; });
+  for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 });
+}
+const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function startTask(p) {
+  if (!p.alive || p.task) return;
+  const now = Date.now();
+  const st = STATIONS.map(t => [t, Math.hypot(t.x - p.x, t.z - p.z)]).filter(([, d]) => d <= TASK_R).sort((a, b) => a[1] - b[1])[0];
+  if (!st) return tell(p, '과제 기계 가까이 가야 해요.');
+  const t = st[0];
+  if ((p.tcd[t.id] || 0) > now) return tell(p, `이 기계는 ${Math.ceil((p.tcd[t.id] - now) / 1000)}초 뒤에 다시 할 수 있어요. 다른 기계를 찾아보세요!`);
+  let q, ans;
+  if (t.type === 'wires') { const right = shuf([0, 1, 2, 3]); q = { right }; ans = [0, 1, 2, 3].map(c => right.indexOf(c)); }
+  else if (t.type === 'nacelle') { const wind = Math.floor(Math.random() * 8); q = { wind, start: (wind + 2 + Math.floor(Math.random() * 5)) % 8 }; ans = wind; }
+  else if (t.type === 'order') { q = { parts: shuf(PARTS) }; ans = PARTS.join('|'); }
+  else { const it = QUIZ[Math.floor(Math.random() * QUIZ.length)], opts = shuf(it.slice(1)); q = { q: it[0], o: opts }; ans = opts.indexOf(it[1]); }
+  p.task = { sid: t.id, type: t.type, ans, at: now };
+  p.c && p.c.send({ t: 'task', sid: t.id, type: t.type, name: TASKN[t.type], q });
+}
+function cancelTask(p, why) { if (!p.task) return; p.task = null; p.c && p.c.send({ t: 'tx', s: why || '' }); }
+function answerTask(p, a) {
+  const tk = p.task; if (!tk) return;
+  const t = STATIONS[tk.sid], now = Date.now();
+  if (!p.alive || Math.hypot(t.x - p.x, t.z - p.z) > TASK_R + .8) return cancelTask(p, '기계에서 멀어져서 과제가 취소됐어요.');
+  let ok;
+  if (tk.type === 'wires') ok = Array.isArray(a) && a.length === 4 && a.every((v, i) => v === tk.ans[i]);
+  else if (tk.type === 'order') ok = Array.isArray(a) && a.join('|') === tk.ans;
+  else ok = +a === tk.ans;
+  p.task = null;
+  if (!ok) { p.tcd[t.id] = now + TASK_WRONG_CD; p.c && p.c.send({ t: 'tres', ok: false, s: '앗, 틀렸어요! 8초 뒤에 다시 도전하거나 다른 기계로 가세요.' }); return; }
+  p.tcd[t.id] = now + TASK_CD; p.tasks++;
+  const xp = Math.round(xpNeed(p.lv) * .4); gainXp(p, xp); addCoins(p, 12);
+  let tl = null;
+  if (teamsOn) {
+    const ts = teamSt[p.team]; ts.pts++; ts.tasks++;
+    if (ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team;
+      for (const q of players.values()) if (online(q) && q.team === p.team && q.lv < MAXLV) gainXp(q, xpNeed(q.lv) - q.xp);
+      broadcast({ t: 'tlv', team: p.team, by: p.name, n: ts.lvups }); }
+  }
+  p.c && p.c.send({ t: 'tres', ok: true, xp, coins: 12, s: `과제 성공! 경험치 +${xp} · 코인 +12${teamsOn ? ' · 팀 게이지 +1' : ''}` });
+  ev({ k: 'task', id: p.id, sid: t.id, team: p.team, tl });
 }
 
 /* ======================= helpers ======================= */
@@ -229,12 +309,13 @@ function hurtPlayer(v, dmg, src) {
   let d = dmg * (1 - st.def) * (v.shieldT > 0 ? .4 : 1);
   d = Math.max(1, Math.round(d));
   v.hp -= d; v.lastHurt = Date.now();
+  if (v.task) cancelTask(v, '공격을 받아서 과제가 취소됐어요! 주변을 살피고 다시 하세요.');
   if (src && src.kind === 'p') { v.dmgBy.set(src.p.id, Date.now()); src.p.lastHurt = Date.now(); }
   ev({ k: 'hit', t: 'p', id: v.id, d, x: +v.x.toFixed(1), z: +v.z.toFixed(1) });
   if (v.hp <= 0) killPlayer(v, src);
 }
 function killPlayer(v, src) {
-  v.hp = 0; v.alive = false; v.respawnAt = Date.now() + 5000; v.deaths++;
+  if (v.task) cancelTask(v); v.hp = 0; v.alive = false; v.respawnAt = Date.now() + 5000; v.deaths++;
   const vLv = v.lv;
   const wasKing = king === v.id, bounty = wasKing ? bountyOf(v) : 0;
   // penalties: 30% coins dropped, one gear tier dropped, XP loss (may level down)
@@ -250,7 +331,7 @@ function killPlayer(v, src) {
   v.streak = 0;
   let killer = null, helpers = [];
   if (src && src.kind === 'p' && src.p.id !== v.id) {
-    killer = src.p; killer.kills++; killer.streak++; killer.best = Math.max(killer.best, killer.streak);
+    killer = src.p; killer.kills++; if (teamsOn) teamSt[killer.team].kills++; killer.streak++; killer.best = Math.max(killer.best, killer.streak);
     gainXp(killer, 20 + vLv * 8); addCoins(killer, 10 + vLv * 3);
   }
   if (bounty) {
@@ -281,11 +362,11 @@ function hurtMon(m, dmg, p) {
 /* ======================= targeting ======================= */
 function enemiesNear(p, range) {
   const out = [];
-  for (const q of players.values()) if (q !== p && q.alive && online(q) && Date.now() >= q.prot) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d <= range) out.push({ kind: 'p', o: q, d }); }
+  for (const q of players.values()) if (q !== p && q.alive && online(q) && Date.now() >= q.prot && !sameTeam(p, q)) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d <= range) out.push({ kind: 'p', o: q, d }); }
   for (const m of mons.values()) { const d = Math.hypot(m.x - p.x, m.z - p.z); if (d <= range + MON[m.type].r * .5) out.push({ kind: 'm', o: m, d }); }
   return out.sort((a, b) => a.d - b.d);
 }
-function hitTarget(p, t, dmg) { if (t.kind === 'p') hurtPlayer(t.o, dmg, { kind: 'p', p }); else hurtMon(t.o, dmg, p); }
+function hitTarget(p, t, dmg) { if (t.kind === 'p' && sameTeam(p, t.o)) return; if (t.kind === 'p') hurtPlayer(t.o, dmg, { kind: 'p', p }); else hurtMon(t.o, dmg, p); }
 
 /* ======================= actions ======================= */
 function useSkill(p, id) {
@@ -366,6 +447,7 @@ function step(dt) {
       continue;
     }
     p.dashT -= dt; p.shieldT -= dt;
+    if (p.task) { const t = STATIONS[p.task.sid]; if (Math.hypot(t.x - p.x, t.z - p.z) > TASK_R + .8) cancelTask(p, '기계에서 멀어져서 과제가 취소됐어요.'); }
     const st = stat(p);
     const len = Math.hypot(p.mx, p.mz);
     if (len > .05) {
@@ -457,7 +539,7 @@ function step(dt) {
 }
 function sendSnap(rl) {
   const t = Date.now();
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0), p.wpn, p.arm]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0), p.wpn, p.arm, p.team]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2)]);
@@ -469,12 +551,12 @@ function sendSnap(rl) {
     const p = c.pid && players.get(c.pid); if (!p) continue;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000 };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: rankOf.get(p.id), n: rl.length, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STATIONS.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks };
     c.send(base);
   }
 }
 function sendBoard(rl) {
-  broadcast({ t: 'lb', king, list: rl.map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm]) });
+  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ ...s, goal: teamGoal(i), n: teamCount(i) })), list: rl.map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks]) });
 }
 function endRound() {
   const rl = rankList();
@@ -495,7 +577,7 @@ function onConnect(c) {
     if (msg.t === 'join' && !c.pid && !c.admin) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
-      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STATIONS, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
@@ -505,13 +587,13 @@ function onConnect(c) {
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
-      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, ph: round.phase });
+      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOP, pot: POT, shopR: SHOP_R, teams: TEAMS, teamsOn, stations: STATIONS, taskN: TASKN, taskR: TASK_R, ph: round.phase });
       broadcast({ t: 'ro', joined: p.id, name });
       return;
     }
     if (msg.t === 'admin') {
       if (msg.key !== ADMIN_KEY) return c.send({ t: 'err', s: '관리자 비밀번호가 틀렸어요.' });
-      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, ph: round.phase, addr: addresses() }); sendBoard(rankList());
+      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, teams: TEAMS, stations: STATIONS, ph: round.phase, addr: addresses() }); sendBoard(rankList());
       return;
     }
     if (c.admin && msg.t === 'cmd') return adminCmd(c, msg);
@@ -522,6 +604,9 @@ function onConnect(c) {
     else if (msg.t === 'up') upgrade(p, msg.w === 'arm' ? 'arm' : 'wpn');
     else if (msg.t === 'buy') { if (msg.s === 'pot') buyPot(p); else if (SHOP[msg.s]) buy(p, msg.s, msg.v); }
     else if (msg.t === 'pot') drinkPot(p);
+    else if (msg.t === 'task') startTask(p);
+    else if (msg.t === 'ans') answerTask(p, msg.a);
+    else if (msg.t === 'tcancel') cancelTask(p);
     else if (msg.t === 'emo') { const e = ['좋아!', '도와줘!', '1등 잡자!', 'ㅋㅋㅋ', '미안!', '고마워!'][msg.i | 0]; if (e && (!p.emoT || Date.now() - p.emoT > 2500)) { p.emoT = Date.now(); ev({ k: 'emo', id: p.id, s: e }); } }
   };
 }
@@ -529,12 +614,15 @@ function adminCmd(c, msg) {
   if (msg.c === 'start') {
     const min = Math.max(2, Math.min(30, +msg.min || 10));
     for (const p of players.values()) resetPlayer(p);
+    for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 });
     mons.clear(); projs.length = 0; picks.clear(); pending.length = 0;
     round.phase = 'play'; round.len = min * 60; round.endsAt = Date.now() + min * 60000;
     broadcast({ t: 'round', s: `${min}분 결승 라운드 시작! 모두 Lv 1부터 다시 시작해요. 마지막에는 바람의 벽이 좁혀져요.` });
   } else if (msg.c === 'stop') { if (round.phase === 'play') endRound(); }
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
-  else if (msg.c === 'reset') { for (const p of players.values()) resetPlayer(p); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'reset') { for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
+  else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'kick') { const p = players.get(+msg.id); if (p && p.c) { p.c.send({ t: 'err', s: '선생님이 퇴장시켰어요.' }); setTimeout(() => p.c.close(), 200); } }
   else if (msg.c === 'dbg' && process.env.ARENA_TEST) { const p = players.get(+msg.id); if (p) Object.assign(p, msg.set); }

@@ -35,6 +35,11 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
 .kick{background:transparent;border:1px solid #4A6B74;color:#C9D9DA;border-radius:8px;padding:2px 8px;cursor:pointer;font-size:12px}
 .phase{font-size:16px;padding:4px 12px;border-radius:999px;background:#21414A}
 .code{font:900 34px var(--mono);color:#FFD45A;letter-spacing:.2em}
+.teams{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.teams div{border-radius:16px;padding:12px;color:#08161B;font-weight:900;font-size:22px;line-height:1.25}
+.teams small{display:block;font-size:14px;font-weight:700;opacity:.85}
+.teams i{display:block;height:10px;border-radius:99px;background:rgba(0,0,0,.18);margin-top:8px;overflow:hidden}.teams i b{display:block;height:100%;background:rgba(8,22,27,.75)}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:-1px}
 @media (max-width:900px){.wrap{grid-template-columns:1fr}}
 </style>
 </head>
@@ -51,7 +56,8 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
 <div class="wrap" id="main" hidden>
   <div class="panel big">
     <h2><span>실시간 순위</span><span class="phase" id="phase">자유 대전</span></h2>
-    <table><thead><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th><th>장비</th><th></th></tr></thead><tbody id="tb"></tbody></table>
+    <div class="teams" id="teams"></div>
+    <table><thead><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>과제</th><th>장비</th><th></th></tr></thead><tbody id="tb"></tbody></table>
   </div>
   <div class="ctl">
     <div class="panel">
@@ -64,6 +70,11 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
       <div class="rowx"><select id="min" style="height:46px;border-radius:12px;padding:0 10px"><option>5</option><option>8</option><option selected>10</option><option>12</option><option>15</option></select><span>분</span><button class="btn" id="start">결승 라운드 시작</button><button class="btn g" id="stop">지금 끝내기</button></div>
       <p class="muted">결승 라운드를 시작하면 모두 Lv 1·0코인으로 다시 시작해요. 마지막 40% 시간에는 <b>바람의 벽</b>이 섬 가운데로 좁혀져 밖에 있으면 피해를 입어요. 끝나면 학생 화면에 시상대가 떠요.</p>
       <div class="rowx"><button class="btn g" id="free">자유 대전으로</button><button class="btn r" id="reset">모두 초기화</button></div>
+    </div>
+    <div class="panel">
+      <h2>팀전</h2>
+      <div class="rowx"><label><input type="checkbox" id="teamsOn" checked> 4팀 팀전 (같은 팀 공격 안 됨)</label><button class="btn g" id="shuffle">팀 다시 나누기</button></div>
+      <p class="muted">학생이 들어오면 인원이 적은 팀에 자동으로 들어가요. 섬의 과제 기계 8곳에서 미션을 성공하면 팀 게이지가 차고, 가득 차면 그 팀 모두 레벨 업. 팀을 다시 나누면 팀 게이지·기록이 0이 돼요.</p>
     </div>
     <div class="panel">
       <h2>입장 코드</h2>
@@ -79,7 +90,7 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const GEAR = ['맨손', '스패너', '토크 렌치', '돌풍 해머', '태풍 블레이드'], ARM = ['작업복', '작업 조끼', '방풍 재킷', '탄소섬유 슈트', '태풍 갑옷'];
-let ws, R = 62, OBS = [], lb = [], king = null, last = null;
+let ws, R = 62, OBS = [], lb = [], king = null, last = null, TEAMS = [], STN = [], teams = [], teamsOn = true;
 const qk = new URLSearchParams(location.search).get('key'); if (qk) $('#key').value = qk;
 function go() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
@@ -87,8 +98,8 @@ function go() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
-    if (m.t === 'adminok') { R = m.R; OBS = m.obs; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(esc).join('<br>'); return; }
-    if (m.t === 'lb') { lb = m.list; king = m.king; render(); return; }
+    if (m.t === 'adminok') { R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(esc).join('<br>'); return; }
+    if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
     if (m.t === 's') { last = m; const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
     if (m.t === 'code') { $('#code').textContent = m.code; return; }
   };
@@ -102,9 +113,13 @@ $('#stop').addEventListener('click', () => cmd({ c: 'stop' }));
 $('#free').addEventListener('click', () => cmd({ c: 'free' }));
 $('#reset').addEventListener('click', () => { if (confirm('모든 학생의 레벨·코인·장비를 초기화할까요?')) cmd({ c: 'reset' }); });
 $('#gate').addEventListener('change', e => cmd({ c: 'gate', on: e.target.checked }));
+$('#teamsOn').addEventListener('change', e => cmd({ c: 'teams', on: e.target.checked }));
+$('#shuffle').addEventListener('click', () => { if (confirm('팀을 무작위로 다시 나눌까요? 팀 게이지와 팀 기록이 0이 돼요.')) cmd({ c: 'shuffle' }); });
 $('#cgo').addEventListener('click', () => cmd({ c: 'code', name: $('#cname').value }));
 function render() {
-  $('#tb').innerHTML = lb.map((r, i) => `<tr class="${r[0] === king ? 'k' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td><b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td><td style="font-size:14px">${GEAR[r[7]]} · ${ARM[r[8]]}</td><td><button class="kick" data-id="${r[0]}">퇴장</button></td></tr>`).join('') || '<tr><td colspan="9" style="color:#8FB3B0">아직 아무도 없어요</td></tr>';
+  $('#teams').hidden = !teamsOn || !TEAMS.length;
+  $('#teams').innerHTML = TEAMS.map((T, i) => { const t = teams[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 <small>${t.n}명 · 팀 레벨 업 ${t.lvups}번<br>과제 ${t.tasks} · 처치 ${t.kills}</small><i><b style="width:${Math.min(100, t.pts / t.goal * 100)}%"></b></i><small>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('');
+  $('#tb').innerHTML = lb.map((r, i) => `<tr class="${r[0] === king ? 'k' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="dot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[10] || 0}</td><td style="font-size:14px">${GEAR[r[7]]} · ${ARM[r[8]]}</td><td><button class="kick" data-id="${r[0]}">퇴장</button></td></tr>`).join('') || '<tr><td colspan="9" style="color:#8FB3B0">아직 아무도 없어요</td></tr>';
   document.querySelectorAll('.kick').forEach(b => b.addEventListener('click', () => { if (confirm('이 학생을 퇴장시킬까요?')) cmd({ c: 'kick', id: +b.dataset.id }); }));
 }
 const cv = $('#map'), cx = cv.getContext('2d');
@@ -114,11 +129,12 @@ function draw() {
   cx.clearRect(0, 0, N, N); cx.fillStyle = '#4FA3D1'; cx.fillRect(0, 0, N, N);
   cx.fillStyle = '#8CC47C'; cx.beginPath(); cx.arc(N / 2, N / 2, R * s, 0, 7); cx.fill();
   if (last.zr < R - .3) { cx.strokeStyle = '#B44CFF'; cx.lineWidth = 4; cx.beginPath(); cx.arc(N / 2, N / 2, last.zr * s, 0, 7); cx.stroke(); }
-  for (const o of OBS) { cx.fillStyle = o[3] === 'tree' ? '#3E8E57' : o[3] === 'forge' ? '#FFC21A' : '#9AA6AC'; cx.beginPath(); cx.arc(X(o[0]), Z(o[1]), Math.max(2, o[2] * s), 0, 7); cx.fill(); }
+  for (const o of OBS) { if (o[3] === 'station') continue; cx.fillStyle = o[3] === 'tree' ? '#3E8E57' : o[3] === 'forge' ? '#FFC21A' : '#9AA6AC'; cx.beginPath(); cx.arc(X(o[0]), Z(o[1]), Math.max(2, o[2] * s), 0, 7); cx.fill(); }
+  for (const t of STN) { cx.save(); cx.translate(X(t.x), Z(t.z)); cx.rotate(Math.PI / 4); cx.fillStyle = '#5FF0D8'; cx.fillRect(-6, -6, 12, 12); cx.restore(); }
   for (const m of last.M) { cx.fillStyle = '#E9A3FF'; cx.beginPath(); cx.arc(X(m[2]), Z(m[3]), 3, 0, 7); cx.fill(); }
   cx.font = '700 11px sans-serif'; cx.textAlign = 'center';
   const nm = new Map(lb.map(r => [r[0], r[1]]));
-  for (const p of last.P) { if (!(p[7] & 1)) continue; const k = p[7] & 16; cx.fillStyle = k ? '#FFC21A' : '#FFFFFF'; cx.beginPath(); cx.arc(X(p[1]), Z(p[2]), k ? 8 : 5, 0, 7); cx.fill(); cx.fillStyle = '#10242B'; cx.fillText(nm.get(p[0]) || '', X(p[1]), Z(p[2]) - 9); }
+  for (const p of last.P) { if (!(p[7] & 1)) continue; const k = p[7] & 16; cx.fillStyle = k ? '#FFC21A' : teamsOn && TEAMS[p[10]] ? TEAMS[p[10]].c : '#FFFFFF'; cx.beginPath(); cx.arc(X(p[1]), Z(p[2]), k ? 8 : 5, 0, 7); cx.fill(); cx.fillStyle = '#10242B'; cx.fillText(nm.get(p[0]) || '', X(p[1]), Z(p[2]) - 9); }
 }
 })();
 </script>

@@ -101,6 +101,29 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 .upg b{font-size:17px}
 .upg button{min-height:44px;border-radius:12px;border:0;background:#10242B;color:#FFC21A;font-weight:900}
 .upg button:disabled{opacity:.35}
+/* teams & tasks */
+.tline{grid-column:1/3;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800}
+.tchip{border-radius:999px;padding:1px 9px;color:#08161B;font-weight:900;font-size:12px;white-space:nowrap}
+.tbar{flex:1;height:7px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden;min-width:60px}.tbar i{display:block;height:100%;border-radius:99px;transition:width .3s}
+.tline small{font:700 11px var(--mono);color:#CFE3E1;white-space:nowrap}
+.tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:0}
+@media (min-width:761px){#bTask{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);white-space:nowrap}}
+.bTask{background:linear-gradient(160deg,#5FF0D8,#1FB8A0)!important;color:#05211C!important;font-size:15px!important;padding:10px 18px!important;box-shadow:0 0 0 3px rgba(95,240,216,.35)}
+.task h2{display:flex;justify-content:space-between;align-items:center}
+.task .tip{font-size:12.5px;color:#7A4A00;background:#FFF1D6;border-radius:10px;padding:6px 10px;margin:6px 0 10px}
+.wires{display:grid;grid-template-columns:1fr 1fr;gap:10px 90px;position:relative;padding:4px 0}
+.wires svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.plug{min-height:52px;border-radius:12px;border:3px solid transparent;font-weight:900;color:#fff;font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,.5);position:relative;z-index:1}
+.plug.sel{border-color:#10242B;transform:scale(1.04)}.plug.done{opacity:.55}
+.comp{width:230px;height:230px;margin:6px auto;display:block}
+.trow{display:flex;gap:10px;justify-content:center;margin-top:8px}
+.trow button,.opts button,.parts button{min-height:52px;border-radius:14px;border:0;background:#10242B;color:#fff;font-weight:900;font-size:16px;padding:0 18px}
+.trow button.go{background:#FFC21A;color:#2A1E00}
+.opts{display:grid;gap:8px;margin-top:8px}.opts button{text-align:left;background:#fff;color:#10242B;border:2px solid #D3DFDD}
+.parts{display:grid;grid-template-columns:1fr 1fr;gap:8px}.parts button{background:#fff;color:#10242B;border:2px solid #D3DFDD}.parts button:disabled{opacity:.3}
+.seq{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;min-height:40px;align-items:center}.seq span{background:#E3F4F0;border-radius:10px;padding:8px 10px;font-weight:800;font-size:14px}.seq em{font-style:normal;color:#5F7378}
+.tstand{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}.tstand div{border-radius:12px;padding:8px;color:#08161B;font-weight:900;font-size:13px;line-height:1.4}.tstand small{display:block;font-weight:700;font-size:11px;opacity:.8}
+@media (max-width:620px){.wires{gap:8px 50px}.tstand{grid-template-columns:1fr 1fr}}
 #dead{background:radial-gradient(ellipse at center,rgba(90,10,10,.45),rgba(5,10,15,.8))}
 #dead .card{text-align:center}
 #dead .big{font-size:64px;font-weight:900;color:#C9473A;line-height:1}
@@ -134,7 +157,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
     <label>입장 코드 <small style="font-weight:500;opacity:.75">· 클리어 화면의 숫자 4자리</small><input id="jCode" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="0000"></label>
     <div class="err" id="jErr"></div>
     <button class="btn" id="jGo">입장하기</button>
-    <div class="rules">· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨이 오를수록 새 스킬이 열려요. Lv 8이면 스킬 8개 모두!</div>
+    <div class="rules">· <b>4개 팀</b>으로 자동으로 나뉘어요. 같은 팀은 서로 공격되지 않아요. 섬 곳곳의 <b>과제 기계(!)</b>에서 미션을 성공하면 경험치·코인을 받고, 팀 게이지가 가득 차면 <b>팀 모두 레벨 업</b>!<br>· 쓰러지면 5초 뒤 부활하지만 <b>코인 30%</b>와 <b>장비 1단계</b>를 떨어뜨리고 경험치를 잃어요(레벨이 내려갈 수도 있어요).<br>· 1등에게는 <b>왕관과 현상금</b>! 1등을 쓰러뜨리면 최근 12초 동안 함께 공격한 모두가 현상금을 나눠요.<br>· 레벨이 오를수록 새 스킬이 열려요. Lv 8이면 스킬 8개 모두!</div>
   </div>
 </div>
 
@@ -144,6 +167,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
     <div class="bar hpb"><i id="hpB" style="width:100%"></i></div>
     <div class="row"><span id="hpT">100/100</span><span><span class="coin"></span> <b id="coinT">0</b></span><span class="rankb" id="rankT">#1</span><span class="bnty" id="bntT" hidden></span></div>
     <div class="row gear"><span id="gearT">맨손 · 작업복</span><span id="kdT">0 처치 · 0 쓰러짐</span></div>
+    <div class="tline" id="tLine" hidden><span class="tchip" id="tChip">팀</span><span class="tbar"><i id="tBar"></i></span><small id="tTxt">0/0</small></div>
   </div>
   <div class="top glass" id="topT">자유 대전</div>
   <div class="lb glass"><h4><span>순위</span><span id="lbN">0명</span></h4><div id="lbL"></div></div>
@@ -153,6 +177,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
   <div class="joy glass pe" id="joy"><i id="joyK"></i></div>
   <div class="emo pe" id="emo" hidden></div>
   <div class="mid pe">
+    <button class="glass bTask" id="bTask" hidden>⚙ 과제 하기 <kbd>E</kbd></button>
     <button class="glass" id="bUpg">상점 <kbd>B</kbd></button>
     <button class="glass" id="bPot">음료 <b id="potN">1</b> <kbd>R</kbd></button>
     <button class="glass" id="bRank">순위 <kbd>Tab</kbd></button>
@@ -181,6 +206,8 @@ const MONC = { snail: '#93A08A', slime: '#7D6CB0', bee: '#3E3F48', boar: '#5B4A4
 const MONN = { snail: '매연 달팽이', slime: '스모그 슬라임', bee: '미세먼지 벌', boar: '매연 멧돼지', golem: '스모그 골렘' };
 const TIERC = ['#B9C4C8', '#8FD3FF', '#5FA8FF', '#B07CF0', '#FFC21A'];
 let ws = null, me = null, myId = 0, R = 62, OBS = [], GEARN = [], ARMN = [], UPG = [], SHOP = null, POTI = { price: 25, max: 3, heal: .45 }, SHOP_R = 9, names = new Map(), lb = [], king = null;
+let TEAMS = [], teamsOn = true, STN = [], TASKN = {}, TASK_R = 3, teamInfo = [], nearSt = null, curTask = null;
+const STNO = new Map();
 let snaps = [], meS = null, phase = 'free', zr = 62, leftS = null, lastSnapAt = 0;
 
 /* ================= join ================= */
@@ -248,6 +275,15 @@ function buildWorld() {
       const area = new THREE.Mesh(new THREE.RingGeometry(SHOP_R - .25, SHOP_R, 48), new THREE.MeshBasicMaterial({ color: '#FFC21A', transparent: true, opacity: .55 })); area.rotation.x = -Math.PI / 2; area.position.y = .08; g.add(area);
     }
     scene.add(g);
+  }
+  for (const t of STN) {
+    const g = new THREE.Group(); g.position.set(t.x, 0, t.z); g.rotation.y = Math.atan2(-t.x, -t.z);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, .9), M('#3A4C55')); base.position.y = .55; g.add(base);
+    const scr = new THREE.Mesh(new THREE.BoxGeometry(1.1, .7, .1), new THREE.MeshBasicMaterial({ color: '#5FF0D8' })); scr.position.set(0, 1.35, .25); scr.rotation.x = -.5; g.add(scr);
+    const pad = new THREE.Mesh(new THREE.RingGeometry(TASK_R - .2, TASK_R, 40), new THREE.MeshBasicMaterial({ color: '#5FF0D8', transparent: true, opacity: .5 })); pad.rotation.x = -Math.PI / 2; pad.position.y = .07; g.add(pad);
+    const lab = label('⚙ ' + (TASKN[t.type] || '과제'), '#7FF0E0'); lab.position.y = 2.5; lab.scale.set(3.6, .6, 1); g.add(lab);
+    const mark = label('!', '#FFD45A'); mark.scale.set(2.4, .9, 1); mark.position.y = 3.4; g.add(mark);
+    scene.add(g); STNO.set(t.id, { g, scr, mark, pad });
   }
   zoneMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 40, 64, 1, true), new THREE.MeshBasicMaterial({ color: '#B44CFF', transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false }));
   zoneMesh.position.y = 18; scene.add(zoneMesh);
@@ -362,7 +398,7 @@ function interp(id, kind) {
 function onMsg(m) {
   if (m.t === 'err') { $('#jErr').textContent = m.s; if (me) toast(m.s, 5000); return; }
   if (m.t === 'welcome') {
-    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R;
+    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3;
     me = { name: m.name }; localStorage.setItem('arena-tok', m.tok); localStorage.setItem('arena-tokname', $('#jName').value.trim());
     buildWorld(); buildPad();
     $('#join').hidden = true; $('#hud').hidden = false;
@@ -370,17 +406,22 @@ function onMsg(m) {
     return;
   }
   if (m.t === 's') return onSnap(m);
-  if (m.t === 'lb') { lb = m.list; king = m.king; for (const r of lb) names.set(r[0], r[1]); renderLb(); return; }
+  if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teamInfo = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; for (const r of lb) names.set(r[0], r[1]); renderLb(); return; }
   if (m.t === 'ro') { if (m.joined && m.joined !== myId) feed(`<b>${esc(m.name)}</b> 입장`); if (m.gone) feed(`${esc(m.name)} 퇴장`); return; }
   if (m.t === 'msg') { toast(esc(m.s).replace(/&lt;(\/?)b&gt;/g, '<$1b>'), 2800); if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') { shopSig = ''; renderUpg(); } return; }
   if (m.t === 'round') { $('#modal').hidden = true; return toast('<b>' + esc(m.s) + '</b>', 6000); }
-  if (m.t === 'dead') return showDead(m);
+  if (m.t === 'dead') { curTask = null; return showDead(m); }
+  if (m.t === 'task') return openTask(m);
+  if (m.t === 'tx') { if (curTask) { curTask = null; closeModal(); } if (m.s) toast(esc(m.s), 3200); return; }
+  if (m.t === 'tres') { curTask = null; closeModal(); toast(m.ok ? `<b>✔ ${esc(m.s)}</b>` : esc(m.s), 3200); if (m.ok) { fxRing(local.x, local.z, '#5FF0D8', .5, 3, .8); fxText(`+${m.xp} XP`, local.x, 3.4, local.z, '#7FF0E0'); } return; }
+  if (m.t === 'tlv') { const T = TEAMS[m.team] || { n: '?', c: '#fff' }; const mine = meS && meS.team === m.team; toast(mine ? `🎉 <b style="color:${T.c}">${T.n} 팀 레벨 업!</b> ${esc(m.by)}의 과제로 팀 게이지 완성 → 우리 팀 모두 <b>+1 레벨</b>!` : `<b style="color:${T.c}">${T.n} 팀</b>이 팀 레벨 업 했어요! (${m.n}번째)`, 4200); feed(`<span class="tdot" style="background:${T.c}"></span><b>${T.n} 팀</b> 레벨 업!`); if (mine) fxRing(local.x, local.z, T.c, .6, 4, 1); return; }
+  if (m.t === 'teams') { teamsOn = m.teamsOn; if (m.s) toast('<b>' + esc(m.s) + '</b>', 4000); return; }
   if (m.t === 'end') return showEnd(m.top);
 }
 function onSnap(m) {
   const at = performance.now();
   const s = { at, P: new Map(), M: new Map(), J: new Map(), K: new Map() };
-  for (const p of m.P) s.P.set(p[0], { x: p[1], z: p[2], dir: p[3], hp: p[4], max: p[5], lv: p[6], f: p[7], wpn: p[8], arm: p[9] });
+  for (const p of m.P) s.P.set(p[0], { x: p[1], z: p[2], dir: p[3], hp: p[4], max: p[5], lv: p[6], f: p[7], wpn: p[8], arm: p[9], team: p[10] });
   for (const q of m.M) s.M.set(q[0], { type: q[1], x: q[2], z: q[3], dir: q[4], hp: q[5], max: q[6] });
   for (const j of m.J) s.J.set(j[0], { kind: j[1], x: j[2], z: j[3], dir: 0 });
   for (const k of m.K) s.K.set(k[0], { kind: k[1], val: k[2], x: k[3], z: k[4] });
@@ -444,6 +485,11 @@ function renderMe() {
   $('#bntT').hidden = !s.bounty; if (s.bounty) $('#bntT').textContent = `👑 현상금 ${s.bounty}`;
   $('#gearT').textContent = [GEARN[s.wpn], ARMN[s.arm], SHOP && s.boot ? SHOP.boot.names[s.boot] : '', SHOP && s.helm ? SHOP.helm.names[s.helm] : ''].filter(Boolean).join(' · ');
   if (s.pot != null) { $('#potN').textContent = s.potCd ? `${s.pot}(${s.potCd})` : s.pot; $('#bPot').disabled = !s.pot; }
+  { const T = TEAMS[s.team], ti = teamInfo[s.team]; $('#tLine').hidden = !(teamsOn && T);
+    if (teamsOn && T) { $('#tChip').textContent = T.n + ' 팀'; $('#tChip').style.background = T.c; $('#tBar').style.background = T.c; if (ti) { $('#tBar').style.width = Math.min(100, ti.pts / ti.goal * 100) + '%'; $('#tTxt').textContent = `${ti.pts}/${ti.goal}`; } } }
+  { let best = null, bd = TASK_R; for (const t of STN) { const d = Math.hypot(t.x - local.x, t.z - local.z); if (d <= bd) { bd = d; best = t; } }
+    nearSt = best; const b = $('#bTask'); b.hidden = !best || !(mp.f & 1);
+    if (best) { const cd = s.tcd ? s.tcd[best.id] : 0; b.innerHTML = cd ? `⚙ ${cd}초 뒤 가능` : `⚙ ${esc(TASKN[best.type])} 하기 <kbd>E</kbd>`; b.disabled = !!cd; } }
   { const inShop = Math.hypot(local.x, local.z) <= SHOP_R; if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼으로 장비를 사세요.', 2600); wasInShop = inShop; } $('#kdT').textContent = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}`;
   for (const b of document.querySelectorAll('.sk')) {
     const sk = SK.find(k => k.id === b.dataset.id), lock = mp.lv < sk.lv, cd = s.cds[sk.id] || 0, full = { dash: 8, whirl: 7, cannon: 6, heal: 18, shield: 16, thunder: 10, tornado: 14 }[sk.id];
@@ -457,7 +503,8 @@ function renderMe() {
   if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') renderUpg();
 }
 function renderLb() {
-  const rows = lb.slice(0, 6).map((r, i) => `<div class="lbr ${r[0] === myId ? 'me2' : ''}"><span>${r[0] === king ? '👑' : i + 1}</span><span class="n">${esc(r[1])}</span><span class="l">Lv${r[2]}</span><span class="c">${r[3]}</span></div>`).join('');
+  const dot = r => teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : '';
+  const rows = lb.slice(0, 6).map((r, i) => `<div class="lbr ${r[0] === myId ? 'me2' : ''}"><span>${r[0] === king ? '👑' : i + 1}</span><span class="n">${dot(r)}${esc(r[1])}</span><span class="l">Lv${r[2]}</span><span class="c">${r[3]}</span></div>`).join('');
   const myIdx = lb.findIndex(r => r[0] === myId);
   $('#lbL').innerHTML = rows + (myIdx >= 6 ? `<div class="lbr me2"><span>${myIdx + 1}</span><span class="n">${esc(lb[myIdx][1])}</span><span class="l">Lv${lb[myIdx][2]}</span><span class="c">${lb[myIdx][3]}</span></div>` : '');
   $('#lbN').textContent = lb.length + '명';
@@ -485,7 +532,7 @@ function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 function skill(id, btn) { send({ t: 'sk', id }); if (btn) { btn.classList.add('press'); setTimeout(() => btn.classList.remove('press'), 120); } if (id === 'punch') swing = .25; }
 function openModal(kind, html) { const c = $('#mCard'); c.dataset.kind = kind; c.innerHTML = html; $('#modal').hidden = false; }
 function closeModal() { $('#modal').hidden = true; }
-$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') { if (curTask) send({ t: 'tcancel' }); closeModal(); } });
 let shopSig = '', wasInShop = false;
 const EFF = { wpn: t => `공격 +${t * 5}`, arm: t => `체력 +${t * 22} · 피해 −${t * 6}%`, boot: t => `이동 속도 +${t * 7}%`, helm: t => `스킬 대기 −${t * 8}%` };
 function renderUpg() {
@@ -505,12 +552,50 @@ function renderUpg() {
 }
 $('#mCard').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b || b.disabled) return; if (b.dataset.s === 'pot') send({ t: 'buy', s: 'pot' }); else send({ t: 'buy', s: b.dataset.s, v: +b.dataset.v }); b.disabled = true; });
 function openUpg() { openModal('upg', ''); shopSig = ''; renderUpg(); }
+/* ================= tasks (mini-games) ================= */
+const WCOL = [['빨강', '#E5483B'], ['파랑', '#3F7FE0'], ['노랑', '#E8B400'], ['초록', '#2E9E58']];
+const DIRN = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+function openTask(m) {
+  curTask = m; const q = m.q;
+  const head = `<h2><span>⚙ ${esc(m.name)}</span><button class="btn ghost" id="tX" style="min-height:40px;padding:0 14px">그만두기</button></h2><div class="tip">기계 앞을 떠나거나 공격받으면 취소돼요. 주변을 잘 살피세요!</div>`;
+  let body = '';
+  if (m.type === 'wires') body = `<p>왼쪽 전선을 누르고, <b>같은 색</b> 오른쪽 단자를 눌러 4개 모두 연결하세요.</p><div class="wires" id="wr"><svg id="wsvg"></svg>${[0, 1, 2, 3].map(i => `<button class="plug" data-l="${i}" style="grid-column:1;grid-row:${i + 1};background:${WCOL[i][1]}">${WCOL[i][0]}</button>`).join('')}${q.right.map((c, j) => `<button class="plug" data-r="${j}" style="grid-column:2;grid-row:${j + 1};background:${WCOL[c][1]}">${WCOL[c][0]}</button>`).join('')}</div>`;
+  else if (m.type === 'nacelle') body = `<p>바람이 <b>${DIRN[q.wind]}쪽</b>에서 불어와요. 나셀(발전기 머리)을 돌려 <b>바람이 불어오는 쪽</b>을 보게 하세요.</p><svg class="comp" id="comp" viewBox="-120 -120 240 240"></svg><div class="trow"><button id="rl">⟲ 왼쪽</button><button id="rr">오른쪽 ⟳</button><button class="go" id="rok">확인</button></div>`;
+  else if (m.type === 'order') body = `<p>풍력발전기에서 에너지가 흐르는 순서대로 부품을 누르세요. <b>바람 → ? → ? → ? → ? → 전기</b></p><div class="seq" id="seq"><em>바람 →</em></div><div class="parts">${q.parts.map((n, i) => `<button data-p="${i}">${esc(n)}</button>`).join('')}</div><div class="trow"><button id="oreset">다시</button></div>`;
+  else body = `<p style="font-size:17px;color:#10242B"><b>${esc(q.q)}</b></p><div class="opts">${q.o.map((o, i) => `<button data-o="${i}">${'①②③④'[i]} ${esc(o)}</button>`).join('')}</div>`;
+  openModal('task', `<div class="task">${head}${body}</div>`);
+  $('#tX').addEventListener('click', () => { send({ t: 'tcancel' }); curTask = null; closeModal(); });
+  if (m.type === 'wires') {
+    const link = [-1, -1, -1, -1]; let sel = -1; const wr = $('#wr');
+    const draw = () => { const svg = $('#wsvg'), bx = wr.getBoundingClientRect(); svg.innerHTML = link.map((j, i) => { if (j < 0) return ''; const a = wr.querySelector(`[data-l="${i}"]`).getBoundingClientRect(), b = wr.querySelector(`[data-r="${j}"]`).getBoundingClientRect(); return `<line x1="${a.right - bx.left}" y1="${a.top + a.height / 2 - bx.top}" x2="${b.left - bx.left}" y2="${b.top + b.height / 2 - bx.top}" stroke="${WCOL[i][1]}" stroke-width="8" stroke-linecap="round"/>`; }).join(''); wr.querySelectorAll('[data-l]').forEach(b => { b.classList.toggle('sel', +b.dataset.l === sel); b.classList.toggle('done', link[+b.dataset.l] >= 0); }); };
+    wr.querySelectorAll('[data-l]').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.l; draw(); }));
+    wr.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { if (sel < 0) return toast('먼저 왼쪽 전선을 고르세요.', 1500); const j = +b.dataset.r; for (let i = 0; i < 4; i++) if (link[i] === j) link[i] = -1; link[sel] = j; sel = link.indexOf(-1); draw(); if (link.every(v => v >= 0)) setTimeout(() => send({ t: 'ans', a: link }), 250); }));
+    requestAnimationFrame(draw);
+  } else if (m.type === 'nacelle') {
+    let face = q.start;
+    const draw = () => {
+      const wa = q.wind * 45, fa = face * 45;
+      $('#comp').innerHTML = `<circle r="100" fill="#E3F4F0" stroke="#B8CFCB" stroke-width="3"/>${DIRN.map((d, i) => { const a = i * Math.PI / 4; return `<text x="${Math.sin(a) * 86}" y="${-Math.cos(a) * 86 + 6}" text-anchor="middle" font-size="${i % 2 ? 12 : 16}" font-weight="800" fill="#3F5259">${d}</text>`; }).join('')}
+<g transform="rotate(${wa})"><path d="M0 -112 L0 -60" stroke="#3F7FE0" stroke-width="7" stroke-linecap="round"/><path d="M-12 -74 L0 -56 L12 -74" fill="none" stroke="#3F7FE0" stroke-width="7" stroke-linejoin="round"/></g>
+<text x="${Math.sin(q.wind * Math.PI / 4) * 58 + (q.wind % 4 === 0 ? 24 : 0)}" y="${-Math.cos(q.wind * Math.PI / 4) * 58 + 5}" text-anchor="middle" font-size="13" font-weight="900" fill="#3F7FE0">바람</text>
+<g transform="rotate(${fa})"><rect x="-13" y="-8" width="26" height="40" rx="7" fill="#10242B"/><path d="M-48 -14 L48 -14" stroke="#9AA6AC" stroke-width="7" stroke-linecap="round"/><circle cy="-14" r="9" fill="#FFC21A"/><path d="M-8 -30 L0 -42 L8 -30 Z" fill="#E5483B"/></g>
+<text y="112" text-anchor="middle" font-size="13" font-weight="800" fill="#10242B">나셀이 보는 쪽: ${DIRN[face]}</text>`; };
+    $('#rl').addEventListener('click', () => { face = (face + 7) % 8; draw(); }); $('#rr').addEventListener('click', () => { face = (face + 1) % 8; draw(); });
+    $('#rok').addEventListener('click', () => send({ t: 'ans', a: face })); draw();
+  } else if (m.type === 'order') {
+    let seq = [];
+    const draw = () => { $('#seq').innerHTML = `<em>바람 →</em>${seq.map(i => `<span>${esc(q.parts[i])}</span><em>→</em>`).join('')}${seq.length === 4 ? '<em>전기!</em>' : ''}`; document.querySelectorAll('[data-p]').forEach(b => { b.disabled = seq.includes(+b.dataset.p); }); };
+    document.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => { seq.push(+b.dataset.p); draw(); if (seq.length === 4) setTimeout(() => send({ t: 'ans', a: seq.map(i => q.parts[i]) }), 300); }));
+    $('#oreset').addEventListener('click', () => { seq = []; draw(); }); draw();
+  } else document.querySelectorAll('[data-o]').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('[data-o]').forEach(x => { x.disabled = true; }); send({ t: 'ans', a: +b.dataset.o }); }));
+}
 function openRank() {
-  const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td><b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
-  openModal('rank', `<h2>순위</h2><p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
+  const ts = teamsOn && TEAMS.length ? `<div class="tstand">${TEAMS.map((T, i) => { const t = teamInfo[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 · ${t.n}명<small>팀 레벨 업 ${t.lvups}번 · 과제 ${t.tasks} · 처치 ${t.kills}<br>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('')}</div>` : '';
+  const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
+  openModal('rank', `<h2>순위</h2>${ts}<p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal);
 }
-$('#bUpg').addEventListener('click', openUpg); $('#bPot').addEventListener('click', () => send({ t: 'pot' })); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
+$('#bTask').addEventListener('click', () => { if (!curTask) send({ t: 'task' }); }); $('#bUpg').addEventListener('click', openUpg); $('#bPot').addEventListener('click', () => send({ t: 'pot' })); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
 let deadT = 0;
 function showDead(m) {
   $('#dead').hidden = false; closeModal();
@@ -534,15 +619,22 @@ const cam = { yaw: 0, pitch: .62, dist: 14 };
 const MOVE = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r', KeyZ: 'cl', KeyC: 'cr', KeyQ: 'cl' };
 addEventListener('keydown', e => {
   if (!me || e.target.tagName === 'INPUT') return;
+  if (curTask) {
+    if (e.code === 'Escape') { send({ t: 'tcancel' }); curTask = null; closeModal(); return; }
+    const d = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code); if (d >= 0 && !e.repeat) { const b = document.querySelector(`[data-o="${d}"],[data-p="${d}"]`); if (b && !b.disabled) b.click(); }
+    if (curTask && curTask.type === 'nacelle' && !e.repeat) { if (e.code === 'ArrowLeft' || e.code === 'KeyA') $('#rl').click(); if (e.code === 'ArrowRight' || e.code === 'KeyD') $('#rr').click(); if (e.code === 'Enter' || e.code === 'Space') $('#rok').click(); }
+    e.preventDefault(); return;
+  }
   if (MOVE[e.code]) { keys[MOVE[e.code]] = true; e.preventDefault(); }
   if (e.repeat && e.code !== 'Space') return;
   if (e.code === 'Space' || e.code === 'KeyF') { e.preventDefault(); skill('punch', $('#atk')); }
   const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(e.code); if (i >= 0) skill(SK[i].id, document.querySelector(`.sk[data-id="${SK[i].id}"]`));
   if (e.code === 'KeyR') send({ t: 'pot' });
+  if (e.code === 'KeyE' && !curTask && nearSt && $('#modal').hidden) send({ t: 'task' });
   if (e.code === 'KeyU' || e.code === 'KeyB') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') closeModal(); else openUpg(); }
   if (e.code === 'Tab' || e.code === 'KeyL') { e.preventDefault(); if (!$('#modal').hidden && $('#mCard').dataset.kind === 'rank') closeModal(); else openRank(); }
   if (e.code === 'KeyT') $('#emo').hidden = !$('#emo').hidden;
-  if (e.code === 'Escape') closeModal();
+  if (e.code === 'Escape') { if (curTask) send({ t: 'tcancel' }); closeModal(); }
 });
 addEventListener('keyup', e => { if (MOVE[e.code]) keys[MOVE[e.code]] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -597,14 +689,16 @@ function loop(now) {
       o.arm.rotation.x = id === myId && swing > 0 ? -2.2 * (swing / .25) : -a * .6;
       o.helm.material.color.set(TIERC[e.arm || 0]); o.wpn.material.color.set(TIERC[e.wpn || 0]); o.wpn.scale.y = 1 + (e.wpn || 0) * .2;
       o.shield.visible = !!(e.f & 4); o.g.children.forEach(c => { if (c.material && !c.isSprite && c !== o.shield && c !== o.ring) { c.material.transparent = !!(e.f & 2); c.material.opacity = e.f & 2 ? .55 + .3 * Math.sin(clockT * 12) : 1; } });
-      o.ring.material.color.set(id === myId ? '#3FE0C5' : e.f & 16 ? '#FFC21A' : '#FFFFFF'); o.ring.visible = id === myId || !!(e.f & 16);
+      const tc = teamsOn && TEAMS[e.team] ? TEAMS[e.team].c : null;
+      o.ring.material.color.set(e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc;
       const nm = names.get(id) || (id === myId ? me.name : '');
-      drawTag(o.tag, `Lv${e.lv} ${nm}`, e.hp, e.max, id === myId ? '#7FF0E0' : e.f & 16 ? '#FFD45A' : '#FFFFFF', !!(e.f & 16));
+      drawTag(o.tag, `${e.f & 32 ? '⚙ ' : ''}Lv${e.lv} ${nm}`, e.hp, e.max, e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0, e.z); let dr = ((e.dir - o.g.rotation.y + Math.PI * 3) % TAU) - Math.PI; o.g.rotation.y += dr * Math.min(1, dt * 8); drawTag(o.tag, MONN[o.type], e.hp, e.max, '#E6F2F2', false); o.tag.s.visible = Math.hypot(e.x - local.x, e.z - local.z) < 24; }
     for (const [id, g] of PK) { const e = last.K.get(id); if (!e) continue; g.position.set(e.x, .6 + Math.sin(clockT * 3 + id) * .15, e.z); g.userData.m.rotation.y += dt * 3; g.rotation.y += dt * 2; }
     for (const [id, g] of PJ) { const e = interp(id, 'J'); if (!e) continue; const ox = g.position.x, oz = g.position.z; g.position.set(e.x, 0, e.z); if (Math.hypot(e.x - ox, e.z - oz) > .01) g.rotation.y = Math.atan2(e.x - ox, e.z - oz); g.userData.m.rotation.y += dt * (last.J.get(id) && last.J.get(id).kind === 'tornado' ? 14 : 0); }
+    for (const t of STN) { const o = STNO.get(t.id); if (!o) continue; const ready = !meS || !meS.tcd || !meS.tcd[t.id]; o.mark.visible = ready; o.mark.position.y = 3.4 + Math.sin(clockT * 3 + t.id) * .2; o.scr.material.color.set(ready ? '#5FF0D8' : '#41545B'); o.pad.material.opacity = ready ? .5 + .2 * Math.sin(clockT * 4) : .15; }
     if (zoneMesh) { zoneMesh.scale.set(zr, 1, zr); zoneMesh.visible = zr < R - .3; }
     // camera
     const tx = local.x, tz = local.z, cp = Math.cos(cam.pitch);
@@ -622,8 +716,9 @@ function drawMini(last) {
   mmc.fillStyle = '#4FA3D1'; mmc.fillRect(0, 0, N, N); mmc.fillStyle = '#8CC47C'; mmc.beginPath(); mmc.arc(N / 2, N / 2, R * s, 0, TAU); mmc.fill();
   if (zr < R - .3) { mmc.strokeStyle = '#B44CFF'; mmc.lineWidth = 3; mmc.beginPath(); mmc.arc(N / 2, N / 2, zr * s, 0, TAU); mmc.stroke(); }
   mmc.fillStyle = '#FFC21A'; mmc.fillRect(X(0) - 4, Z(0) - 4, 8, 8);
+  for (const t of STN) { const ready = !meS || !meS.tcd || !meS.tcd[t.id]; mmc.save(); mmc.translate(X(t.x), Z(t.z)); mmc.rotate(Math.PI / 4); mmc.fillStyle = ready ? '#5FF0D8' : 'rgba(65,84,91,.8)'; mmc.fillRect(-5, -5, 10, 10); mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 1.5; mmc.strokeRect(-5, -5, 10, 10); mmc.restore(); }
   for (const [, m] of last.M) { mmc.fillStyle = m.type === 'golem' || m.type === 'boar' ? '#FF6B5A' : '#E9A3FF'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 3, 0, TAU); mmc.fill(); }
-  for (const [id, p] of last.P) { if (id === myId || !(p.f & 1)) continue; const kingP = p.f & 16; mmc.fillStyle = kingP ? '#FFC21A' : '#FFFFFF'; mmc.beginPath(); mmc.arc(X(p.x), Z(p.z), kingP ? 7 : 4.5, 0, TAU); mmc.fill(); mmc.strokeStyle = '#10242B'; mmc.lineWidth = 1.5; mmc.stroke(); }
+  for (const [id, p] of last.P) { if (id === myId || !(p.f & 1)) continue; const kingP = p.f & 16; mmc.fillStyle = kingP ? '#FFC21A' : teamsOn && TEAMS[p.team] ? TEAMS[p.team].c : '#FFFFFF'; mmc.beginPath(); mmc.arc(X(p.x), Z(p.z), kingP ? 7 : 4.5, 0, TAU); mmc.fill(); mmc.strokeStyle = '#10242B'; mmc.lineWidth = 1.5; mmc.stroke(); }
   mmc.save(); mmc.translate(X(local.x), Z(local.z)); mmc.rotate(-local.dir + Math.PI); mmc.fillStyle = '#3FE0C5'; mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 2;
   mmc.beginPath(); mmc.moveTo(0, -9); mmc.lineTo(6.5, 7); mmc.lineTo(0, 3.5); mmc.lineTo(-6.5, 7); mmc.closePath(); mmc.fill(); mmc.stroke(); mmc.restore(); mmc.restore();
 }
