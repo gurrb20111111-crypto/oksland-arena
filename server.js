@@ -822,7 +822,7 @@ function onConnect(c) {
     if (msg.t === 'join' && !c.pid && !c.admin) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
-      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
