@@ -161,6 +161,9 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
   .top{left:calc(12px + env(safe-area-inset-left));transform:none;top:calc(146px + env(safe-area-inset-top));font-size:12px;padding:5px 12px}
   .me{max-width:calc(100vw - 200px)}.row{flex-wrap:wrap;gap:4px 8px;font-size:11px}.gear{font-size:10.5px}
 }
+.shopT{font-size:14px;font-weight:800;color:#3A2600;background:#FFD45A;border-radius:999px;padding:3px 10px;margin-left:8px;vertical-align:middle}
+#shopIn{margin-top:6px}
+.boostB{color:#FFB347}
 </style>
 </head>
 <body>
@@ -742,6 +745,11 @@ function onMsg(m) {
     try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ }
     location.replace(location.pathname); return;
   }
+  if (m.t === 'shop') {
+    if (m.s === 'in') { toast(`🛒 <b>상점에 들어왔어요!</b> ${m.secs}초 동안 <b>공격받지 않아요</b>. 시간이 끝나면 자동으로 나가요.`, 2600); shopSig = ''; renderUpg(); }
+    if (m.s === 'out') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') $('#modal').hidden = true; if (m.why === 'time') toast(`⏰ 상점 시간 끝! <b>${m.cd}초</b> 뒤에 다시 들어갈 수 있어요.`, 3000); else if (m.why === 'left') toast(`상점 원을 벗어나서 상점을 닫았어요. ${m.cd}초 뒤 다시 들어갈 수 있어요.`, 2800); }
+    return;
+  }
   if (m.t === 'err') { $('#jErr').textContent = m.s; if (me) toast(m.s, 5000); return; }
   if (m.t === 'welcome') {
     myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3; QST = m.qst || null; STRUCTS = m.structs || []; buildSurf(); if (m.shops) SHOPS = m.shops; if (m.jobs) { JOBS = m.jobs; JOB_LV = m.jobLv; JOB_COST = m.jobCost; SHRINE_R = m.shrineR; }
@@ -841,7 +849,8 @@ function onEv(e) {
     const a = e.a ? names.get(e.a) : null, v = names.get(e.v) || '?';
     const how = e.src === 'zone' ? '바람의 벽' : e.src === 'sea' ? '🌊 바다' : e.src ? MONN[e.src] : null;
     feed(`${a ? `<b>${esc(a)}</b>` : esc(how || '')} ${e.sea ? '🌊' : '⚔'} ${esc(v)}${e.sea ? ' <span class="bt">바다에 빠뜨림</span>' : ''}${e.bounty ? ` <span class="bt">현상금 ${e.bounty}코인 · ${e.helpers.length}명이 나눔</span>` : ''}`);
-    if (e.a === myId) toast(`<b>${esc(v)}</b>을(를) ${e.sea ? '바다에 빠뜨렸어요! 🌊' : '쓰러뜨렸어요!'}${e.bounty && e.helpers.includes(myId) ? ` 현상금 <b>${Math.ceil(e.bounty / e.helpers.length)}코인</b>!` : ''}`, 2600);
+    if (e.a === myId && e.soft) toast(`<b>${esc(v)}</b>은(는) 나보다 훨씬 약해서 보상이 거의 없어요. 비슷한 레벨이나 더 센 상대를 노려 보세요!`, 3200);
+    else if (e.a === myId) toast(`${e.up ? '⚡ <b>역전 보너스 ×1.5!</b> ' : ''}<b>${esc(v)}</b>을(를) ${e.sea ? '바다에 빠뜨렸어요! 🌊' : '쓰러뜨렸어요!'}${e.bounty && e.helpers.includes(myId) ? ` 현상금 <b>${Math.ceil(e.bounty / e.helpers.length)}코인</b>!` : ''}`, 2600);
     else if (e.bounty && e.helpers.includes(myId)) toast(`1등 협공 성공! 현상금 <b>${Math.ceil(e.bounty / e.helpers.length)}코인</b>`, 3000);
   } else if (e.k === 'lv' && e.id === myId) {
     const sk = SK.find(s => s.lv === e.lv); const p = posOf(myId); fxRing(p.x, p.z, '#FFC21A', .6, 3.2, .8); fxText('레벨 업! Lv ' + e.lv, p.x, 3.6, p.z, '#FFC21A');
@@ -871,7 +880,7 @@ function renderMe() {
   { let best = null, bd = TASK_R; for (const t of STN) { const d = Math.hypot(t.x - local.x, t.z - local.z); if (d <= bd) { bd = d; best = t; } }
     nearSt = best; const b = $('#bTask'); b.hidden = !best || !(mp.f & 1) || nearChest;
     if (best) { const cd = s.tcd ? s.tcd[best.id] : 0; b.innerHTML = cd ? `⚙ ${cd}초 뒤 가능` : `⚙ ${esc(TASKN[best.type])} 하기 <kbd>E</kbd>`; b.disabled = !!cd; } }
-  { const inShop = nearShopL(); if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼으로 장비를 사세요.', 2600); wasInShop = inShop; } $('#kdT').textContent = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}`;
+  { const inShop = nearShopL(); if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼을 누르면 <b>10초 동안 안전</b>하게 살 수 있어요.', 2800); wasInShop = inShop; } $('#kdT').innerHTML = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}${s.boost > 1 ? ` · <b class="boostB" title="레벨이 평균보다 낮아서 경험치를 더 받아요">🔥 경험치 ×${s.boost}</b>` : ''}`;
   for (const b of document.querySelectorAll('.sk')) {
     const sk = SK.find(k => k.id === b.dataset.id), lock = mp.lv < sk.lv, cd = s.cds[sk.id] || 0, full = { dash: 8, whirl: 7, cannon: 6, heal: 18, shield: 16, thunder: 10, tornado: 14 }[sk.id];
     b.classList.toggle('lock', lock); b.style.setProperty('--cd', lock ? 0 : cd / full);
@@ -912,27 +921,28 @@ addEventListener('resize', () => { if (document.querySelector('.sk')) layoutPad(
 function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 function skill(id, btn) { send({ t: 'sk', id }); if (btn) { btn.classList.add('press'); setTimeout(() => btn.classList.remove('press'), 120); } if (id === 'punch') swing = .25; }
 function openModal(kind, html) { const c = $('#mCard'); c.dataset.kind = kind; c.innerHTML = html; $('#modal').hidden = false; }
-function closeModal() { $('#modal').hidden = true; }
+function closeModal() { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg' && meS && meS.shop > 0) send({ t: 'shop', open: false }); $('#modal').hidden = true; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') { if (curTask) send({ t: 'tcancel' }); closeModal(); } });
 let shopSig = '', wasInShop = false, wasInShrine = false;
 const EFF = { wpn: t => `공격 +${t * 5}`, arm: t => `체력 +${t * 22} · 피해 −${t * 6}%`, boot: t => `이동 속도 +${t * 7}%`, helm: t => `스킬 대기 −${t * 8}%` };
 function renderUpg() {
   const s = meS; if (!s || !SHOP) return;
-  const near = nearShopL(), ok = near && s.safe;
-  const sig = [s.coins, s.parts, s.wpn, s.arm, s.boot, s.helm, s.pot, near, s.safe].join('|'); if (sig === shopSig) return; shopSig = sig;
-  const why = !near ? '🧭 <b>동·서·남·북 바람상회</b>(미니맵의 노란 네모) 중 가까운 곳으로 가야 살 수 있어요.' : !s.safe ? '⚔ 싸우는 중이라 지금은 살 수 없어요. 4초만 숨으세요!' : '';
+  const near = nearShopL(), ok = near && s.shop > 0;
+  const sig = [s.coins, s.parts, s.wpn, s.arm, s.boot, s.helm, s.pot, near, s.shop, s.shopCd].join('|'); if (sig === shopSig) return; shopSig = sig;
+  const why = !near ? '🧭 <b>동·서·남·북 바람상회</b>(미니맵의 노란 네모) 중 가까운 곳으로 가야 살 수 있어요.' : s.shopCd > 0 && !s.shop ? `⏳ 상점은 <b>${s.shopCd}초</b> 뒤에 다시 들어갈 수 있어요. (무적을 계속 쓰지 못하게 쉬는 시간이 있어요)` : !s.shop ? '<button class="btn" id="shopIn">🛒 상점 들어가기 · 10초 동안 안전</button>' : '';
   const sec = k => { const it = SHOP[k], cur = s[k] || 0;
     const rows = it.names.map((n, t) => t === 0 ? '' : `<div class="si ${t <= cur ? 'own' : ''}"><span class="tc" style="background:${TIERC[t]}"></span><b>${esc(n)}</b><small>${EFF[k](t)}</small>${t === cur ? '<em>착용 중</em>' : t < cur ? '<em>✓</em>' : `<button data-s="${k}" data-v="${t}" ${!ok || s.coins < it.price[t] || (s.parts || 0) < ((it.parts || [])[t] || 0) ? 'disabled' : ''}>${it.price[t]}${(it.parts || [])[t] ? ` ⚙${it.parts[t]}` : ''}</button>`}</div>`).join('');
     return `<section><h3>${it.label}<small>${esc(it.names[cur])}</small></h3>${rows}</section>`; };
   const potSec = `<section><h3>회복 음료<small>${s.pot} / ${POTI.max}개</small></h3><div class="si"><span class="tc" style="background:#7BD88F"></span><b>회복 음료</b><small>체력 ${Math.round(POTI.heal * 100)}% 회복 · <b>R</b> 키 · 싸우는 중에도 OK</small><button data-s="pot" ${!ok || s.coins < POTI.price || s.pot >= POTI.max ? 'disabled' : ''}>${POTI.price}</button></div></section>`;
   const c = $('#mCard');
-  c.innerHTML = `<h2>바람상회</h2><div class="stl"><span>코인 ${s.coins}</span><span>공격 ${s.atk}</span><span>받는 피해 −${s.def}%</span><span>속도 +${s.spdB || 0}%</span><span>스킬 대기 −${s.cdr || 0}%</span></div>
+  c.innerHTML = `<h2>바람상회${s.shop > 0 ? ` <span class="shopT">🛡 안전 ${s.shop}초</span>` : ''}</h2><div class="stl"><span>코인 ${s.coins}</span><span>공격 ${s.atk}</span><span>받는 피해 −${s.def}%</span><span>속도 +${s.spdB || 0}%</span><span>스킬 대기 −${s.cdr || 0}%</span></div>
 <p style="font-size:13px">${SHOP.wpn.parts && SHOP.wpn.parts.some(Boolean) ? `<b>좋은 장비는 부품 ⚙이 필요해요</b> (지금 ⚙ ${s.parts || 0}개) — 부품은 <b>과제 기계</b>에서만 받아요. ` : ''}원하는 단계를 바로 살 수 있어요. 코인을 쓰면 순위(코인)가 내려가고, 쓰러지면 가장 좋은 장비를 1단계 떨어뜨려요.</p>${why ? `<div class="shopw">${why}</div>` : ''}
 <div class="shop">${sec('wpn')}${sec('arm')}${sec('boot')}${sec('helm')}${potSec}</div><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>B</kbd></button></div>`;
   $('#mX').addEventListener('click', closeModal);
+  const si = $('#shopIn'); if (si) si.addEventListener('click', () => send({ t: 'shop', open: true }));
 }
 $('#mCard').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b || b.disabled) return; if (b.dataset.s === 'pot') send({ t: 'buy', s: 'pot' }); else send({ t: 'buy', s: b.dataset.s, v: +b.dataset.v }); b.disabled = true; });
-function openUpg() { openModal('upg', ''); shopSig = ''; renderUpg(); }
+function openUpg() { openModal('upg', ''); shopSig = ''; if (nearShopL() && meS && !meS.shop && !meS.shopCd) send({ t: 'shop', open: true }); renderUpg(); }
 /* ================= tasks (mini-games) ================= */
 const WCOL = [['빨강', '#E5483B'], ['파랑', '#3F7FE0'], ['노랑', '#E8B400'], ['초록', '#2E9E58']];
 const DIRN = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
@@ -990,7 +1000,7 @@ function showDead(m) {
   $('#dead').hidden = false; closeModal();
   const by = m.by === 'zone' ? '바람의 벽' : MONN[m.by] || m.by;
   $('#dTitle').textContent = m.sea ? (m.by === 'sea' ? '바다에 빠졌어요 🌊' : `${by}에게 밀려 바다에 빠졌어요 🌊`) : `${by}에게 쓰러졌어요`;
-  $('#dInfo').innerHTML = `코인 <b>−${m.lost}</b>${m.gearLost ? ` · <b>${esc(m.gearLost)}</b>을(를) 떨어뜨렸어요` : ''}${m.partLost ? ' · 부품 ⚙ 1개' : ''} · 경험치 −${m.xpLoss}${m.lvDown ? ' · <b style="color:#C9473A">레벨이 내려갔어요</b>' : ''}<br>떨어진 코인과 장비는 다른 사람이 주울 수 있어요. 빨리 돌아가 되찾으세요!`;
+  $('#dInfo').innerHTML = `코인 <b>−${m.lost}</b>${m.gearLost ? ` · <b>${esc(m.gearLost)}</b>을(를) 떨어뜨렸어요` : ''}${m.partLost ? ' · 부품 ⚙ 1개' : ''} · 경험치 −${m.xpLoss}${m.lvDown ? ' · <b style="color:#C9473A">레벨이 내려갔어요</b>' : ''}<br>${m.soft ? '🛡 <b>약자 보호</b>: 레벨이 5 이상 높은 친구에게 쓰러져서 잃는 것이 줄었어요(장비는 그대로).' : '떨어진 코인과 장비는 다른 사람이 주울 수 있어요. 빨리 돌아가 되찾으세요!'}`;
   let n = m.respawn; $('#dCount').textContent = n; clearInterval(deadT);
   deadT = setInterval(() => { n--; $('#dCount').textContent = Math.max(0, n); if (n <= 0) { clearInterval(deadT); $('#dead').hidden = true; } }, 1000);
 }
@@ -1106,12 +1116,12 @@ function loop(now) {
       if (o.gk !== gk) { o.gk = gk; o.helm.material.color.set(TIERC[e.arm || 0]); o.vest.visible = (e.arm || 0) > 0; o.vest.material.color.set(TIERC[e.arm || 0]); o.wpn.material.color.set(TIERC[e.wpn || 0]); o.wpn.material.emissive.set(e.wpn >= 3 ? TIERC[e.wpn] : '#000000'); o.wpn.material.emissiveIntensity = .4; o.wpn.scale.y = 1 + (e.wpn || 0) * .2; o.shirt.color.set(tc || hashCol(id)); }
       o.shield.visible = !!(e.f & 4);
       if (o.flash > 0 || o.wasFlash) { o.flash = (o.flash || 0) - dt; const on = o.flash > 0; for (const m of o.mats) if (m.emissive) m.emissive.set(on ? '#FF3B2F' : '#000000'); o.wasFlash = on; if (on) o.g.scale.setScalar(1 + o.flash * .6); else o.g.scale.setScalar(1); }
-      const prot = !!(e.f & 2); if (prot || o.wasProt) { for (const m of o.mats) { m.transparent = prot; m.opacity = prot ? .55 + .3 * Math.sin(clockT * 12) : 1; } o.wasProt = prot; }
+      const shopM = !!(e.f & 256), prot = !!(e.f & 2) || shopM; if (prot || o.wasProt) { for (const m of o.mats) { m.transparent = prot; m.opacity = shopM ? .28 : prot ? .55 + .3 * Math.sin(clockT * 12) : 1; } o.wasProt = prot; }   // 상점 안 = 반투명 유령
       o.aura.visible = !!(e.f & 64); if (e.f & 64) { o.aura.material.color.set(tc || '#FFFFFF'); o.aura.rotation.y += dt * 2; o.aura.material.opacity = .18 + .1 * Math.sin(clockT * 6); }
-      o.ring.material.color.set(e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc;
+      o.ring.material.color.set(e.f & 256 ? '#FFD45A' : e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc || !!(e.f & 256);
       const nm = names.get(id) || (id === myId ? me.name : '');
       const jic = e.job && JOBS[JOBK[e.job]] ? JOBS[JOBK[e.job]].ic + ' ' : '';
-      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
+      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & 256 ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, (e.y || 0) + (o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0), e.z);

@@ -301,7 +301,7 @@ function bye(p, s) {   // 내보내기: 학생 화면은 다시 연결하지 않
 function applyGM(p) { p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
 const live = () => [...players.values()].filter(p => online(p) && !p.gm);
 function resetPlayer(p) {
-  p.lv = 1; p.xp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
+  p.lv = 1; p.xp = 0; p.shopUntil = 0; p.shopCdUntil = 0; p.catchUp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.y = 0; p.vy = 0; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
   if (p.gm) applyGM(p);
 }
@@ -318,6 +318,7 @@ function shuffleTeams() {
 }
 const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startTask(p) {
+  if (p.shopUntil) return tell(p, '상점 안에서는 할 수 없어요. 상점을 닫고 하세요.');
   if (!COOP || !p.alive || p.task) return;
   const now = Date.now();
   const st = STN.map(t => [t, Math.hypot(t.x - p.x, t.z - p.z)]).filter(([, d]) => d <= TASK_R).sort((a, b) => a[1] - b[1])[0];
@@ -345,6 +346,7 @@ function dropChest(why) {
   broadcast({ t: 'chest', s: 'drop', x: chest.x, z: chest.z, y, high: y > 0, why });
 }
 function startOpen(p) {
+  if (p.shopUntil) return tell(p, '상점 안에서는 할 수 없어요. 상점을 닫고 하세요.');
   const now = Date.now();
   if (!chest || now < chest.landAt || !p.alive) return;
   if (Math.hypot(p.x - chest.x, p.z - chest.z) > CHEST.r || Math.abs((p.y || 0) - chest.y) > 1.2) return tell(p, '보물 상자 가까이 가야 열 수 있어요.');
@@ -385,7 +387,7 @@ function answerTask(p, a) {
   p.task = null;
   if (!ok) { p.tcd[t.id] = now + TASK_WRONG_CD; p.c && p.c.send({ t: 'tres', ok: false, s: '앗, 틀렸어요! 8초 뒤에 다시 도전하거나 다른 기계로 가세요.' }); return; }
   p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1; questTask();
-  const xp = Math.round(xpNeed(p.lv) * .4); gainXp(p, xp); addCoins(p, 12);
+  const xp = Math.round(xpNeed(p.lv) * .4); gainXpB(p, xp); addCoins(p, 12);
   { const st = stat(p); p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .25); }
   let tl = null;
   if (teamsOn) {
@@ -429,7 +431,8 @@ function dropPick(kind, val, x, z, y = 0) {
 
 /* ======================= damage & death ======================= */
 function hurtPlayer(v, dmg, src) {
-  if (!v.alive || Date.now() < v.prot) return;
+  if (!v.alive || Date.now() < v.prot || v.shopUntil) return;
+  if (src && src.kind === 'p' && src.p && !src.p.gm && !v.gm) { const g = src.p.lv - v.lv; if (g > 0) dmg *= Math.max(.6, 1 - .05 * g); else if (g < 0) dmg *= Math.min(1.5, 1 - .05 * g); }   // 레벨 차이 보정
   const st = stat(v);
   let d = dmg * (1 - st.def) * (v.shieldT > 0 ? .4 : 1);
   d = Math.max(1, Math.round(d));
@@ -444,35 +447,39 @@ function hurtPlayer(v, dmg, src) {
   if (v.hp <= 0) killPlayer(v, src);
 }
 function killPlayer(v, src) {
+  const kp = src && src.kind === 'p' && src.p && src.p.id !== v.id ? src.p : null, gap = kp ? kp.lv - v.lv : 0, soft = !!kp && !v.gm && !kp.gm && gap >= 5;   // 5레벨 이상 높은 사람에게 쓰러지면 손해를 줄여 줌
+  v.shopUntil = 0;
   if (v.task) cancelTask(v); v.hp = 0; v.alive = false; v.respawnAt = Date.now() + 5000; v.deaths++;
   const vLv = v.lv;
   const wasKing = king === v.id, bounty = wasKing ? bountyOf(v) : 0;
   // penalties: 30% coins dropped, one gear tier dropped, XP loss (may level down)
-  const lost = v.gm ? 0 : Math.floor(v.coins * .3); v.coins -= lost;
+  const lost = v.gm ? 0 : Math.floor(v.coins * (soft ? .1 : .3)); v.coins -= lost;
   if (lost > 0) { const n = Math.min(6, Math.max(1, Math.ceil(lost / 15))); for (let i = 0; i < n; i++) dropPick('coin', Math.floor(lost / n) + (i < lost % n ? 1 : 0), v.x, v.z, v.y); }
   let gearLost = null;
-  if (!v.gm) { // drop one tier of the best piece (weapon/armour first on ties)
+  if (!v.gm && !soft) { // drop one tier of the best piece (weapon/armour first on ties)
     let best = null; for (const k of ['wpn', 'arm', 'boot', 'helm']) if ((v[k] || 0) > 0 && (!best || v[k] > v[best])) best = k;
     if (best) { dropPick(best, v[best], v.x, v.z, v.y); gearLost = SLOTN[best][v[best]]; v[best]--; }
   }
-  let partLost = 0; if (!v.gm && (v.parts || 0) > 0) { v.parts--; partLost = 1; dropPick('part', 1, v.x, v.z, v.y); }
-  const xpLoss = v.gm ? 0 : Math.round(xpNeed(v.lv) * .4); let lvDown = false;
-  v.xp -= xpLoss; if (!v.gm && v.xp < 0) { if (v.lv > 1) { v.lv--; v.xp = Math.max(0, xpNeed(v.lv) + v.xp); lvDown = true; } else v.xp = 0; }
+  let partLost = 0; if (!v.gm && !soft && (v.parts || 0) > 0) { v.parts--; partLost = 1; dropPick('part', 1, v.x, v.z, v.y); }
+  const xpLoss = v.gm ? 0 : Math.round(xpNeed(v.lv) * (soft ? .15 : .4)); let lvDown = false;
+  v.xp -= xpLoss; if (soft && v.xp < 0) v.xp = 0;   // 약자 보호: 레벨은 안 내려감
+  if (!v.gm && v.xp < 0) { if (v.lv > 1) { v.lv--; v.xp = Math.max(0, xpNeed(v.lv) + v.xp); lvDown = true; } else v.xp = 0; }
   v.streak = 0;
   let killer = null, helpers = [];
   if (src && src.kind === 'p' && src.p.id !== v.id) {
     killer = src.p; killer.kills++; if (teamsOn && teamSt[killer.team]) teamSt[killer.team].kills++; killer.streak++; killer.best = Math.max(killer.best, killer.streak);
-    gainXp(killer, 20 + vLv * 8); addCoins(killer, 10 + vLv * 3);
+    if (soft) { gainXp(killer, 5); addCoins(killer, 2); }   // 약한 친구를 잡으면 보상이 거의 없음
+    else { const up = gap <= -3 ? 1.5 : 1; gainXpB(killer, Math.round((20 + vLv * 8) * up)); addCoins(killer, Math.round((10 + vLv * 3) * up)); }   // 높은 레벨을 잡으면 역전 보너스
   }
   if (bounty) {
     const now = Date.now();
     helpers = [...v.dmgBy.entries()].filter(([id, t]) => now - t < 12000 && players.has(id) && id !== v.id).map(([id]) => players.get(id));
     if (killer && !helpers.includes(killer)) helpers.push(killer);
-    if (helpers.length) { const share = Math.ceil(bounty / helpers.length); for (const h of helpers) { addCoins(h, share); gainXp(h, 15); } }
+    if (helpers.length) { const share = Math.ceil(bounty / helpers.length); for (const h of helpers) { addCoins(h, share); gainXpB(h, 15); } }
   }
   v.dmgBy.clear();
-  ev({ k: 'kill', v: v.id, a: killer ? killer.id : null, src: src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : null, sea: v.seaKO ? 1 : 0, bounty, helpers: helpers.map(h => h.id) });
-  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : '?', sea: v.seaKO ? 1 : 0, lost, gearLost, partLost, lvDown, xpLoss, respawn: 5 });
+  ev({ k: 'kill', v: v.id, a: killer ? killer.id : null, src: src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : null, sea: v.seaKO ? 1 : 0, bounty, soft: soft ? 1 : 0, up: kp && gap <= -3 ? 1 : 0, helpers: helpers.map(h => h.id) });
+  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : '?', sea: v.seaKO ? 1 : 0, soft: soft ? 1 : 0, lost, gearLost, partLost, lvDown, xpLoss, respawn: 5 });
 }
 function hurtMon(m, dmg, p, kb = 1, fx, fz) {
   if (m.dead) return;
@@ -487,7 +494,7 @@ function hurtMon(m, dmg, p, kb = 1, fx, fz) {
     m.dead = true; mons.delete(m.id);
     const def = MON[m.type];
     if (COOP) questKill();
-    gainXp(p, def.xp); addCoins(p, def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1)));
+    gainXpB(p, def.xp); addCoins(p, def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1)));
     const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6, weasel: .1, flower: .14, crab: .25, bat: .05, turtle: .45 }[m.type] || .1;
     if (r < gearP) { const tier = Math.min(4, 1 + Math.floor(Math.random() * ({ snail: 1, slime: 1.6, bee: 2, boar: 3, golem: 4, weasel: 1.6, flower: 2, crab: 3, bat: 1, turtle: 3.6 }[m.type] || 1))); const sl = ['wpn', 'arm', 'wpn', 'arm', 'boot', 'helm'][Math.floor(Math.random() * 6)]; dropPick(sl, sl === 'boot' || sl === 'helm' ? Math.min(3, tier) : tier, m.x, m.z); }
     else if (r < gearP + .22) dropPick('heal', 30, m.x, m.z);
@@ -532,6 +539,7 @@ const MON_HIT_KB = { boar: 1.8, golem: 1.6, turtle: 2.6, crab: 1.1 };
 /* ======================= actions ======================= */
 function useSkill(p, id) {
   const sk = SKILLS[id]; if (!sk || !p.alive || p.lv < sk.lv) return;
+  if (p.shopUntil) return;   // 상점 안(무적)에서는 공격 못 함
   const now = Date.now() / 1000;
   if ((p.cds[id] || 0) > now) return;
   p.cds[id] = now + sk.cd * (id === 'punch' ? 1 : 1 - stat(p).cdr);
@@ -567,10 +575,38 @@ function useSkill(p, id) {
   }
 }
 const tell = (p, s) => p.c && p.c.send({ t: 'msg', s });
+/* ---- 안전 쇼핑: 상점에 들어가면 10초 동안 무적(대신 공격·과제·상자 불가), 10초 뒤 자동으로 나가고 10초 동안 다시 못 들어감 ---- */
+const SHOP_SAFE = 10000, SHOP_CD = 10000;
+function enterShop(p) {
+  const now = Date.now();
+  if (!p.alive || p.shopUntil) return;
+  if (!nearShop(p)) return tell(p, '동·서·남·북에 있는 <b>바람상회</b>(미니맵 노란 네모) 노란 원 안에서 상점에 들어갈 수 있어요.');
+  if (now < (p.shopCdUntil || 0)) { const left = Math.ceil((p.shopCdUntil - now) / 1000); if (p.c) p.c.send({ t: 'shop', s: 'cd', left }); return tell(p, `상점은 <b>${left}초</b> 뒤에 다시 들어갈 수 있어요.`); }
+  if (p.task) cancelTask(p);
+  if (chest && chest.opener === p.id) chest.opener = null;
+  p.shopUntil = now + SHOP_SAFE; p.prot = p.shopUntil; p.mx = p.mz = 0;
+  if (p.c) p.c.send({ t: 'shop', s: 'in', secs: SHOP_SAFE / 1000 });
+  ev({ k: 'fx', s: 'shopin', id: p.id, x: +p.x.toFixed(1), z: +p.z.toFixed(1) });
+}
+function exitShop(p, why) {
+  if (!p.shopUntil) return;
+  const now = Date.now(); p.shopUntil = 0; p.shopCdUntil = now + SHOP_CD; p.prot = p.alive ? now + 1000 : 0;   // 나온 뒤 1초만 숨 돌릴 틈
+  if (p.c) p.c.send({ t: 'shop', s: 'out', why, cd: SHOP_CD / 1000 });
+}
+/* ---- 따라잡기: 늦게 온 친구·레벨 낮은 친구 돕기 ---- */
+let lvAvg = 1;
+const xpBoost = p => { if (p.gm) return 1; const g = lvAvg - p.lv; return g >= 1.5 ? Math.min(3, +(1 + .25 * g).toFixed(1)) : 1; };
+const gainXpB = (p, n) => gainXp(p, Math.round(n * xpBoost(p)));
+function catchUpStart(p) {   // 다른 친구들 평균 레벨의 60%로 시작 + 코인·기본 장비
+  const others = live().filter(q => q !== p); if (others.length < 2) return;
+  const avg = others.reduce((a, q) => a + q.lv, 0) / others.length, lv = Math.min(MAXLV, Math.floor(avg * .6));
+  if (lv < 2) return;
+  p.lv = lv; p.xp = 0; p.coins += (lv - 1) * 12; const g = Math.min(2, Math.floor(lv / 4)); p.wpn = Math.max(p.wpn, g); p.arm = Math.max(p.arm, g); p.hp = stat(p).maxHp; p.catchUp = lv;
+}
 function shopCheck(p) {
   if (!p.alive) return false;
   if (!nearShop(p)) { tell(p, '동·서·남·북에 있는 <b>바람상회</b>(미니맵 노란 네모)에 가야 살 수 있어요.'); return false; }
-  if (Date.now() - p.lastHurt < 4000) { tell(p, '싸우는 중에는 살 수 없어요. 4초만 숨으세요!'); return false; }
+  if (!p.shopUntil) { tell(p, '<b>상점 버튼(B)</b>을 눌러 상점에 들어가야 살 수 있어요.'); return false; }
   return true;
 }
 function buy(p, slot, tier) {
@@ -687,6 +723,7 @@ function step(dt) {
   // players
   for (const p of [...players.values()]) {
     if (!online(p)) { if (now - (p.offAt || now) > 180000) { players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name }); } continue; }
+    if (p.shopUntil && (now >= p.shopUntil || !p.alive || !nearShop(p))) exitShop(p, now >= p.shopUntil ? 'time' : 'left');
     if (!p.gm && now - (p.actAt || p.joined) > IDLE_MS) { bye(p, '5분 동안 움직이지 않아서 아레나에서 나왔어요. 다시 하려면 [입장하기]를 누르세요.'); continue; }
     if (!p.alive) {
       if (now >= p.respawnAt) { const [x, z] = freeSpot(10); p.x = x; p.z = z; p.y = 0; p.vy = 0; p.alive = true; p.prot = now + 3000; p.hp = stat(p).maxHp; ev({ k: 'spawn', id: p.id }); }
@@ -722,18 +759,22 @@ function step(dt) {
   // monsters spawn
   monT -= dt;
   const alive = [...players.values()].filter(p => p.alive && online(p));
+  { const lp = live(); lvAvg = lp.length ? lp.reduce((a, q) => a + q.lv, 0) / lp.length : 1; }
   const cap = Math.min(MON_CAP, 8 + Math.ceil(alive.length * MON_PER));   // 접속 인원에 따라 늘어남
   if (monT <= 0 && alive.length && mons.size < cap) {
     monT = .35;
-    const avgLv = alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
+    const studs = alive.filter(p => !p.gm), anchor = studs.length ? studs[Math.floor(Math.random() * studs.length)] : null;   // 한 학생 근처에, 그 학생 레벨에 맞는 몬스터
+    const avgLv = anchor ? anchor.lv : alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
     const pool = Object.entries(MON).filter(([, d]) => d.lv <= Math.max(2, avgLv + 2));
     const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' || k === 'turtle' ? .6 + (avgLv - d.lv) * .25 : k === 'bat' ? 1 : 2);
     let r = Math.random() * w.reduce((a, b) => a + b, 0), type = pool[0][0];
     for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { type = pool[i][0]; break; } }
     for (let i = 0; i < 20; i++) {
-      const a = Math.random() * Math.PI * 2, d = 8 + Math.random() * (zr - 12), x = Math.cos(a) * d, z = Math.sin(a) * d;
+      let a = Math.random() * Math.PI * 2, d = 8 + Math.random() * (zr - 12), x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (anchor && i < 12) { const r2 = 13 + Math.random() * 15; x = anchor.x + Math.cos(a) * r2; z = anchor.z + Math.sin(a) * r2; if (Math.hypot(x, z) > zr - 4) continue; }
       if (OBS.some(o => Math.hypot(o[0] - x, o[1] - z) < o[2] + 2)) continue;
       if (onStruct(x, z, 1.5)) continue;
+      if (SHOPS.some(sh => Math.hypot(sh.x - x, sh.z - z) < SHOP_R + 4)) continue;
       if (alive.some(p => Math.hypot(p.x - x, p.z - z) < 11)) continue;
       const def = MON[type];
       for (let k = 0; k < (def.beh === 'swarm' ? 3 : 1); k++) { const id = nextId++; mons.set(id, { id, type, x: x + k * .9, z: z + (k % 2) * .9, hp: def.hp, max: def.hp, dir: Math.random() * 6.28, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 1 + Math.random() * 2 }); }
@@ -756,7 +797,8 @@ function step(dt) {
     if (spd < 0) { m.dir += Math.PI; spd = -spd; }
     const nx = m.x + Math.sin(m.dir) * spd * dt, nz = m.z + Math.cos(m.dir) * spd * dt;
     const fly = FLYERS.has(m.type);
-    const [cx, cz] = collide(nx, nz, def.r * .7);
+    let [cx, cz] = collide(nx, nz, def.r * .7);
+    for (const sh of SHOPS) { const dx = cx - sh.x, dz = cz - sh.z, d = Math.hypot(dx, dz), lim = SHOP_R + def.r * .5; if (d < lim && d > 1e-3) { cx = sh.x + dx / d * lim; cz = sh.z + dz / d * lim; } }   // 몬스터는 상점 원 안에 못 들어와요
     if (fly) { m.x = cx; m.z = cz; m.y = tgt ? (tgt.y || 0) : 0; } else { const ox = m.x, oz = m.z; moveY(m, cx, cz, def.r * .6, dt); if (Math.hypot(m.x - ox, m.z - oz) < spd * dt * .2 && spd > .5) m.wT = 0; }
     if (Math.hypot(m.x, m.z) > zr + 4) { m.dir += Math.PI; }
     m.atkCd -= dt;
@@ -809,7 +851,7 @@ function step(dt) {
 }
 function sendSnap(rl) {
   const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);
@@ -827,7 +869,7 @@ function sendSnap(rl) {
     c.seenM = nowSeen; base.M = near; base.MF = far || undefined;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, shop: p.shopUntil ? Math.max(0, Math.ceil((p.shopUntil - t) / 1000)) : 0, shopCd: Math.max(0, Math.ceil(((p.shopCdUntil || 0) - t) / 1000)), boost: xpBoost(p), catchUp: p.catchUp || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
     c.send(base);
   }
 }
@@ -867,8 +909,9 @@ function onConnect(c) {
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
-      if (code === ADMIN_KEY) applyGM(p);
+      if (code === ADMIN_KEY) applyGM(p); else catchUpStart(p);
       c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
+      if (p.catchUp) tell(p, `🚀 <b>따라잡기 출발!</b> 친구들이 벌써 많이 컸어요. <b>Lv ${p.catchUp}</b>과 기본 장비로 시작해요. 레벨이 평균보다 낮으면 <b>경험치를 더 많이</b> 받아요!`);
       broadcast({ t: 'ro', joined: p.id, name });
       return;
     }
@@ -883,6 +926,7 @@ function onConnect(c) {
     if (msg.t === 'in') { const mx = +msg.mx || 0, mz = +msg.mz || 0, l = Math.hypot(mx, mz); p.mx = l > 1 ? mx / l : mx; p.mz = l > 1 ? mz / l : mz; }
     else if (msg.t === 'sk') useSkill(p, String(msg.id));
     else if (msg.t === 'up') upgrade(p, msg.w === 'arm' ? 'arm' : 'wpn');
+    else if (msg.t === 'shop') { if (msg.open) enterShop(p); else exitShop(p, 'close'); }
     else if (msg.t === 'buy') { if (msg.s === 'pot') buyPot(p); else if (SHOPX[msg.s]) buy(p, msg.s, msg.v); }
     else if (msg.t === 'pot') drinkPot(p);
     else if (msg.t === 'task') startTask(p);
