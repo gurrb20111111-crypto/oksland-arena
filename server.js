@@ -106,8 +106,12 @@ const MON = {
   flower: { hp: 44, spd: .7, dmg: 12, xp: 24, coins: [8, 12], r: .8, aggro: 15, lv: 3, beh: 'ranged' },     // 멀리서 매연탄
   crab: { hp: 150, spd: 2.4, dmg: 15, xp: 36, coins: [12, 18], r: 1, aggro: 11, lv: 4, beh: 'armor' },     // 단단함(피해 40% 덜 받음)
   bat: { hp: 22, spd: 8, dmg: 6, xp: 12, coins: [4, 6], r: .5, aggro: 18, lv: 5, beh: 'swarm' },           // 떼로 다님
-  turtle: { hp: 230, spd: 1.1, dmg: 48, xp: 62, coins: [22, 32], r: 1.4, aggro: 10, lv: 6, beh: 'heavy' }  // 느리지만 한 방
+  turtle: { hp: 230, spd: 1.1, dmg: 48, xp: 62, coins: [22, 32], r: 1.4, aggro: 10, lv: 6, beh: 'heavy' },  // 느리지만 한 방
+  wolf: { hp: 70, spd: 10.2, dmg: 11, xp: 30, coins: [10, 15], r: .75, aggro: 22, lv: 3, beh: 'runner' }   // 아주 빠름: 2마리씩, 물고 빠지기
 };
+/* 몬스터 레벨: 근처 학생 레벨을 따라 올라감(체력·공격·속도·보상 증가). 25%는 원래 레벨 그대로(약한 몬스터) */
+const MON_MAXLV = MAXLV + 3;
+function monLevelUp(m, lv) { const d = MON[m.type], g = Math.max(0, lv - d.lv); m.lv = d.lv + g; m.hp = m.max = Math.round(d.hp * (1 + .22 * g)); m.dmg = Math.round(d.dmg * (1 + .12 * g)); m.spdMul = 1 + .02 * g; m.rw = 1 + .18 * g; }
 const BOSS = { hp0: 5000, hpPer: 9000, spd: 2.5, r: 2.6, melee: 60, whirl: 80, bolt: 55, coins: 80, pool: 900 };   // HP = hp0 + hpPer × 접속 인원
 const GEARN = ['맨손', '스패너', '토크 렌치', '돌풍 해머', '태풍 블레이드'];
 const ARMN = ['작업복', '작업 조끼', '방풍 재킷', '탄소섬유 슈트', '태풍 갑옷'];
@@ -612,8 +616,8 @@ function hurtMon(m, dmg, p, kb = 1, fx, fz) {
     m.dead = true; mons.delete(m.id);
     const def = MON[m.type];
     if (COOP) questKill();
-    gainXpB(p, def.xp); addCoins(p, def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1)));
-    const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6, weasel: .1, flower: .14, crab: .25, bat: .05, turtle: .45 }[m.type] || .1;
+    const rw = m.rw || 1; gainXpB(p, Math.round(def.xp * rw)); addCoins(p, Math.round((def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1))) * rw));
+    const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6, weasel: .1, flower: .14, crab: .25, bat: .05, turtle: .45, wolf: .18 }[m.type] || .1;
     if (r < gearP) { const tier = Math.min(4, 1 + Math.floor(Math.random() * ({ snail: 1, slime: 1.6, bee: 2, boar: 3, golem: 4, weasel: 1.6, flower: 2, crab: 3, bat: 1, turtle: 3.6 }[m.type] || 1))); const sl = ['wpn', 'arm', 'wpn', 'arm', 'boot', 'helm'][Math.floor(Math.random() * 6)]; dropPick(sl, sl === 'boot' || sl === 'helm' ? Math.min(3, tier) : tier, m.x, m.z); }
     else if (r < gearP + .22) dropPick('heal', 30, m.x, m.z);
     ev({ k: 'mdie', id: m.id, x: +m.x.toFixed(1), z: +m.z.toFixed(1), by: p.id, type: m.type });
@@ -651,7 +655,7 @@ function seaFall(v, src) {   // 학생이 바다에 빠짐: 1부 = 쓰러짐(민
   if (!by) { const now = Date.now(); let best = null, bt = 0; for (const [id, t] of v.dmgBy) if (now - t < 6000 && t > bt && players.has(id)) { best = players.get(id); bt = t; } if (best) by = { kind: 'p', p: best }; }
   v.seaKO = true; killPlayer(v, by || { kind: 'sea' }); v.seaKO = false;
 }
-const MON_KB = { snail: 1.6, slime: 1.4, bee: 1.2, boar: .6, golem: .25, weasel: 1.6, flower: 1, crab: .5, bat: 1.8, turtle: .15 };
+const MON_KB = { snail: 1.6, slime: 1.4, bee: 1.2, boar: .6, golem: .25, weasel: 1.6, flower: 1, crab: .5, bat: 1.8, turtle: .15, wolf: 1.3 };
 const MON_HIT_KB = { boar: 1.8, golem: 1.6, turtle: 2.6, crab: 1.1 };
 
 /* ======================= actions ======================= */
@@ -884,7 +888,7 @@ function step(dt) {
     const studs = alive.filter(p => !p.gm), anchor = studs.length ? studs[Math.floor(Math.random() * studs.length)] : null;   // 한 학생 근처에, 그 학생 레벨에 맞는 몬스터
     const avgLv = anchor ? anchor.lv : alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
     const pool = Object.entries(MON).filter(([, d]) => d.lv <= Math.max(2, avgLv + 2));
-    const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' || k === 'turtle' ? .6 + (avgLv - d.lv) * .25 : k === 'bat' ? 1 : 2);
+    const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' || k === 'turtle' ? .6 + (avgLv - d.lv) * .25 : k === 'bat' ? 1 : k === 'wolf' ? 1.3 : 2);
     let r = Math.random() * w.reduce((a, b) => a + b, 0), type = pool[0][0];
     for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { type = pool[i][0]; break; } }
     for (let i = 0; i < 20; i++) {
@@ -895,7 +899,8 @@ function step(dt) {
       if (SHOPS.some(sh => Math.hypot(sh.x - x, sh.z - z) < SHOP_R + 4)) continue;
       if (alive.some(p => Math.hypot(p.x - x, p.z - z) < 11)) continue;
       const def = MON[type];
-      for (let k = 0; k < (def.beh === 'swarm' ? 3 : 1); k++) { const id = nextId++; mons.set(id, { id, type, x: x + k * .9, z: z + (k % 2) * .9, hp: def.hp, max: def.hp, dir: Math.random() * 6.28, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 1 + Math.random() * 2 }); }
+      const weak = Math.random() < .25, mlv = weak || !anchor ? def.lv : Math.min(MON_MAXLV, Math.max(def.lv, anchor.lv + Math.floor(Math.random() * 4) - 1));
+      for (let k = 0; k < (def.beh === 'swarm' ? 3 : def.beh === 'runner' ? 2 : 1); k++) { const id = nextId++; mons.set(id, { id, type, x: x + k * .9, z: z + (k % 2) * .9, hp: def.hp, max: def.hp, dir: Math.random() * 6.28, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 1 + Math.random() * 2 }); monLevelUp(mons.get(id), mlv); }
       break;
     }
   }
@@ -905,12 +910,13 @@ function step(dt) {
     const def = MON[m.type];
     let tgt = null, td = def.aggro;
     for (const p of alive) { if (now < p.prot) continue; const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < td || (m.tgt === p.id && d < def.aggro * 1.6)) { if (d < td || !tgt) { tgt = p; td = d; } } }
-    let spd = def.spd; m.cd2 = (m.cd2 || 0) - dt; if (m.stun > 0) { m.stun -= dt; spd = 0; }
+    let spd = def.spd * (m.spdMul || 1); m.cd2 = (m.cd2 || 0) - dt; if (m.stun > 0) { m.stun -= dt; spd = 0; }
     if (tgt) m.dir = Math.atan2(tgt.x - m.x, tgt.z - m.z) + (m.type === 'bee' || m.type === 'bat' ? Math.sin(now / 200 + m.id) * .6 : 0);
     else { spd *= .4; m.wT -= dt; if (m.wT <= 0) { m.wT = 2 + Math.random() * 3; m.dir = Math.random() * 6.28; } }
+    if (def.beh === 'runner' && tgt && m.flee > 0) { m.flee -= dt; m.dir = Math.atan2(m.x - tgt.x, m.z - tgt.z) + Math.sin(now / 300 + m.id) * .5; }   // 물고 빠지기
     if (def.beh === 'dart' && tgt) { if (m.dash > 0) { m.dash -= dt; spd = 15; } else if (td < 10 && m.cd2 <= 0) { m.dash = .4; m.cd2 = 2.6; } }
-    if (def.beh === 'ranged' && tgt) { spd = td < 7 ? -def.spd * 1.5 : 0; if (td < 14 && m.cd2 <= 0) { m.cd2 = 2.6; const a = Math.atan2(tgt.x - m.x, tgt.z - m.z); projs.push({ id: nextId++, kind: 'spit', mon: true, x: m.x, z: m.z, y: m.y || 0, dx: Math.sin(a), dz: Math.cos(a), spd: 13, life: 1.3, dmg: def.dmg, r: .7 }); } }
-    if (def.beh === 'heavy') { if (m.wind > 0) { m.wind -= dt; spd = 0; if (m.wind <= 0) { const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'slam', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8 }); for (const p of alive) if (now >= p.prot && Math.hypot(p.x - fx, p.z - fz) < 2.8 && dyOk(p, m, 1.6)) hurtPlayer(p, def.dmg, { kind: 'm', m }); m.atkCd = 2.4; } }
+    if (def.beh === 'ranged' && tgt) { spd = td < 7 ? -def.spd * 1.5 : 0; if (td < 14 && m.cd2 <= 0) { m.cd2 = 2.6; const a = Math.atan2(tgt.x - m.x, tgt.z - m.z); projs.push({ id: nextId++, kind: 'spit', mon: true, x: m.x, z: m.z, y: m.y || 0, dx: Math.sin(a), dz: Math.cos(a), spd: 13, life: 1.3, dmg: (m.dmg || def.dmg), r: .7 }); } }
+    if (def.beh === 'heavy') { if (m.wind > 0) { m.wind -= dt; spd = 0; if (m.wind <= 0) { const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'slam', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8 }); for (const p of alive) if (now >= p.prot && Math.hypot(p.x - fx, p.z - fz) < 2.8 && dyOk(p, m, 1.6)) hurtPlayer(p, (m.dmg || def.dmg), { kind: 'm', m }); m.atkCd = 2.4; } }
       else if (tgt && td < def.r + 1.6 && m.atkCd <= 0) { m.wind = 1.0; const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'warn', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8, t: 1 }); } }
     if (spd < 0) { m.dir += Math.PI; spd = -spd; }
     const [mgx, mgz] = gustPush(m, false);
@@ -921,7 +927,7 @@ function step(dt) {
     if (fly) { m.x = cx; m.z = cz; m.y = tgt ? (tgt.y || 0) : 0; } else { const ox = m.x, oz = m.z; moveY(m, cx, cz, def.r * .6, dt); if (Math.hypot(m.x - ox, m.z - oz) < spd * dt * .2 && spd > .5) m.wT = 0; }
     if (Math.hypot(m.x, m.z) > zr + 4) { m.dir += Math.PI; }
     m.atkCd -= dt;
-    if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, def.dmg, { kind: 'm', m }); }
+    if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, (m.dmg || def.dmg), { kind: 'm', m }); if (def.beh === 'runner') { m.flee = .9; m.atkCd = 1.4; } }
   }
   tickBossStrikes(now, alive);
   tickChest(dt, now); tickGusts(now);
@@ -972,7 +978,7 @@ const t0g = () => Date.now();
 function sendSnap(rl) {
   const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
   const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null ? 512 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
-  const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2)]);
+  const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2), m.lv || (MON[m.type] ? MON[m.type].lv : 20)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);
   const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, gt: gst.map(t => [t.id, t.active ? 2 : t.solver ? 1 : 0, t.active ? Math.ceil((t.active.until - t0g()) / 1000) : 0, t.active ? t.active.owner : t.solver, t.active ? +t.active.dir.toFixed(3) : 0, t.active ? t.active.team : -1]), left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
