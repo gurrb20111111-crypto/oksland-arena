@@ -166,6 +166,53 @@ const QUIZ = [
   ['선풍기와 풍력발전기의 관계는?', '에너지 전환 방향이 반대', '완전히 같은 기계', '아무 관계 없다']
 ];
 
+
+/* ======================= 돌풍 발전기 (풍력 문제를 맞히면 원하는 방향으로 세찬 바람 + 바람 화살) ======================= */
+const GUST = { r: 3.6, quiz: 15000, pick: 8000, life: 12000, len: 26, w: 9, push: 4.4, cdP: 60000, arrowEvery: .65, arrowSpd: 20, wrongHp: .2 };
+const GQ = [   // [문제, 정답, 오답, 오답, 오답] — 옥정섬 SOS 퀘스트·지식 카드 내용
+  ['바람이 생기는 가장 근본적인 까닭은?', '태양이 땅과 바다를 고르게 데우지 못해서', '지구가 커다란 자석이라서', '달이 바닷물을 당겨서', '구름이 움직이면서 공기를 끌고 가서'],
+  ['낮에 바닷가에서 부는 바람은?', '해풍 (바다 → 육지)', '육풍 (육지 → 바다)', '바람이 전혀 안 분다', '하늘에서 땅으로 분다'],
+  ['밤에 바닷가에서 부는 바람은?', '육풍 (육지 → 바다)', '해풍 (바다 → 육지)', '바람이 전혀 안 분다', '땅에서 하늘로 분다'],
+  ['육지와 바다 중 빨리 데워지고 빨리 식는 쪽은?', '육지', '바다', '둘이 똑같다', '날마다 다르다'],
+  ['낮에 햇볕을 받은 육지 위 공기는 어떻게 될까?', '데워져서 위로 올라간다', '차가워져서 가라앉는다', '그 자리에 멈춘다', '바다 밑으로 들어간다'],
+  ['"태양이 없다면 바람은?"에 대한 답으로 알맞은 것은?', '거의 생기지 않는다', '지금보다 세게 분다', '지금과 똑같이 분다', '육풍만 분다'],
+  ['풍력발전기의 에너지 전환으로 알맞은 것은?', '바람의 운동 에너지 → 회전 운동 에너지 → 전기 에너지', '전기 에너지 → 회전 운동 에너지 → 바람', '열에너지 → 빛에너지 → 전기 에너지', '위치 에너지 → 소리 에너지 → 전기 에너지'],
+  ['선풍기의 에너지 전환은?', '전기 → 회전 → 바람', '바람 → 회전 → 전기', '빛 → 열 → 바람', '바람 → 열 → 빛'],
+  ['나셀 속에서 힘이 전달되는 순서는?', '날개 → 회전축 → 기어 → 발전기 → 전선', '발전기 → 날개 → 기어 → 전선 → 회전축', '전선 → 기어 → 날개 → 회전축 → 발전기', '기어 → 전선 → 날개 → 발전기 → 회전축'],
+  ['나셀 속 기어가 하는 일은?', '느린 회전을 빠르게 바꿔 발전기에 전해 준다', '전기를 저장한다', '바람 방향을 잰다', '날개를 멈추게만 한다'],
+  ['나셀(발전기 머리)은 어느 쪽을 향해야 할까?', '바람이 불어오는 쪽', '바람이 불어 가는 쪽', '언제나 북쪽', '아무 쪽이나 상관없다'],
+  ['나셀을 바람이 불어오는 쪽으로 돌리는 것을 무엇이라고 할까?', '요(yaw) 제어', '컷아웃', '양력', '설비이용률'],
+  ['기어 없이 날개가 발전기를 바로 돌리는 방식은?', '직결식', '수직축식', '부유식', '항력식'],
+  ['평평한 판이나 컵처럼 바람이 "미는 힘"은?', '항력', '양력', '중력', '자기력'],
+  ['큰 풍력발전기 날개를 빠르게 돌리는 주된 힘은?', '양력', '항력', '중력', '마찰력'],
+  ['비행기 날개 모양에서 양력이 생기는 까닭은?', '날개 위아래의 압력 차이', '날개가 무거워서', '바람이 날개 뒤를 밀어서', '날개 색이 진해서'],
+  ['큰 풍력발전기 날개의 단면 모양은?', '비행기 날개 모양', '평평한 판', '컵 모양', '동그란 공 모양'],
+  ['날개가 2장인 발전기의 약점은?', '균형이 덜 맞아 흔들림과 소음이 크다', '너무 무거워 돌지 않는다', '바람을 전혀 못 받는다', '전기가 반대로 흐른다'],
+  ['날개가 12장인 풍차에 알맞은 쓰임은?', '느리지만 힘이 세서 물을 퍼 올리는 풍차', '가장 빠르게 도는 대형 발전기', '해상풍력 발전', '비행기 프로펠러'],
+  ['큰 발전용 풍력발전기의 날개는 대부분 몇 장일까?', '3장', '2장', '12장', '1장'],
+  ['풍속이 2배가 되면 바람의 동력은 몇 배?', '8배', '2배', '4배', '16배'],
+  ['풍속이 3배가 되면 바람의 동력은 몇 배?', '27배', '9배', '3배', '6배'],
+  ['날개 길이가 2배가 되면 바람 받는 면적은 몇 배?', '4배', '2배', '8배', '그대로'],
+  ['날개 길이가 2배가 되면 발전량은 대략 몇 배?', '4배', '8배', '2배', '16배'],
+  ['P = ½ρAv³ 에서 세제곱(³)이 붙은 v는 무엇일까?', '풍속', '날개 무게', '공기 온도', '날개 수'],
+  ['바람이 너무 셀 때 발전기를 일부러 멈추는 것을 무엇이라고 할까?', '컷아웃', '컷인', '요 제어', '양력'],
+  ['발전을 시작하는 풍속(컷인)에 가장 가까운 것은?', '약 3 m/s', '약 30 m/s', '0 m/s', '약 100 m/s'],
+  ['풍속이 25 m/s를 넘는 태풍이 오면 발전기는?', '멈춘다 (날개와 설비 보호)', '최대로 발전한다', '날개를 더 빨리 돌린다', '나셀을 바람 반대로 돌려 계속 발전한다'],
+  ['정격 출력을 넘는 센 바람에서 출력을 일정하게 지키는 방법은?', '날개 각도를 조절한다', '날개를 하나 뗀다', '기어를 뺀다', '전선을 끊는다'],
+  ['발전기가 멈춘 동안 보건소 같은 곳에 전기를 보내 주는 것은?', '배터리 (ESS)', '선풍기', '풍향계', '나셀'],
+  ['풍력발전기 자리를 고를 때 따지지 않아도 되는 것은?', '학교 급식 메뉴', '주민 소음·그림자', '철새가 다니는 길', '송전선과 길'],
+  ['학교 옥상이 대형 풍력발전기 자리로 알맞지 않은 까닭은?', '건물에 막혀 바람이 약하고 들쭉날쭉해서', '햇빛이 너무 강해서', '옥상이 너무 넓어서', '바람이 언제나 일정해서'],
+  ['수직축 풍력발전기의 장점은?', '바람 방향과 상관없이 돈다', '효율이 가장 높다', '날개가 필요 없다', '바람이 없어도 돈다'],
+  ['깊은 바다에 세우는 해상풍력은 어떻게 고정할까?', '물에 띄우고 줄로 고정한다 (부유식)', '바닥까지 기둥을 박는다', '배 위에 올려 둔다', '하늘에 매단다'],
+  ['해상풍력으로 만든 전기는 어떻게 육지로 올까?', '해저 케이블', '무선 전파', '배에 실어서', '비행기로 날라서'],
+  ['바다에 세운 풍력발전기가 특히 조심해야 하는 것은?', '소금기에 의한 부식', '모래 폭풍', '눈사태', '산불'],
+  ['디젤 발전기와 비교한 풍력발전의 장점은?', '돌아가는 동안 연료를 태우지 않아 이산화탄소·매연이 없다', '바람이 없을 때 가장 많이 발전한다', '소음과 그림자가 전혀 없다', '밤에만 발전한다'],
+  ['"설비이용률"의 뜻으로 알맞은 것은?', '최대로 돌았을 때와 비교한 실제 전기량의 비율', '발전기가 돌 수 있었던 시간', '날개 수의 비율', '바람이 불어오는 방향'],
+  ['"가동률"의 뜻으로 알맞은 것은?', '발전기가 돌 수 있었던 시간의 비율', '최대 출력과 비교한 실제 전기량', '날개 길이의 비율', '배터리 남은 양'],
+  ['풍력발전기의 소음은 거리와 어떤 관계일까?', '멀어질수록 빠르게 줄어든다', '가까울수록 작아진다', '거리와 상관없다', '밤에만 생긴다'],
+  ['풍력발전기의 "그림자 깜빡임"이 잘 생기는 때는?', '해가 낮게 떠 있을 때', '한낮 해가 머리 위에 있을 때', '비 오는 날', '바람이 없는 날']
+];
+
 /* ======================= climbable structures (height) ======================= */
 // 사각 발판(plat)은 바닥부터 h까지 꽉 찬 덩어리, 계단(stairs)·사다리(ladder)는 h0→h1로 올라가는 경사(dir 쪽으로 높아짐)
 const STRUCTS = [
@@ -213,6 +260,7 @@ const OBS_ALL = [];
   }
 })();
 const OBS_BATTLE = OBS_ALL.filter(o => o[3] !== 'station');
+const GTS = OBS_ALL.filter(o => o[3] === 'turbine').map((o, i) => ({ id: i, x: o[0], z: o[1] }));   // 섬의 풍력발전기 6기 = 돌풍 발전기
 function addresses() {
   const out = [];
   for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
@@ -301,7 +349,7 @@ function bye(p, s) {   // 내보내기: 학생 화면은 다시 연결하지 않
 function applyGM(p) { p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
 const live = () => [...players.values()].filter(p => online(p) && !p.gm);
 function resetPlayer(p) {
-  p.lv = 1; p.xp = 0; p.shopUntil = 0; p.shopCdUntil = 0; p.catchUp = 0; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
+  p.lv = 1; p.xp = 0; p.shopUntil = 0; p.shopCdUntil = 0; p.catchUp = 0; p.gustCd = 0; p.gq = null; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.y = 0; p.vy = 0; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
   if (p.gm) applyGM(p);
 }
@@ -318,7 +366,7 @@ function shuffleTeams() {
 }
 const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startTask(p) {
-  if (p.shopUntil) return tell(p, '상점 안에서는 할 수 없어요. 상점을 닫고 하세요.');
+  if (p.shopUntil || p.gq != null) return tell(p, '상점이나 돌풍 발전기 문제를 푸는 중에는 할 수 없어요.');
   if (!COOP || !p.alive || p.task) return;
   const now = Date.now();
   const st = STN.map(t => [t, Math.hypot(t.x - p.x, t.z - p.z)]).filter(([, d]) => d <= TASK_R).sort((a, b) => a[1] - b[1])[0];
@@ -335,6 +383,76 @@ function startTask(p) {
 }
 /* ======================= 보물 상자 이벤트 ======================= */
 const CHEST = { every: 150, fall: 6, life: 60, open: 3, r: 2.4 };
+
+/* ---- 돌풍 발전기 ---- */
+const gst = GTS.map(t => ({ ...t, solver: 0, qAns: -1, qUntil: 0, pickUntil: 0, active: null, lastQ: -1 }));
+const DIRK = ['남', '남동', '동', '북동', '북', '북서', '서', '남서'];
+const dirName = a => DIRK[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+function gustStart(p) {
+  const now = Date.now();
+  if (!p.alive || p.shopUntil || p.gq != null) return;
+  const t = gst.find(g => Math.hypot(g.x - p.x, g.z - p.z) <= GUST.r && (p.y || 0) < 1); if (!t) return tell(p, '돌풍 발전기(섬의 풍력발전기) 가까이 가야 해요.');
+  if (t.active) return tell(p, `이 발전기는 지금 돌고 있어요. ${Math.ceil((t.active.until - now) / 1000)}초 뒤에 다시 쓸 수 있어요.`);
+  const sv = t.solver && players.get(t.solver); if (sv && sv.alive && online(sv)) return tell(p, `<b>${sv.name}</b>이(가) 이 발전기 문제를 풀고 있어요. 다른 발전기를 찾아보세요!`);
+  if (now < (p.gustCd || 0)) return tell(p, `돌풍 발전기는 <b>${Math.ceil((p.gustCd - now) / 1000)}초</b> 뒤에 다시 돌릴 수 있어요. (친구들과 돌아가며!)`);
+  if (p.task) cancelTask(p); if (chest && chest.opener === p.id) chest.opener = null;
+  let qi; do { qi = Math.floor(Math.random() * GQ.length); } while (GQ.length > 1 && (qi === t.lastQ || qi === p.lastGq));
+  t.lastQ = p.lastGq = qi; const it = GQ[qi], opts = shuf(it.slice(1));
+  t.solver = p.id; t.qAns = opts.indexOf(it[1]); t.qUntil = now + GUST.quiz; t.pickUntil = 0; t.qText = it[1];
+  p.gq = t.id; p.prot = t.qUntil; p.mx = p.mz = 0;
+  if (p.c) p.c.send({ t: 'gq', s: 'q', tid: t.id, q: it[0], o: opts, secs: GUST.quiz / 1000, dbgA: process.env.ARENA_TEST ? t.qAns : undefined });
+}
+function gustRelease(t, p, cd) { t.solver = 0; t.qUntil = t.pickUntil = 0; if (p) { p.gq = null; p.prot = Date.now() + 800; if (cd) p.gustCd = Date.now() + cd; } }
+function gustAnswer(p, a) {
+  const t = p.gq != null && gst[p.gq]; if (!t || t.solver !== p.id || !t.qUntil) return;
+  const now = Date.now();
+  if (+a === t.qAns) {
+    const xp = Math.round(xpNeed(p.lv) * .35); gainXpB(p, xp); addCoins(p, 10);
+    t.qUntil = 0; t.pickUntil = now + GUST.pick; p.prot = t.pickUntil;
+    if (p.c) p.c.send({ t: 'gq', s: 'ok', xp: Math.round(xp * xpBoost(p)), secs: GUST.pick / 1000, def: +p.dir.toFixed(2) });
+    ev({ k: 'fx', s: 'gqok', id: p.id, x: +p.x.toFixed(1), z: +p.z.toFixed(1) });
+  } else gustWrong(t, p, +a >= 0 ? 'wrong' : 'time');
+}
+function gustWrong(t, p, why) {
+  const st = stat(p), d = Math.round(st.maxHp * GUST.wrongHp); p.hp = Math.max(1, p.hp - d);   // 틀리면 체력 20% (이걸로 쓰러지진 않음)
+  if (p.c) p.c.send({ t: 'gq', s: 'no', why, right: t.qText, dmg: d, cd: GUST.cdP / 1000 });
+  ev({ k: 'hit', t: 'p', id: p.id, d, x: +p.x.toFixed(1), z: +p.z.toFixed(1), kx: 0, kz: 0, big: 0 });
+  gustRelease(t, p, GUST.cdP);
+}
+function gustFire(t, p, ang) {
+  const now = Date.now(); if (!(isFinite(ang))) ang = p.dir || 0;
+  t.active = { dir: ang, ux: Math.sin(ang), uz: Math.cos(ang), until: now + GUST.life, owner: p.id, team: p.team, nextArrow: now + 300, name: p.name };
+  gustRelease(t, p, GUST.cdP);
+  if (p.c) p.c.send({ t: 'gq', s: 'fire', cd: GUST.cdP / 1000 });
+  broadcast({ t: 'msg', s: `🌪 <b>${p.name}</b>이(가) 돌풍 발전기를 돌렸어요! <b>${dirName(ang)}쪽</b>으로 세찬 바람과 바람 화살이 날아가요!` });
+  ev({ k: 'fx', s: 'gust', x: t.x, z: t.z });
+}
+function gustAffects(g, e, isP) {   // 이 돌풍이 e를 미는지 (주인·같은 팀·2부 친구·보호 중·건물 위는 제외)
+  if (isP) { if (COOP || e.gm || e.id === g.owner || Date.now() < e.prot || e.shopUntil || e.gq != null) return false; const o = players.get(g.owner); if (o && sameTeam(o, e)) return false; }
+  if ((e.y || 0) > 1) return false;
+  return true;
+}
+function gustPush(e, isP) {
+  let gx = 0, gz = 0;
+  for (const t of gst) { const g = t.active; if (!g) continue;
+    const rx = e.x - t.x, rz = e.z - t.z, al = rx * g.ux + rz * g.uz, pe = Math.abs(-rx * g.uz + rz * g.ux);
+    if (al < .5 || al > GUST.len || pe > GUST.w / 2 || !gustAffects(g, e, isP)) continue;
+    const k = GUST.push * (1 - .45 * al / GUST.len); gx += g.ux * k; gz += g.uz * k; }
+  return [gx, gz];
+}
+function tickGusts(now) {
+  for (const t of gst) {
+    if (t.solver) { const p = players.get(t.solver);
+      if (!p || !p.alive || !online(p) || Math.hypot(t.x - p.x, t.z - p.z) > GUST.r + 1.5) { if (p && p.c) p.c.send({ t: 'gq', s: 'cancel' }); gustRelease(t, p, 15000); }
+      else if (t.qUntil && now > t.qUntil) gustWrong(t, p, 'time');
+      else if (t.pickUntil && now > t.pickUntil) gustFire(t, p, p.dir);
+    }
+    const g = t.active; if (!g) continue;
+    if (now > g.until) { t.active = null; continue; }
+    if (now >= g.nextArrow) { g.nextArrow = now + GUST.arrowEvery * 1000; const o = players.get(g.owner);
+      if (o) { const off = (Math.random() - .5) * GUST.w * .75; projs.push({ id: nextId++, kind: 'warrow', by: o.id, x: t.x + g.ux * 1.6 - g.uz * off, z: t.z + g.uz * 1.6 + g.ux * off, y: 0, dx: g.ux, dz: g.uz, spd: GUST.arrowSpd, life: (GUST.len - 1.6) / GUST.arrowSpd, dmg: Math.round(12 + o.lv * 1.5), r: 1, kb: 1.2 }); } }
+  }
+}
 let chest = null, chestT = 45;
 function dropChest(why) {
   if (chest) return;
@@ -346,7 +464,7 @@ function dropChest(why) {
   broadcast({ t: 'chest', s: 'drop', x: chest.x, z: chest.z, y, high: y > 0, why });
 }
 function startOpen(p) {
-  if (p.shopUntil) return tell(p, '상점 안에서는 할 수 없어요. 상점을 닫고 하세요.');
+  if (p.shopUntil || p.gq != null) return tell(p, '상점이나 돌풍 발전기 문제를 푸는 중에는 할 수 없어요.');
   const now = Date.now();
   if (!chest || now < chest.landAt || !p.alive) return;
   if (Math.hypot(p.x - chest.x, p.z - chest.z) > CHEST.r || Math.abs((p.y || 0) - chest.y) > 1.2) return tell(p, '보물 상자 가까이 가야 열 수 있어요.');
@@ -448,7 +566,7 @@ function hurtPlayer(v, dmg, src) {
 }
 function killPlayer(v, src) {
   const kp = src && src.kind === 'p' && src.p && src.p.id !== v.id ? src.p : null, gap = kp ? kp.lv - v.lv : 0, soft = !!kp && !v.gm && !kp.gm && gap >= 5;   // 5레벨 이상 높은 사람에게 쓰러지면 손해를 줄여 줌
-  v.shopUntil = 0;
+  v.shopUntil = 0; if (v.gq != null) { const gt = gst[v.gq]; if (gt && gt.solver === v.id) gustRelease(gt, v, 15000); v.gq = null; }
   if (v.task) cancelTask(v); v.hp = 0; v.alive = false; v.respawnAt = Date.now() + 5000; v.deaths++;
   const vLv = v.lv;
   const wasKing = king === v.id, bounty = wasKing ? bountyOf(v) : 0;
@@ -539,7 +657,7 @@ const MON_HIT_KB = { boar: 1.8, golem: 1.6, turtle: 2.6, crab: 1.1 };
 /* ======================= actions ======================= */
 function useSkill(p, id) {
   const sk = SKILLS[id]; if (!sk || !p.alive || p.lv < sk.lv) return;
-  if (p.shopUntil) return;   // 상점 안(무적)에서는 공격 못 함
+  if (p.shopUntil || p.gq != null) return;   // 상점·문제 풀이 중(무적)에는 공격 못 함
   const now = Date.now() / 1000;
   if ((p.cds[id] || 0) > now) return;
   p.cds[id] = now + sk.cd * (id === 'punch' ? 1 : 1 - stat(p).cdr);
@@ -579,7 +697,7 @@ const tell = (p, s) => p.c && p.c.send({ t: 'msg', s });
 const SHOP_SAFE = 10000, SHOP_CD = 10000;
 function enterShop(p) {
   const now = Date.now();
-  if (!p.alive || p.shopUntil) return;
+  if (!p.alive || p.shopUntil || p.gq != null) return;
   if (!nearShop(p)) return tell(p, '동·서·남·북에 있는 <b>바람상회</b>(미니맵 노란 네모) 노란 원 안에서 상점에 들어갈 수 있어요.');
   if (now < (p.shopCdUntil || 0)) { const left = Math.ceil((p.shopCdUntil - now) / 1000); if (p.c) p.c.send({ t: 'shop', s: 'cd', left }); return tell(p, `상점은 <b>${left}초</b> 뒤에 다시 들어갈 수 있어요.`); }
   if (p.task) cancelTask(p);
@@ -732,11 +850,11 @@ function step(dt) {
     p.dashT -= dt; p.shieldT -= dt;
     if (p.task) { const t = STATIONS[p.task.sid]; if (Math.hypot(t.x - p.x, t.z - p.z) > TASK_R + .8) cancelTask(p, '기계에서 멀어져서 과제가 취소됐어요.'); }
     const st = stat(p);
-    const len = Math.hypot(p.mx, p.mz);
-    if (len > .05) {
-      const k = Math.min(1, len); let nx = p.x + p.mx / len * st.spd * k * dt, nz = p.z + p.mz / len * st.spd * k * dt;
+    const len = Math.hypot(p.mx, p.mz), [gx, gz] = gustPush(p, true);
+    if (len > .05 || gx || gz) {
+      const k = Math.min(1, len), mv = len > .05 ? st.spd * k / len : 0; let nx = p.x + (p.mx * mv + gx) * dt, nz = p.z + (p.mz * mv + gz) * dt;
       if ((p.y || 0) < .5) [nx, nz] = collide(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } }
-      moveY(p, nx, nz, .4, dt); p.dir = Math.atan2(p.mx, p.mz);
+      moveY(p, nx, nz, .4, dt); if (len > .05) p.dir = Math.atan2(p.mx, p.mz);
     } else moveY(p, p.x, p.z, .4, dt);
     if (now - p.lastHurt > 5000 && p.hp < st.maxHp) p.hp = Math.min(st.maxHp, p.hp + st.maxHp * (p.job === 'healer' ? .08 : .04) * dt);
     if (p.hp > st.maxHp) p.hp = st.maxHp;
@@ -795,7 +913,8 @@ function step(dt) {
     if (def.beh === 'heavy') { if (m.wind > 0) { m.wind -= dt; spd = 0; if (m.wind <= 0) { const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'slam', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8 }); for (const p of alive) if (now >= p.prot && Math.hypot(p.x - fx, p.z - fz) < 2.8 && dyOk(p, m, 1.6)) hurtPlayer(p, def.dmg, { kind: 'm', m }); m.atkCd = 2.4; } }
       else if (tgt && td < def.r + 1.6 && m.atkCd <= 0) { m.wind = 1.0; const fx = m.x + Math.sin(m.dir) * 1.4, fz = m.z + Math.cos(m.dir) * 1.4; ev({ k: 'fx', s: 'warn', x: +fx.toFixed(1), z: +fz.toFixed(1), r: 2.8, t: 1 }); } }
     if (spd < 0) { m.dir += Math.PI; spd = -spd; }
-    const nx = m.x + Math.sin(m.dir) * spd * dt, nz = m.z + Math.cos(m.dir) * spd * dt;
+    const [mgx, mgz] = gustPush(m, false);
+    const nx = m.x + (Math.sin(m.dir) * spd + mgx) * dt, nz = m.z + (Math.cos(m.dir) * spd + mgz) * dt;
     const fly = FLYERS.has(m.type);
     let [cx, cz] = collide(nx, nz, def.r * .7);
     for (const sh of SHOPS) { const dx = cx - sh.x, dz = cz - sh.z, d = Math.hypot(dx, dz), lim = SHOP_R + def.r * .5; if (d < lim && d > 1e-3) { cx = sh.x + dx / d * lim; cz = sh.z + dz / d * lim; } }   // 몬스터는 상점 원 안에 못 들어와요
@@ -805,7 +924,7 @@ function step(dt) {
     if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, def.dmg, { kind: 'm', m }); }
   }
   tickBossStrikes(now, alive);
-  tickChest(dt, now);
+  tickChest(dt, now); tickGusts(now);
   // boss trigger (1부: 레벨이 높아지면 / 2부: 퀘스트 3단계)
   bossChk -= dt;
   if (bossChk <= 0) { bossChk = 5;
@@ -819,7 +938,7 @@ function step(dt) {
     pr.x += pr.dx * pr.spd * dt; pr.z += pr.dz * pr.spd * dt;
     if (pr.mon) { let hit = false; for (const p of alive) if (now >= p.prot && Math.hypot(p.x - pr.x, p.z - pr.z) < pr.r + .45) { hurtPlayer(p, pr.dmg, { kind: 'm', m: { type: 'flower' } }); hit = true; break; } if (hit || pr.life <= 0) projs.splice(i, 1); continue; }
     if (!owner) { projs.splice(i, 1); continue; }
-    if (pr.kind === 'arrow') {
+    if (pr.kind === 'arrow' || pr.kind === 'warrow') {
       const t = enemiesNear({ x: pr.x, z: pr.z, y: pr.y, id: -1, team: owner.team }, pr.r + .4, 3).find(t => !(t.kind === 'p' && (t.o.id === pr.by || sameTeam(owner, t.o))));
       if (t) { hitTarget(owner, t, pr.dmg, pr.kb, { x: pr.x - pr.dx, z: pr.z - pr.dz }); projs.splice(i, 1); continue; }
     } else if (pr.kind === 'cannon') {
@@ -849,13 +968,14 @@ function step(dt) {
   lbT -= dt;
   if (lbT <= 0) { lbT = 1; sendBoard(rl); }
 }
+const t0g = () => Date.now();
 function sendSnap(rl) {
   const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null ? 512 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);
-  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
+  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, gt: gst.map(t => [t.id, t.active ? 2 : t.solver ? 1 : 0, t.active ? Math.ceil((t.active.until - t0g()) / 1000) : 0, t.active ? t.active.owner : t.solver, t.active ? +t.active.dir.toFixed(3) : 0, t.active ? t.active.team : -1]), left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
   const rankOf = new Map(rl.map((p, i) => [p.id, i + 1]));
   for (const c of conns) {
     if (!c.open) continue;
@@ -869,7 +989,7 @@ function sendSnap(rl) {
     c.seenM = nowSeen; base.M = near; base.MF = far || undefined;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
-    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, shop: p.shopUntil ? Math.max(0, Math.ceil((p.shopUntil - t) / 1000)) : 0, shopCd: Math.max(0, Math.ceil(((p.shopCdUntil || 0) - t) / 1000)), boost: xpBoost(p), catchUp: p.catchUp || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
+    base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, gcd: Math.max(0, Math.ceil(((p.gustCd || 0) - t) / 1000)), gq: p.gq != null ? 1 : 0, shop: p.shopUntil ? Math.max(0, Math.ceil((p.shopUntil - t) / 1000)) : 0, shopCd: Math.max(0, Math.ceil(((p.shopCdUntil || 0) - t) / 1000)), boost: xpBoost(p), catchUp: p.catchUp || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
     c.send(base);
   }
 }
@@ -898,7 +1018,7 @@ function onConnect(c) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
       if (old && locked && String(msg.code || '').trim() !== ADMIN_KEY && !old.gm) { players.delete(old.id); return c.send({ t: 'err', s: '지금은 아레나가 닫혀 있어요. 선생님이 열어 주면 들어올 수 있어요.' }); }
-      if (old) { old.c = c; old.actAt = Date.now(); c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old) { old.c = c; old.actAt = Date.now(); c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
@@ -910,7 +1030,7 @@ function onConnect(c) {
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
       if (code === ADMIN_KEY) applyGM(p); else catchUpStart(p);
-      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
+      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
       if (p.catchUp) tell(p, `🚀 <b>따라잡기 출발!</b> 친구들이 벌써 많이 컸어요. <b>Lv ${p.catchUp}</b>과 기본 장비로 시작해요. 레벨이 평균보다 낮으면 <b>경험치를 더 많이</b> 받아요!`);
       broadcast({ t: 'ro', joined: p.id, name });
       return;
@@ -931,6 +1051,9 @@ function onConnect(c) {
     else if (msg.t === 'pot') drinkPot(p);
     else if (msg.t === 'task') startTask(p);
     else if (msg.t === 'open') startOpen(p);
+    else if (msg.t === 'gq') gustStart(p);
+    else if (msg.t === 'gqa') gustAnswer(p, msg.a);
+    else if (msg.t === 'gqd') { const t = p.gq != null && gst[p.gq]; if (t && t.solver === p.id && t.pickUntil) gustFire(t, p, +msg.d); }
     else if (msg.t === 'job') changeJob(p, String(msg.job));
     else if (msg.t === 'ans') answerTask(p, msg.a);
     else if (msg.t === 'tcancel') cancelTask(p);

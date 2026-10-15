@@ -164,6 +164,10 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 .shopT{font-size:14px;font-weight:800;color:#3A2600;background:#FFD45A;border-radius:999px;padding:3px 10px;margin-left:8px;vertical-align:middle}
 #shopIn{margin-top:6px}
 .boostB{color:#FFB347}
+.gqbar{height:8px;border-radius:99px;background:rgba(0,0,0,.12);overflow:hidden;margin:4px 0 10px}.gqbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#3FC6E8,#5FF0D8);animation:gqT linear forwards;transform-origin:left}
+@keyframes gqT{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+.gqq{font-size:18px;font-weight:800;margin:4px 0 10px;line-height:1.45}.gqo{display:grid;gap:8px}.gqo .btn{text-align:left;justify-content:flex-start;white-space:normal;height:auto;min-height:48px;padding:10px 12px;line-height:1.35}
+.gqd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:360px;margin:0 auto}.gqd .btn{height:72px;font-size:26px;flex-direction:column;gap:2px}.gqd .btn small{font-size:12px;font-weight:600}
 </style>
 </head>
 <body>
@@ -202,6 +206,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
   <div class="emo pe" id="emo" hidden></div>
   <div class="mid pe">
     <button class="glass bTask" id="bChest" hidden style="background:linear-gradient(160deg,#FFE48A,#FFB800)!important;color:#3A2600!important">📦 상자 열기 <kbd>E</kbd></button>
+    <button class="glass bTask" id="bGust" hidden style="background:linear-gradient(160deg,#BFF6FF,#3FC6E8)!important;color:#05323A!important">🌪 발전기 돌리기 <kbd>E</kbd></button>
     <button class="glass bTask" id="bTask" hidden>⚙ 과제 하기 <kbd>E</kbd></button>
     <button class="glass bTask" id="bJob" hidden style="background:linear-gradient(160deg,#BFE6FF,#5FA8FF)!important">⛩ 전직 <kbd>J</kbd></button>
     <button class="glass" id="bUpg">상점 <kbd>B</kbd></button>
@@ -336,7 +341,8 @@ const waterU = { uTime: { value: 0 }, uAmp: { value: .22 } };
     sh.vertexShader = 'uniform float uTime; uniform float uAmp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n float fall = clamp(1.0 - length(position.xy) / 520.0, 0.0, 1.0);\n transformed.z += (sin(position.x * .13 + uTime * 1.1) * .6 + sin(position.y * .17 - uTime * .9) * .5 + sin((position.x + position.y) * .31 + uTime * 1.7) * .25) * uAmp * fall;'); };
   const w = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400, 150, 150), mat); w.rotation.x = -Math.PI / 2; w.position.y = -.55; w.receiveShadow = true; scene.add(w); }
 let zoneMesh = null, worldBuilt = false;
-const turbines = [];
+const turbines = [], TURBX = [];
+let GTS = [], GUC = { r: 3.6, len: 26, w: 9, push: 4.4 }, gtInfo = [], nearGust = null, gqPhase = null, gqT = 0;
 function islandY(r) { return r < R - .6 ? 0 : r < R + 7 ? -1.9 * Math.pow((r - R + .6) / 7.6, 1.3) : -1.9 - (r - R - 7) * .12; }
 function buildWorld() {
   if (worldBuilt) return; worldBuilt = true;
@@ -392,6 +398,9 @@ function buildWorld() {
         const bm = new THREE.Mesh(bg, LMAT({ vertexColors: true, roughness: .5 })); bm.rotation.y = .28; piv.add(bm);
       }
       yaw.rotation.y = Math.atan2(-x, -z); turbines.push(rot);
+      const gring = new THREE.Mesh(new THREE.TorusGeometry(3.6, .09, 6, 48), new THREE.MeshBasicMaterial({ color: '#5FF0D8', transparent: true, opacity: .7, depthWrite: false })); gring.rotation.x = Math.PI / 2; gring.position.y = .12; g.add(gring);
+      const glab = label('🌪 돌풍 발전기 (E)', '#9FF3FF'); glab.position.y = 3.4; glab.scale.set(3.8, .6, 1); g.add(glab);
+      TURBX.push({ rot, yaw, baseYaw: yaw.rotation.y, ring: gring, lab: glab, x, z, fx: null });
     } else if (k === 'shrine') {
       const base = new THREE.Mesh(new THREE.CylinderGeometry(SHRINE_R - .5, SHRINE_R, .12, 32), M('#C8C2B0')); base.position.y = .06; g.add(base);
       const ring2 = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.9, .7, 24), M('#B2AA94')); ring2.position.y = .55; g.add(ring2);
@@ -639,6 +648,7 @@ function makePick(kind, val) {
 }
 function makeProj(kind) {
   let m;
+  if (kind === 'warrow') { const ag = new THREE.Group(); const mat = new THREE.MeshBasicMaterial({ color: '#BFF6FF' }); const sh = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 2, 6), mat); sh.rotation.x = Math.PI / 2; ag.add(sh); const tip = new THREE.Mesh(new THREE.ConeGeometry(.2, .5, 8), new THREE.MeshBasicMaterial({ color: '#FFFFFF' })); tip.rotation.x = Math.PI / 2; tip.position.z = 1.2; ag.add(tip); const tail = new THREE.Mesh(new THREE.ConeGeometry(.35, 1.4, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#7FE8FF', transparent: true, opacity: .45, side: THREE.DoubleSide, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.z = -1.3; ag.add(tail); ag.position.y = 1.2; const g = new THREE.Group(); g.add(ag); g.userData.m = ag; scene.add(g); return g; }
   if (kind === 'arrow') { const ag = new THREE.Group(); const sh = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, 1.2, 5), new THREE.MeshBasicMaterial({ color: '#F2E3C8' })); sh.rotation.x = Math.PI / 2; ag.add(sh); const tip = new THREE.Mesh(new THREE.ConeGeometry(.12, .3, 6), new THREE.MeshBasicMaterial({ color: '#8FD3FF' })); tip.rotation.x = Math.PI / 2; tip.position.z = .7; ag.add(tip); ag.position.y = 1.2; m = ag; }
   else if (kind === 'spit') { m = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 1), new THREE.MeshStandardMaterial({ color: '#6B5A8A', emissive: '#3A2A55', roughness: .9 })); m.position.y = 1.1; }
   else if (kind === 'cannon') { const geo = new THREE.ConeGeometry(.55, 1.8, 10); geo.rotateX(Math.PI / 2); m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#BFF3EC', transparent: true, opacity: .85 })); m.position.y = 1.2; }
@@ -745,6 +755,7 @@ function onMsg(m) {
     try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ }
     location.replace(location.pathname); return;
   }
+  if (m.t === 'gq') { gqMsg(m); return; }
   if (m.t === 'shop') {
     if (m.s === 'in') { toast(`🛒 <b>상점에 들어왔어요!</b> ${m.secs}초 동안 <b>공격받지 않아요</b>. 시간이 끝나면 자동으로 나가요.`, 2600); shopSig = ''; renderUpg(); }
     if (m.s === 'out') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') $('#modal').hidden = true; if (m.why === 'time') toast(`⏰ 상점 시간 끝! <b>${m.cd}초</b> 뒤에 다시 들어갈 수 있어요.`, 3000); else if (m.why === 'left') toast(`상점 원을 벗어나서 상점을 닫았어요. ${m.cd}초 뒤 다시 들어갈 수 있어요.`, 2800); }
@@ -752,7 +763,7 @@ function onMsg(m) {
   }
   if (m.t === 'err') { $('#jErr').textContent = m.s; if (me) toast(m.s, 5000); return; }
   if (m.t === 'welcome') {
-    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3; QST = m.qst || null; STRUCTS = m.structs || []; buildSurf(); if (m.shops) SHOPS = m.shops; if (m.jobs) { JOBS = m.jobs; JOB_LV = m.jobLv; JOB_COST = m.jobCost; SHRINE_R = m.shrineR; }
+    myId = m.id; R = m.R; OBS = m.obs; GEARN = m.gearN; ARMN = m.armN; UPG = m.upg; phase = m.ph; SHOP = m.shop || null; POTI = m.pot || POTI; SHOP_R = m.shopR || SHOP_R; TEAMS = m.teams || []; teamsOn = m.teamsOn !== false; STN = m.stations || []; TASKN = m.taskN || {}; TASK_R = m.taskR || 3; QST = m.qst || null; STRUCTS = m.structs || []; GTS = m.gusts || []; if (m.gust) GUC = m.gust; buildSurf(); if (m.shops) SHOPS = m.shops; if (m.jobs) { JOBS = m.jobs; JOB_LV = m.jobLv; JOB_COST = m.jobCost; SHRINE_R = m.shrineR; }
     me = { name: m.name }; localStorage.setItem(LS('arena-tok'), m.tok); localStorage.setItem(LS('arena-tokname'), $('#jName').value.trim());
     buildWorld(); buildPad();
     $('#join').hidden = true; $('#hud').hidden = false;
@@ -801,7 +812,7 @@ function onSnap(m) {
   for (const j of m.J) s.J.set(j[0], { kind: j[1], x: j[2], z: j[3], dir: 0, y: j[4] || 0 });
   for (const k of m.K) s.K.set(k[0], { kind: k[1], val: k[2], x: k[3], z: k[4], y: k[5] || 0 });
   snaps.push(s); while (snaps.length > 12) snaps.shift();
-  zr = m.zr; phase = m.ph; leftS = m.left; lastSnapAt = at; qState = m.q || null; bossInfo = m.bs || null; chestInfo = m.ch || null; renderRaid(); renderChest(); beachHint();
+  zr = m.zr; phase = m.ph; leftS = m.left; lastSnapAt = at; qState = m.q || null; bossInfo = m.bs || null; chestInfo = m.ch || null; gtInfo = m.gt || []; renderRaid(); renderChest(); beachHint();
   if (m.me) { meS = m.me; renderMe(); }
   const mp = s.P.get(myId);
   if (mp) {
@@ -878,7 +889,10 @@ function renderMe() {
     if (teamsOn && T) { $('#tChip').textContent = T.n + ' 팀'; $('#tChip').style.background = T.c; $('#tBar').style.background = T.c; if (ti) { $('#tBar').style.width = Math.min(100, ti.pts / ti.goal * 100) + '%'; $('#tTxt').textContent = `${ti.pts}/${ti.goal} · ${ti.score || 0}점`; } } }
   { const nearShrine = Math.hypot(local.x, local.z) <= SHRINE_R + .5 && Object.keys(JOBS).length; $('#bJob').hidden = !nearShrine || !$('#bTask').hidden && false; if (nearShrine && !wasInShrine) toast(`<b>바람의 신전</b>! ${mp.lv >= JOB_LV || s.gm ? '<b>J</b>를 눌러 전직할 수 있어요.' : `Lv ${JOB_LV}가 되면 전직할 수 있어요.`}`, 2600); wasInShrine = nearShrine; }
   { let best = null, bd = TASK_R; for (const t of STN) { const d = Math.hypot(t.x - local.x, t.z - local.z); if (d <= bd) { bd = d; best = t; } }
-    nearSt = best; const b = $('#bTask'); b.hidden = !best || !(mp.f & 1) || nearChest;
+    { let gb = null; for (const t of GTS) if (Math.hypot(t.x - local.x, t.z - local.z) <= GUC.r && local.y < 1) gb = t; nearGust = gb; const bg = $('#bGust'); bg.hidden = !gb || !(mp.f & 1) || nearChest || !$('#modal').hidden;
+      if (gb) { const gi = gtInfo.find(q => q[0] === gb.id) || [gb.id, 0, 0, 0]; const busy = gi[1] === 1 && gi[3] !== myId; bg.disabled = gi[1] === 2 || busy || s.gcd > 0;
+        bg.innerHTML = gi[1] === 2 ? `🌪 돌풍 중 · ${gi[2]}초` : busy ? `🌪 ${esc(names.get(gi[3]) || '친구')} 푸는 중` : s.gcd > 0 ? `🌪 ${s.gcd}초 뒤 가능` : '🌪 발전기 돌리기 <kbd>E</kbd>'; } }
+    nearSt = best; const b = $('#bTask'); b.hidden = !best || !(mp.f & 1) || nearChest || !!nearGust;
     if (best) { const cd = s.tcd ? s.tcd[best.id] : 0; b.innerHTML = cd ? `⚙ ${cd}초 뒤 가능` : `⚙ ${esc(TASKN[best.type])} 하기 <kbd>E</kbd>`; b.disabled = !!cd; } }
   { const inShop = nearShopL(); if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼을 누르면 <b>10초 동안 안전</b>하게 살 수 있어요.', 2800); wasInShop = inShop; } $('#kdT').innerHTML = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}${s.boost > 1 ? ` · <b class="boostB" title="레벨이 평균보다 낮아서 경험치를 더 받아요">🔥 경험치 ×${s.boost}</b>` : ''}`;
   for (const b of document.querySelectorAll('.sk')) {
@@ -921,7 +935,7 @@ addEventListener('resize', () => { if (document.querySelector('.sk')) layoutPad(
 function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 function skill(id, btn) { send({ t: 'sk', id }); if (btn) { btn.classList.add('press'); setTimeout(() => btn.classList.remove('press'), 120); } if (id === 'punch') swing = .25; }
 function openModal(kind, html) { const c = $('#mCard'); c.dataset.kind = kind; c.innerHTML = html; $('#modal').hidden = false; }
-function closeModal() { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg' && meS && meS.shop > 0) send({ t: 'shop', open: false }); $('#modal').hidden = true; }
+function closeModal() { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'gq' && gqPhase === 'q') { send({ t: 'gqa', a: -1 }); gqPhase = null; } if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg' && meS && meS.shop > 0) send({ t: 'shop', open: false }); $('#modal').hidden = true; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') { if (curTask) send({ t: 'tcancel' }); closeModal(); } });
 let shopSig = '', wasInShop = false, wasInShrine = false;
 const EFF = { wpn: t => `공격 +${t * 5}`, arm: t => `체력 +${t * 22} · 피해 −${t * 6}%`, boot: t => `이동 속도 +${t * 7}%`, helm: t => `스킬 대기 −${t * 8}%` };
@@ -942,6 +956,51 @@ function renderUpg() {
   const si = $('#shopIn'); if (si) si.addEventListener('click', () => send({ t: 'shop', open: true }));
 }
 $('#mCard').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b || b.disabled) return; if (b.dataset.s === 'pot') send({ t: 'buy', s: 'pot' }); else send({ t: 'buy', s: b.dataset.s, v: +b.dataset.v }); b.disabled = true; });
+/* ================= 돌풍 발전기 ================= */
+const GDIRK = ['남', '남동', '동', '북동', '북', '북서', '서', '남서'];
+const gDirName = a => GDIRK[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+function gustPushL(mp) {   // 서버와 같은 규칙으로 내 캐릭터도 밀어서 화면이 튀지 않게
+  if (ROOM2 || !mp || mp.f & (2 | 128 | 256 | 512) || local.y > 1) return [0, 0];
+  let gx = 0, gz = 0; const myTeam = meS ? meS.team : -1;
+  for (const gi of gtInfo) { if (gi[1] !== 2 || gi[3] === myId || (teamsOn && gi[5] >= 0 && gi[5] === myTeam)) continue; const t = GTS[gi[0]]; if (!t) continue;
+    const ux = Math.sin(gi[4]), uz = Math.cos(gi[4]), rx = local.x - t.x, rz = local.z - t.z, al = rx * ux + rz * uz, pe = Math.abs(-rx * uz + rz * ux);
+    if (al < .5 || al > GUC.len || pe > GUC.w / 2) continue; const k = GUC.push * (1 - .45 * al / GUC.len); gx += ux * k; gz += uz * k; }
+  return [gx, gz];
+}
+function gqMsg(m) {
+  if (m.s === 'q') {
+    gqPhase = 'q'; gqT = m.secs;
+    openModal('gq', `<h2>🌪 돌풍 발전기 · 풍력 문제</h2><div class="gqbar"><i id="gqBar" style="animation-duration:${m.secs}s"></i></div>
+<p class="gqq">${esc(m.q)}</p><div class="gqo">${m.o.map((o, i) => `<button class="btn ghost" data-gq="${i}"><kbd>${i + 1}</kbd> ${esc(o)}</button>`).join('')}</div>
+<p class="muted" style="font-size:12px;margin-top:8px">맞히면 경험치 + 원하는 방향으로 <b>돌풍과 바람 화살</b>! 틀리면 체력 −20%. 푸는 동안은 공격받지 않아요. (${m.secs}초)</p>`);
+    document.querySelectorAll('[data-gq]').forEach(b => b.addEventListener('click', () => { if (gqPhase !== 'q') return; gqPhase = 'wait'; document.querySelectorAll('[data-gq]').forEach(x => x.disabled = true); send({ t: 'gqa', a: +b.dataset.gq }); }));
+  } else if (m.s === 'ok') {
+    gqPhase = 'pick'; const fwd = cam.yaw + Math.PI, ang = [fwd + Math.PI / 4, fwd, fwd - Math.PI / 4, fwd + Math.PI / 2, null, fwd - Math.PI / 2, fwd + 3 * Math.PI / 4, fwd + Math.PI, fwd - 3 * Math.PI / 4], ar = ['↖', '↑', '↗', '←', '◎', '→', '↙', '↓', '↘'];
+    openModal('gq', `<h2>⭕ 정답! <small style="font-size:14px">경험치 +${m.xp}</small></h2><p style="margin:2px 0 8px">돌풍을 어느 쪽으로 보낼까요? <span class="muted">(화면 기준 · ${m.secs}초 안에 안 고르면 내가 보는 쪽)</span></p>
+<div class="gqd">${ang.map((a, i) => `<button class="btn ${i === 4 ? '' : 'ghost'}" data-gd="${i}">${ar[i]}<small>${i === 4 ? '보는 쪽' : gDirName(a) + '쪽'}</small></button>`).join('')}</div>`);
+    document.querySelectorAll('[data-gd]').forEach(b => b.addEventListener('click', () => { if (gqPhase !== 'pick') return; gqPhase = null; const i = +b.dataset.gd; send({ t: 'gqd', d: i === 4 ? local.dir || 0 : ang[i] }); }));
+  } else if (m.s === 'no') {
+    gqPhase = null; openModal('gq', `<h2>❌ ${m.why === 'time' ? '시간 끝!' : '틀렸어요!'}</h2><p>정답: <b>${esc(m.right)}</b></p><p>체력 −${m.dmg} · 돌풍 발전기는 <b>${m.cd}초</b> 뒤에 다시 돌릴 수 있어요.</p>`);
+    setTimeout(() => { if ($('#mCard').dataset.kind === 'gq' && !gqPhase) $('#modal').hidden = true; }, 2600);
+  } else if (m.s === 'fire') { gqPhase = null; if ($('#mCard').dataset.kind === 'gq') $('#modal').hidden = true; }
+  else if (m.s === 'cancel') { gqPhase = null; if ($('#mCard').dataset.kind === 'gq') $('#modal').hidden = true; toast('발전기에서 멀어져서 문제가 취소됐어요. (15초 뒤 다시)', 2600); }
+}
+function gustFxObj() {   // 바닥의 바람길 + 흐르는 바람 줄기
+  const g = new THREE.Group();
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(GUC.w, GUC.len), new THREE.MeshBasicMaterial({ color: '#7FE8FF', transparent: true, opacity: .16, depthWrite: false, side: THREE.DoubleSide })); pl.rotation.x = -Math.PI / 2; pl.position.set(0, .15, GUC.len / 2); g.add(pl);
+  const streaks = []; const sm = new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: .7, depthWrite: false });
+  for (let i = 0; i < 16; i++) { const st = new THREE.Mesh(new THREE.BoxGeometry(.07, .07, 2.6), sm); st.userData = { off: (Math.random() - .5) * GUC.w * .9, y: .4 + Math.random() * 2.4, ph: Math.random() }; g.add(st); streaks.push(st); }
+  g.userData.streaks = streaks; scene.add(g); return g;
+}
+function updateGusts(dt) {
+  for (let i = 0; i < TURBX.length; i++) { const tx = TURBX[i], gi = gtInfo.find(q => q[0] === i) || [i, 0, 0, 0, 0];
+    tx.rot.rotation.z -= dt * (gi[1] === 2 ? 9 : gi[1] === 1 ? 3.5 : 0);
+    tx.yaw.rotation.y = gi[1] === 2 ? gi[4] : tx.baseYaw;
+    tx.ring.material.color.set(gi[1] === 2 ? '#FFFFFF' : gi[1] === 1 ? '#FFD45A' : '#5FF0D8'); tx.ring.material.opacity = .45 + .3 * Math.sin(clockT * 4 + i);
+    if (gi[1] === 2) { if (!tx.fx) tx.fx = gustFxObj(); tx.fx.visible = true; tx.fx.position.set(tx.x, 0, tx.z); tx.fx.rotation.y = gi[4];
+      for (const st of tx.fx.userData.streaks) { const u = st.userData; u.ph = (u.ph + dt * .9) % 1; st.position.set(u.off, u.y, u.ph * GUC.len); st.material.opacity = .7 * Math.sin(u.ph * Math.PI); } }
+    else if (tx.fx) tx.fx.visible = false; }
+}
 function openUpg() { openModal('upg', ''); shopSig = ''; if (nearShopL() && meS && !meS.shop && !meS.shopCd) send({ t: 'shop', open: true }); renderUpg(); }
 /* ================= tasks (mini-games) ================= */
 const WCOL = [['빨강', '#E5483B'], ['파랑', '#3F7FE0'], ['노랑', '#E8B400'], ['초록', '#2E9E58']];
@@ -994,7 +1053,7 @@ function openRank() {
   openModal('rank', `<h2>순위</h2>${ts ? `<p style="font-size:13px">팀 점수 = 과제 ×3 + 처치 ×1 + 팀 레벨 업 ×10 · 결승 라운드가 끝나면 점수가 가장 높은 팀이 우승!</p>${ts}` : ''}<p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="gfxB">그래픽: ${GFX === 'high' ? '고급' : '가볍게'}</button><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal); $('#gfxB').addEventListener('click', () => { setGfx(GFX === 'high' ? 'low' : 'high'); openRank(); });
 }
-$('#bTask').addEventListener('click', () => { if (!curTask) send({ t: 'task' }); }); $('#bChest').addEventListener('click', () => send({ t: 'open' })); $('#bUpg').addEventListener('click', openUpg); $('#bJob').addEventListener('click', openJob); $('#bPot').addEventListener('click', () => send({ t: 'pot' })); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
+$('#bTask').addEventListener('click', () => { if (!curTask) send({ t: 'task' }); }); $('#bGust').addEventListener('click', () => send({ t: 'gq' })); $('#bChest').addEventListener('click', () => send({ t: 'open' })); $('#bUpg').addEventListener('click', openUpg); $('#bJob').addEventListener('click', openJob); $('#bPot').addEventListener('click', () => send({ t: 'pot' })); $('#bRank').addEventListener('click', openRank); $('#bEmo').addEventListener('click', () => { $('#emo').hidden = !$('#emo').hidden; });
 let deadT = 0;
 function showDead(m) {
   $('#dead').hidden = false; closeModal();
@@ -1031,7 +1090,8 @@ addEventListener('keydown', e => {
   const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(e.code); if (i >= 0) skill(SK[i].id, document.querySelector(`.sk[data-id="${SK[i].id}"]`));
   if (e.code === 'KeyR') send({ t: 'pot' });
   if (e.code === 'KeyJ') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'job') closeModal(); else openJob(); }
-  if (e.code === 'KeyE' && $('#modal').hidden) { if (nearChest) send({ t: 'open' }); else if (!curTask && nearSt) send({ t: 'task' }); }
+  if (!$('#modal').hidden && $('#mCard').dataset.kind === 'gq' && gqPhase === 'q' && /^Digit[1-4]$/.test(e.code)) { const b = document.querySelector(`[data-gq="${+e.code.slice(5) - 1}"]`); if (b) b.click(); return; }
+  if (e.code === 'KeyE' && $('#modal').hidden) { if (nearChest) send({ t: 'open' }); else if (nearGust && !$('#bGust').disabled) send({ t: 'gq' }); else if (!curTask && nearSt) send({ t: 'task' }); }
   if (e.code === 'KeyU' || e.code === 'KeyB') { if (!$('#modal').hidden && $('#mCard').dataset.kind === 'upg') closeModal(); else openUpg(); }
   if (e.code === 'Tab' || e.code === 'KeyL') { e.preventDefault(); if (!$('#modal').hidden && $('#mCard').dataset.kind === 'rank') closeModal(); else openRank(); }
   if (e.code === 'KeyT') $('#emo').hidden = !$('#emo').hidden;
@@ -1100,7 +1160,8 @@ function loop(now) {
     moving = alive && ml > .05;
     sendT -= dt; const key = mx.toFixed(2) + ',' + mz.toFixed(2);
     if (key !== lastSent || sendT <= 0) { send({ t: 'in', mx: +mx.toFixed(2), mz: +mz.toFixed(2) }); lastSent = key; sendT = .25; }
-    if (moving) { const spd = 7.6 * (1 + (Math.min(mp.lv, 15) - 1) * .04) * (mp.f & 128 ? 1.15 : 1) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1); let nx = local.x + mx * spd * dt, nz = local.z + mz * spd * dt; if (local.y < .5) [nx, nz] = collideLocal(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } } moveY(local, nx, nz, .4, dt); local.dir = Math.atan2(mx, mz); } else if (alive) moveY(local, local.x, local.z, .4, dt);
+    const [lgx, lgz] = alive ? gustPushL(mp) : [0, 0];
+    if (moving || lgx || lgz) { const spd = !moving ? 0 : 7.6 * (1 + (Math.min(mp.lv, 15) - 1) * .04) * (mp.f & 128 ? 1.15 : 1) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1); let nx = local.x + (mx * spd + lgx) * dt, nz = local.z + (mz * spd + lgz) * dt; if (local.y < .5) [nx, nz] = collideLocal(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } } moveY(local, nx, nz, .4, dt); if (moving) local.dir = Math.atan2(mx, mz); } else if (alive) moveY(local, local.x, local.z, .4, dt);
     // players
     for (const [id, o] of PL) {
       if (id === myId && !mp) continue;
@@ -1116,12 +1177,12 @@ function loop(now) {
       if (o.gk !== gk) { o.gk = gk; o.helm.material.color.set(TIERC[e.arm || 0]); o.vest.visible = (e.arm || 0) > 0; o.vest.material.color.set(TIERC[e.arm || 0]); o.wpn.material.color.set(TIERC[e.wpn || 0]); o.wpn.material.emissive.set(e.wpn >= 3 ? TIERC[e.wpn] : '#000000'); o.wpn.material.emissiveIntensity = .4; o.wpn.scale.y = 1 + (e.wpn || 0) * .2; o.shirt.color.set(tc || hashCol(id)); }
       o.shield.visible = !!(e.f & 4);
       if (o.flash > 0 || o.wasFlash) { o.flash = (o.flash || 0) - dt; const on = o.flash > 0; for (const m of o.mats) if (m.emissive) m.emissive.set(on ? '#FF3B2F' : '#000000'); o.wasFlash = on; if (on) o.g.scale.setScalar(1 + o.flash * .6); else o.g.scale.setScalar(1); }
-      const shopM = !!(e.f & 256), prot = !!(e.f & 2) || shopM; if (prot || o.wasProt) { for (const m of o.mats) { m.transparent = prot; m.opacity = shopM ? .28 : prot ? .55 + .3 * Math.sin(clockT * 12) : 1; } o.wasProt = prot; }   // 상점 안 = 반투명 유령
+      const shopM = !!(e.f & (256 | 512)), prot = !!(e.f & 2) || shopM; if (prot || o.wasProt) { for (const m of o.mats) { m.transparent = prot; m.opacity = shopM ? .28 : prot ? .55 + .3 * Math.sin(clockT * 12) : 1; } o.wasProt = prot; }   // 상점 안 = 반투명 유령
       o.aura.visible = !!(e.f & 64); if (e.f & 64) { o.aura.material.color.set(tc || '#FFFFFF'); o.aura.rotation.y += dt * 2; o.aura.material.opacity = .18 + .1 * Math.sin(clockT * 6); }
-      o.ring.material.color.set(e.f & 256 ? '#FFD45A' : e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc || !!(e.f & 256);
+      o.ring.material.color.set(e.f & (256 | 512) ? '#FFD45A' : e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc || !!(e.f & (256 | 512));
       const nm = names.get(id) || (id === myId ? me.name : '');
       const jic = e.job && JOBS[JOBK[e.job]] ? JOBS[JOBK[e.job]].ic + ' ' : '';
-      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & 256 ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
+      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : e.f & 512 ? '📘 문제 푸는 중 · ' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & (256 | 512) ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, (e.y || 0) + (o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0), e.z);
@@ -1147,6 +1208,7 @@ function loop(now) {
     if ((clockT * 10 | 0) % 2 === 0) drawMini(last);
   } else { const a = clockT * .05; camera.position.set(Math.sin(a) * 90, 50, Math.cos(a) * 90); camera.lookAt(0, 0, 0); }
   for (const r of turbines) r.rotation.z -= dt * 1.2;
+  updateGusts(dt);
   if (chestObj && chestInfo) { const [x, z, y, landed] = chestInfo; const g = chestObj.g; const ty = landed ? y : y + Math.max(0, (chestInfo[6] || 0)) * 5; g.position.set(x, lerp(g.position.y || ty, ty, landed ? 1 : .1), z); chestObj.box.rotation.y += dt * (chestInfo[4] ? 3 : .6); chestObj.beam.material.opacity = .16 + .08 * Math.sin(clockT * 4); chestObj.glow.material.opacity = .6 + .3 * Math.sin(clockT * 6); }
   if (shrineCrys) { shrineCrys.rotation.y += dt * .8; shrineCrys.position.y = 3.3 + Math.sin(clockT * 1.6) * .25; }
   waterU.uTime.value = clockT; clouds.rotation.y += dt * .004;
@@ -1161,6 +1223,8 @@ function drawMini(last) {
   if (zr < R - .3) { mmc.strokeStyle = '#B44CFF'; mmc.lineWidth = 3; mmc.beginPath(); mmc.arc(N / 2, N / 2, zr * s, 0, TAU); mmc.stroke(); }
   for (const st of STRUCTS) { const [x0, x1, z0, z1] = st.plat; mmc.fillStyle = '#B07A4A'; mmc.fillRect(X(x0), Z(z0), (x1 - x0) * s, (z1 - z0) * s); mmc.fillStyle = '#E3CF9A'; for (const r of st.ramps) mmc.fillRect(X(r[0]), Z(r[2]), (r[1] - r[0]) * s, (r[3] - r[2]) * s); }
   mmc.fillStyle = '#FFC21A'; for (const q of SHOPS) mmc.fillRect(X(q.x) - 4, Z(q.z) - 4, 8, 8);
+  for (const t of GTS) { const gi = gtInfo.find(q => q[0] === t.id); if (gi && gi[1] === 2) { mmc.save(); mmc.translate(X(t.x), Z(t.z)); mmc.rotate(-gi[4]); mmc.fillStyle = 'rgba(191,246,255,.55)'; mmc.fillRect(-GUC.w / 2 * s, 0, GUC.w * s, GUC.len * s); mmc.restore(); }
+    mmc.fillStyle = gi && gi[1] === 2 ? '#FFFFFF' : '#5FF0D8'; mmc.beginPath(); mmc.arc(X(t.x), Z(t.z), 4, 0, TAU); mmc.fill(); mmc.strokeStyle = '#05323A'; mmc.lineWidth = 1.5; mmc.stroke(); }
   mmc.fillStyle = '#8FD3FF'; mmc.beginPath(); mmc.arc(X(0), Z(0), 6, 0, TAU); mmc.fill();
   if (chestInfo) { const cxp = X(chestInfo[0]), czp = Z(chestInfo[1]), rr = 9 + Math.sin(clockT * 8) * 2; mmc.save(); mmc.translate(cxp, czp); mmc.fillStyle = '#FFD45A'; mmc.strokeStyle = '#3A2600'; mmc.lineWidth = 2; mmc.beginPath(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU - Math.PI / 2, r2 = i % 2 ? rr * .45 : rr; mmc.lineTo(Math.cos(a) * r2, Math.sin(a) * r2); } mmc.closePath(); mmc.fill(); mmc.stroke(); mmc.restore(); }
   for (const t of STN) { const ready = !meS || !meS.tcd || !meS.tcd[t.id]; mmc.save(); mmc.translate(X(t.x), Z(t.z)); mmc.rotate(Math.PI / 4); mmc.fillStyle = ready ? '#5FF0D8' : 'rgba(65,84,91,.8)'; mmc.fillRect(-5, -5, 10, 10); mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 1.5; mmc.strokeRect(-5, -5, 10, 10); mmc.restore(); }
