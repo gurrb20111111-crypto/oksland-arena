@@ -229,6 +229,7 @@ const MONC = { snail: '#93A08A', slime: '#7D6CB0', bee: '#3E3F48', boar: '#5B4A4
 const MONN = { snail: '매연 달팽이', slime: '스모그 슬라임', bee: '미세먼지 벌', boar: '매연 멧돼지', golem: '스모그 골렘', weasel: '회오리 족제비', flower: '매연 대포꽃', crab: '녹슨 집게게', bat: '연기 박쥐', turtle: '강철 매연거북', boss: '태풍 마수 돌개' };
 let QST = null, qState = null, bossInfo = null, chestInfo = null, chestObj = null, nearChest = false;
 const TIERC = ['#B9C4C8', '#8FD3FF', '#5FA8FF', '#B07CF0', '#FFC21A'];
+let farMons = [];
 let ws = null, me = null, myId = 0, R = 62, OBS = [], GEARN = [], ARMN = [], UPG = [], SHOP = null, POTI = { price: 25, max: 3, heal: .45 }, SHOP_R = 9, names = new Map(), lb = [], king = null;
 let TEAMS = [], teamsOn = true, STN = [], TASKN = {}, TASK_R = 3, teamInfo = [], nearSt = null, curTask = null;
 const STNO = new Map();
@@ -787,6 +788,7 @@ function onSnap(m) {
   if (lastArr) { const gap = at - lastArr; jit = jit * .9 + Math.abs(gap - 100) * .1; interpDelay = Math.max(110, Math.min(260, 105 + jit * 2.5)); } lastArr = at;
   const s = { at, P: new Map(), M: new Map(), J: new Map(), K: new Map() };
   for (const p of m.P) s.P.set(p[0], { x: p[1], z: p[2], dir: p[3], hp: p[4], max: p[5], lv: p[6], f: p[7], wpn: p[8], arm: p[9], team: p[10], y: p[11] || 0, job: p[12] || 0 });
+  if (m.MF) farMons = m.MF;
   for (const q of m.M) s.M.set(q[0], { type: q[1], x: q[2], z: q[3], dir: q[4], hp: q[5], max: q[6], y: q[7] || 0 });
   for (const j of m.J) s.J.set(j[0], { kind: j[1], x: j[2], z: j[3], dir: 0, y: j[4] || 0 });
   for (const k of m.K) s.K.set(k[0], { kind: k[1], val: k[2], x: k[3], z: k[4], y: k[5] || 0 });
@@ -1152,6 +1154,7 @@ function drawMini(last) {
   mmc.fillStyle = '#8FD3FF'; mmc.beginPath(); mmc.arc(X(0), Z(0), 6, 0, TAU); mmc.fill();
   if (chestInfo) { const cxp = X(chestInfo[0]), czp = Z(chestInfo[1]), rr = 9 + Math.sin(clockT * 8) * 2; mmc.save(); mmc.translate(cxp, czp); mmc.fillStyle = '#FFD45A'; mmc.strokeStyle = '#3A2600'; mmc.lineWidth = 2; mmc.beginPath(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU - Math.PI / 2, r2 = i % 2 ? rr * .45 : rr; mmc.lineTo(Math.cos(a) * r2, Math.sin(a) * r2); } mmc.closePath(); mmc.fill(); mmc.stroke(); mmc.restore(); }
   for (const t of STN) { const ready = !meS || !meS.tcd || !meS.tcd[t.id]; mmc.save(); mmc.translate(X(t.x), Z(t.z)); mmc.rotate(Math.PI / 4); mmc.fillStyle = ready ? '#5FF0D8' : 'rgba(65,84,91,.8)'; mmc.fillRect(-5, -5, 10, 10); mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 1.5; mmc.strokeRect(-5, -5, 10, 10); mmc.restore(); }
+  for (let i = 0; i + 2 < farMons.length; i += 3) { mmc.fillStyle = farMons[i + 2] ? '#C9655A' : '#B98AC9'; mmc.fillRect(X(farMons[i]) - 1.5, Z(farMons[i + 1]) - 1.5, 3, 3); }
   for (const [, m] of last.M) { if (m.type === 'boss') { mmc.fillStyle = '#FF2D1A'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 9 + Math.sin(clockT * 6) * 2, 0, TAU); mmc.fill(); mmc.strokeStyle = '#FFE45A'; mmc.lineWidth = 2; mmc.stroke(); continue; } mmc.fillStyle = m.type === 'golem' || m.type === 'boar' || m.type === 'turtle' ? '#FF6B5A' : '#E9A3FF'; mmc.beginPath(); mmc.arc(X(m.x), Z(m.z), 3, 0, TAU); mmc.fill(); }
   for (const [id, p] of last.P) { if (id === myId || !(p.f & 1)) continue; const kingP = p.f & 16; mmc.fillStyle = kingP ? '#FFC21A' : teamsOn && TEAMS[p.team] ? TEAMS[p.team].c : '#FFFFFF'; mmc.beginPath(); mmc.arc(X(p.x), Z(p.z), kingP ? 7 : 4.5, 0, TAU); mmc.fill(); mmc.strokeStyle = '#10242B'; mmc.lineWidth = 1.5; mmc.stroke(); }
   mmc.save(); mmc.translate(X(local.x), Z(local.z)); mmc.rotate(-local.dir + Math.PI); mmc.fillStyle = '#3FE0C5'; mmc.strokeStyle = '#0E3A47'; mmc.lineWidth = 2;

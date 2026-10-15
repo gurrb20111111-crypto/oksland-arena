@@ -86,7 +86,9 @@ server.on('upgrade', (req, sock) => {
 setInterval(() => { for (const r of Object.values(ROOMS)) for (const c of r.conns) { if (!c.alive) { c.close(); continue; } c.alive = false; c.ping(); } }, 20000);
 
 /* ======================= game constants ======================= */
-const R = 62;                          // island radius
+const R = 62;
+const MON_CAP = +process.env.MON_CAP || 110, MON_PER = +process.env.MON_PER || 5.6;   // 몬스터 최대 수 · 학생 1명당 몬스터 (2026-10-15 두 배)
+const VIEW_R = 40;   // 학생 화면에는 40m 안 몬스터만 자세히 보냄(통신량·태블릿 부담 줄이기), 먼 몬스터는 미니맵 점만                          // island radius
 const TICK = 1 / 20;
 const MAXLV = 15;
 const xpNeed = lv => 30 + (lv - 1) * 25;
@@ -676,7 +678,7 @@ function questTask() { if (COOP && quest.stage === 1) { quest.prog++; if (quest.
 function questKill() { if (quest.stage === 2) { quest.prog++; if (quest.prog >= questGoal()) questAdvance(); } }
 
 /* ======================= simulation ======================= */
-let monT = 0, lbT = 0, snapT = 0;
+let monT = 0, lbT = 0, snapT = 0, snapN = 0;
 function step(dt) {
   const now = Date.now();
   // round
@@ -720,9 +722,9 @@ function step(dt) {
   // monsters spawn
   monT -= dt;
   const alive = [...players.values()].filter(p => p.alive && online(p));
-  const cap = Math.min(55, 8 + Math.ceil(alive.length * 2.8));   // 몬스터 2배
+  const cap = Math.min(MON_CAP, 8 + Math.ceil(alive.length * MON_PER));   // 접속 인원에 따라 늘어남
   if (monT <= 0 && alive.length && mons.size < cap) {
-    monT = .6;
+    monT = .35;
     const avgLv = alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
     const pool = Object.entries(MON).filter(([, d]) => d.lv <= Math.max(2, avgLv + 2));
     const w = pool.map(([k, d]) => k === 'snail' ? Math.max(.6, 4 - avgLv * .4) : k === 'golem' || k === 'turtle' ? .6 + (avgLv - d.lv) * .25 : k === 'bat' ? 1 : 2);
@@ -806,7 +808,7 @@ function step(dt) {
   if (lbT <= 0) { lbT = 1; sendBoard(rl); }
 }
 function sendSnap(rl) {
-  const t = Date.now();
+  const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
   const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot ? 2 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
@@ -815,8 +817,14 @@ function sendSnap(rl) {
   const rankOf = new Map(rl.map((p, i) => [p.id, i + 1]));
   for (const c of conns) {
     if (!c.open) continue;
-    if (c.admin) { c.send({ ...base, me: undefined }); continue; }
+    if (c.admin) { c.send({ ...base, M, MF: undefined, me: undefined }); continue; }
     const p = c.pid && players.get(c.pid); if (!p) continue;
+    const near = [], far = farTick ? [] : null, seen = c.seenM || new Set(), nowSeen = new Set();
+    for (const q of M) {
+      const d2 = (q[2] - p.x) ** 2 + (q[3] - p.z) ** 2, r = seen.has(q[0]) ? VIEW_R + 6 : VIEW_R;   // 경계에서 깜빡이지 않게 6m 여유
+      if (q[1] === 'boss' || d2 < r * r) { near.push(q); nowSeen.add(q[0]); } else if (far) far.push(Math.round(q[2]), Math.round(q[3]), q[1] === 'golem' || q[1] === 'boar' || q[1] === 'turtle' ? 1 : 0);
+    }
+    c.seenM = nowSeen; base.M = near; base.MF = far || undefined;
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
     base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
