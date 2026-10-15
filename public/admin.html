@@ -89,7 +89,9 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
     </div>
     <div class="panel">
       <h2>입장 코드</h2>
-      <div class="rowx"><label><input type="checkbox" id="gate" checked> 클리어 코드가 있어야 입장</label></div>
+      <div class="rowx"><label><input type="checkbox" id="gate" checked> 클리어 코드가 있어야 입장</label><label><input type="checkbox" id="locked"> 🔒 입장 잠그기</label></div>
+      <div class="rowx"><button class="btn r" id="kickAll">🚪 수업 끝 · 모두 내보내기</button><span class="muted" id="kickMsg"></span></div>
+      <p class="muted">모두 내보내기를 누르면 학생 화면이 입장 화면으로 돌아가고 <b>입장이 잠겨요</b>(다음 수업 때 잠금 풀기). 창을 안 닫은 학생도 <b>5분 동안 조작이 없으면 자동으로</b> 나가요. 선생님(운영자)은 빼고요.</p>
       <p class="muted">코드를 잃어버린 학생: 클리어 화면에 쓴 이름을 넣으면 오늘의 코드를 알려 줘요.</p>
       <div class="rowx"><input id="cname" placeholder="이름" style="height:44px;border-radius:10px;border:1px solid #2F4C55;background:#0E2128;color:#fff;padding:0 10px"><button class="btn g" id="cgo">코드 보기</button><span class="code" id="code"></span></div>
     </div>
@@ -112,7 +114,7 @@ function go() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
-    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
+    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; $('#locked').checked = !!m.locked; if (m.kicked != null) $('#kickMsg').textContent = `${m.kicked}명을 내보내고 입장을 잠갔어요.`; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
     if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
     if (m.t === 's') { last = m; renderBQ(m); const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
     if (m.t === 'code') { $('#code').textContent = m.code; return; }
@@ -136,6 +138,8 @@ $('#stop').addEventListener('click', () => cmd({ c: 'stop' }));
 $('#free').addEventListener('click', () => cmd({ c: 'free' }));
 $('#reset').addEventListener('click', () => { if (confirm('모든 학생의 레벨·코인·장비를 초기화할까요?')) cmd({ c: 'reset' }); });
 $('#gate').addEventListener('change', e => cmd({ c: 'gate', on: e.target.checked }));
+$('#locked').addEventListener('change', e => { cmd({ c: 'lock', on: e.target.checked }); $('#kickMsg').textContent = e.target.checked ? '입장을 잠갔어요.' : '입장을 다시 열었어요.'; });
+$('#kickAll').addEventListener('click', () => { if (confirm('선생님을 뺀 모든 학생을 내보내고 입장을 잠글까요?')) cmd({ c: 'kickall', lock: true }); });
 $('#teamsOn').addEventListener('change', e => cmd({ c: 'teams', on: e.target.checked }));
 $('#shuffle').addEventListener('click', () => { if (confirm('팀을 무작위로 다시 나눌까요? 팀 게이지와 팀 기록이 0이 돼요.')) cmd({ c: 'shuffle' }); });
 $('#cgo').addEventListener('click', () => cmd({ c: 'code', name: $('#cname').value }));

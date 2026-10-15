@@ -262,7 +262,8 @@ const picks = new Map();
 const pending = [];          // delayed strikes (thunder)
 let nextId = 1;
 const round = { phase: 'free', endsAt: 0, len: 0, zone0: 0, final: null };
-let gate = true;
+let gate = true, locked = false;
+const IDLE_MS = 5 * 60 * 1000;   // 5분 동안 아무 조작이 없으면 자동으로 내보냄 (수업 끝나고 창을 안 닫은 학생)
 function zoneR() {
   if (round.phase !== 'play') return R;
   const total = round.len, left = (round.endsAt - Date.now()) / 1000, shrink = Math.min(150, total * .4);
@@ -289,6 +290,12 @@ function newPlayer(c, name) {
 }
 /* 운영자(선생님): 관리자 비밀번호로 입장 → Lv 100, 최고 장비, 순위·보스 인원 계산에서 빠짐 */
 const GM_LV = 100;
+function bye(p, s) {   // 내보내기: 학생 화면은 다시 연결하지 않고 입장 화면으로 돌아감
+  if (chest && chest.opener === p.id) chest.opener = null;
+  if (p.task) cancelTask(p);
+  const c = p.c; p.c = null; players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name });
+  if (c) { c.pid = null; c.send({ t: 'bye', s }); setTimeout(() => { try { c.close(); } catch (e) { /* already closed */ } }, 300); }
+}
 function applyGM(p) { p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
 const live = () => [...players.values()].filter(p => online(p) && !p.gm);
 function resetPlayer(p) {
@@ -431,6 +438,7 @@ function hurtPlayer(v, dmg, src) {
   if (v.task) cancelTask(v, '공격을 받아서 과제가 취소됐어요! 주변을 살피고 다시 하세요.');
   if (src && src.kind === 'p') { v.dmgBy.set(src.p.id, Date.now()); src.p.lastHurt = Date.now(); }
   ev({ k: 'hit', t: 'p', id: v.id, d, x: +v.x.toFixed(1), z: +v.z.toFixed(1), kx: kb[0], kz: kb[1], big: d >= 30 ? 1 : 0 });
+  if (v.splash) { v.splash = false; if (v.hp > 0) return seaFall(v, src); }
   if (v.hp <= 0) killPlayer(v, src);
 }
 function killPlayer(v, src) {
@@ -461,14 +469,15 @@ function killPlayer(v, src) {
     if (helpers.length) { const share = Math.ceil(bounty / helpers.length); for (const h of helpers) { addCoins(h, share); gainXp(h, 15); } }
   }
   v.dmgBy.clear();
-  ev({ k: 'kill', v: v.id, a: killer ? killer.id : null, src: src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : null, bounty, helpers: helpers.map(h => h.id) });
-  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : '?', lost, gearLost, partLost, lvDown, xpLoss, respawn: 5 });
+  ev({ k: 'kill', v: v.id, a: killer ? killer.id : null, src: src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : null, sea: v.seaKO ? 1 : 0, bounty, helpers: helpers.map(h => h.id) });
+  if (v.c) v.c.send({ t: 'dead', by: killer ? killer.name : src && src.kind === 'm' ? src.m.type : src && src.kind === 'z' ? 'zone' : src && src.kind === 'sea' ? 'sea' : '?', sea: v.seaKO ? 1 : 0, lost, gearLost, partLost, lvDown, xpLoss, respawn: 5 });
 }
 function hurtMon(m, dmg, p, kb = 1, fx, fz) {
   if (m.dead) return;
   if (m.type === 'crab') dmg = Math.max(1, Math.round(dmg * .6));
   m.hp -= dmg; m.tgt = p.id; m.hitT = .15;
-  if (m.type !== 'boss' && m.hp > 0) { const amt = (MON_KB[m.type] || 1) * kb; knock(m, fx != null ? fx : p.x, fz != null ? fz : p.z, amt, MON[m.type].r * .6); if (m.ch) m.ch = null; m.stun = .25; }
+  if (m.type !== 'boss' && m.hp > 0) { const amt = (MON_KB[m.type] || 1) * kb; knock(m, fx != null ? fx : p.x, fz != null ? fz : p.z, amt, MON[m.type].r * .6); if (m.ch) m.ch = null; m.stun = .25;
+    if (m.splash) { m.splash = false; m.hp = 0; ev({ k: 'fx', s: 'splash', x: +m.x.toFixed(1), z: +m.z.toFixed(1), by: p.id }); } }
   if (m.type === 'boss') { m.dmgBy.set(p.id, (m.dmgBy.get(p.id) || 0) + dmg); m.seen.set(p.id, Date.now()); }
   ev({ k: 'hit', t: 'm', id: m.id, d: dmg, x: +m.x.toFixed(1), z: +m.z.toFixed(1) });
   if (m.hp <= 0 && m.type === 'boss') { m.dead = true; mons.delete(m.id); return bossDie(m, p); }
@@ -495,10 +504,25 @@ function hitTarget(p, t, dmg, kb = 1, from) { if (t.kind === 'p' && sameTeam(p, 
 function knock(e, fx, fz, dist, rad) {   // 맞으면 뒤로 밀림 (벽·건물은 통과 못 함)
   if (!(dist > 0)) return [0, 0];
   let dx = e.x - fx, dz = e.z - fz, d = Math.hypot(dx, dz); if (d < .05) { const a = Math.random() * 6.28; dx = Math.sin(a); dz = Math.cos(a); d = 1; }
+  if (Math.hypot(e.x, e.z) > BEACH) dist *= 1.8;   // 모래사장은 미끄러워서 더 멀리 밀려요
   const ox = e.x, oz = e.z; let nx = e.x + dx / d * dist, nz = e.z + dz / d * dist;
+  if ((e.y || 0) < .5 && Math.hypot(nx, nz) > R - 1.15 && !(e.type && FLYERS.has(e.type))) e.splash = true;   // 바다로 밀려남
   if ((e.y || 0) < .5) [nx, nz] = collide(nx, nz, rad);
   if (!blockedAt(nx, nz, e.y || 0, rad * .8)) { e.x = nx; e.z = nz; const f = floorAt(nx, nz, (e.y || 0)); if (f < (e.y || 0)) e.vy = 0; }
   return [+(e.x - ox).toFixed(2), +(e.z - oz).toFixed(2)];
+}
+const BEACH = R - 7;   // 이 바깥(해변)에서 맞으면 1.8배 밀리고, 바다까지 밀리면 풍덩
+function seaFall(v, src) {   // 학생이 바다에 빠짐: 1부 = 쓰러짐(민 사람이 처치), 2부·운영자 = 해변으로 건져 올림
+  ev({ k: 'fx', s: 'splash', x: +v.x.toFixed(1), z: +v.z.toFixed(1) });
+  if (COOP || v.gm) {
+    const [x, z] = freeSpot(6); v.x = x; v.z = z; v.y = 0; v.vy = 0; v.mx = v.mz = 0; v.prot = Date.now() + 1500;
+    if (!v.gm) v.hp = Math.max(1, Math.round(v.hp - stat(v).maxHp * .25));
+    if (v.task) cancelTask(v); tell(v, v.gm ? '바다에 빠졌어요! (운영자는 손해 없음)' : '🌊 바다에 빠졌어요! 섬으로 건져 올렸어요. (체력 −25%)');
+    ev({ k: 'spawn', id: v.id }); return;
+  }
+  let by = src && src.kind === 'p' ? src : null;
+  if (!by) { const now = Date.now(); let best = null, bt = 0; for (const [id, t] of v.dmgBy) if (now - t < 6000 && t > bt && players.has(id)) { best = players.get(id); bt = t; } if (best) by = { kind: 'p', p: best }; }
+  v.seaKO = true; killPlayer(v, by || { kind: 'sea' }); v.seaKO = false;
 }
 const MON_KB = { snail: 1.6, slime: 1.4, bee: 1.2, boar: .6, golem: .25, weasel: 1.6, flower: 1, crab: .5, bat: 1.8, turtle: .15 };
 const MON_HIT_KB = { boar: 1.8, golem: 1.6, turtle: 2.6, crab: 1.1 };
@@ -661,6 +685,7 @@ function step(dt) {
   // players
   for (const p of [...players.values()]) {
     if (!online(p)) { if (now - (p.offAt || now) > 180000) { players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name }); } continue; }
+    if (!p.gm && now - (p.actAt || p.joined) > IDLE_MS) { bye(p, '5분 동안 움직이지 않아서 아레나에서 나왔어요. 다시 하려면 [입장하기]를 누르세요.'); continue; }
     if (!p.alive) {
       if (now >= p.respawnAt) { const [x, z] = freeSpot(10); p.x = x; p.z = z; p.y = 0; p.vy = 0; p.alive = true; p.prot = now + 3000; p.hp = stat(p).maxHp; ev({ k: 'spawn', id: p.id }); }
       continue;
@@ -822,10 +847,12 @@ function onConnect(c) {
     if (msg.t === 'join' && !c.pid && !c.admin) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
-      if (old) { old.c = c; c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old && locked && String(msg.code || '').trim() !== ADMIN_KEY && !old.gm) { players.delete(old.id); return c.send({ t: 'err', s: '지금은 아레나가 닫혀 있어요. 선생님이 열어 주면 들어올 수 있어요.' }); }
+      if (old) { old.c = c; old.actAt = Date.now(); c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
+      if (locked && code !== ADMIN_KEY) return c.send({ t: 'err', s: '지금은 아레나가 닫혀 있어요. 선생님이 열어 주면 들어올 수 있어요.' });
       if (gate && code !== ADMIN_KEY && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d), SALT) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
       const same = [...players.values()].find(p => p.name === name && !online(p));
       if (same) players.delete(same.id);
@@ -839,12 +866,12 @@ function onConnect(c) {
     }
     if (msg.t === 'admin') {
       if (msg.key !== ADMIN_KEY) return c.send({ t: 'err', s: '관리자 비밀번호가 틀렸어요.' });
-      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, teams: TEAMS, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
+      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, teams: TEAMS, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
       return;
     }
     if (c.admin && msg.t === 'cmd') return adminCmd(c, msg);
     const p = c.pid && players.get(c.pid); if (!p) return;
-    p.lastIn = Date.now();
+    p.lastIn = Date.now(); if (msg.t !== 'in' || msg.mx || msg.mz) p.actAt = p.lastIn;
     if (msg.t === 'in') { const mx = +msg.mx || 0, mz = +msg.mz || 0, l = Math.hypot(mx, mz); p.mx = l > 1 ? mx / l : mx; p.mz = l > 1 ? mz / l : mz; }
     else if (msg.t === 'sk') useSkill(p, String(msg.id));
     else if (msg.t === 'up') upgrade(p, msg.w === 'arm' ? 'arm' : 'wpn');
@@ -874,9 +901,11 @@ function adminCmd(c, msg) {
   else if (msg.c === 'qreset') { questReset(); broadcast({ t: 'quest', s: 'reset', stage: 1, name: QSTAGES[1].n, desc: QSTAGES[1].d }); }
   else if (msg.c === 'qnext') { if (COOP && quest.stage < 4) questAdvance(); }
   else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
-  else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, teamsOn, ph: round.phase, addr: addresses() }); }
-  else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, ph: round.phase, addr: addresses() }); }
-  else if (msg.c === 'kick') { const p = players.get(+msg.id); if (p && p.c) { p.c.send({ t: 'err', s: '선생님이 퇴장시켰어요.' }); setTimeout(() => p.c.close(), 200); } }
+  else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, ph: round.phase, addr: addresses() }); }
+  else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, locked, ph: round.phase, addr: addresses() }); }
+  else if (msg.c === 'kick') { const p = players.get(+msg.id); if (p) bye(p, '선생님이 아레나에서 내보냈어요.'); }
+  else if (msg.c === 'kickall') { let n = 0; for (const p of [...players.values()]) if (!p.gm) { bye(p, '수업이 끝났어요. 오늘도 수고했어요! 👋'); n++; } if (msg.lock) locked = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, ph: round.phase, addr: addresses(), kicked: n }); sendBoard(rankList()); }
+  else if (msg.c === 'lock') { locked = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, locked, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'spawn' && process.env.ARENA_TEST && MON[msg.type]) { const d = MON[msg.type], id = nextId++; mons.set(id, { id, type: msg.type, x: +msg.x, z: +msg.z, hp: d.hp, max: d.hp, dir: 0, wT: 0, atkCd: 1, tgt: null, hitT: 0, cd2: 2 }); }
   else if (msg.c === 'dbg' && process.env.ARENA_TEST) { const p = players.get(+msg.id); if (p) Object.assign(p, msg.set); }
   else if (msg.c === 'code') { c.send({ t: 'code', name: cleanName(msg.name), code: clearCode(cleanName(msg.name), kstYmd(0), SALT) }); }
