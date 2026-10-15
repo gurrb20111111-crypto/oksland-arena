@@ -137,6 +137,15 @@ const JOBS = {
   mage: { n: '번개 마법사', ic: '🔮', d: '스킬 피해 +35% · 스킬 대기 −15% · 체력 −10%' },
   healer: { n: '치유 정령사', ic: '💚', d: '재충전이 주변 친구도 회복 · 체력 회복 2배 · 바람 펀치 −10%' }
 };
+/* 직업 전용 스킬: 1번(질주)·3번(돌풍 대포)·6번(낙뢰) 자리를 바꿈. 상성: 검사 > 궁수 > 마법사 > 검사 (상대에게 피해 +20%) */
+const JSK = {
+  warrior: { dash: { n: '돌진 베기', ic: '⚔', cd: 7, d: '앞으로 7m 돌진, 처음 부딪힌 적에게 피해 + 0.8초 기절' }, cannon: { n: '대지 가르기', ic: '⛰', cd: 8, d: '앞쪽 7m 일직선 피해 + 2초 둔화' }, thunder: { n: '대지의 분노', ic: '💥', cd: 22, d: '앞으로 뛰어올라 내려찍기: 주변 큰 피해 + 1초 기절 (뛰는 동안 기절·둔화 안 걸림)' } },
+  archer: { dash: { n: '구르기', ic: '🌀', cd: 5, d: '움직이는 쪽으로 5m 구르기, 구르는 동안 무적' }, cannon: { n: '관통 화살', ic: '➶', cd: 6, d: '18m 꿰뚫는 화살: 맞은 모두 피해 + 1.5초 둔화 (조준이 중요!)' }, thunder: { n: '화살비', ic: '☔', cd: 20, d: '앞쪽 지점에 0.9초 뒤 화살비 3번: 피해 + 둔화 (빨간 원을 보고 피할 수 있음)' } },
+  mage: { dash: { n: '점멸', ic: '✦', cd: 9, d: '보는 쪽으로 6.5m 순간이동' }, cannon: { n: '바람 속박', ic: '⛓', cd: 8, d: '14m 구슬: 처음 맞은 적 피해 + 1.5초 묶기(못 움직임)' }, thunder: { n: '번개 폭풍', ic: '⚡', cd: 22, d: '0.6초 뒤 내 주변 6.5m 큰 피해 + 0.6초 기절' } },
+  healer: { dash: { n: '치유의 바람', ic: '✚', cd: 9, d: '나와 주변 7m 친구 체력 25% 회복 + 기절·묶기·둔화 풀기' }, cannon: { n: '생명 흡수 구슬', ic: '◉', cd: 7, d: '15m 구슬: 피해 + 둔화, 준 피해의 60%만큼 내 체력 회복' }, thunder: { n: '수호의 바람', ic: '🛡', cd: 24, d: '나와 주변 8m 친구에게 4초 보호막(받는 피해 −60%) + 기절·둔화 면역' } }
+};
+const COUNTER = { warrior: 'archer', archer: 'mage', mage: 'warrior' };   // 앞이 뒤에게 강함
+for (const k in JOBS) { JOBS[k].sk = JSK[k]; JOBS[k].beats = COUNTER[k] || null; JOBS[k].weak = Object.keys(COUNTER).find(x => COUNTER[x] === k) || null; }
 const JOBK = [null, 'warrior', 'archer', 'mage', 'healer'];
 const JOB_LV = 5, JOB_CHANGE = 100;
 const UPG = [60, 120, 200, 300];       // legacy (old clients)
@@ -554,23 +563,23 @@ function dropPick(kind, val, x, z, y = 0) {
 /* ======================= damage & death ======================= */
 function hurtPlayer(v, dmg, src) {
   if (!v.alive || Date.now() < v.prot || v.shopUntil) return;
-  if (src && src.kind === 'p' && src.p && !src.p.gm && !v.gm) { const g = src.p.lv - v.lv; if (g > 0) dmg *= Math.max(.6, 1 - .05 * g); else if (g < 0) dmg *= Math.min(1.5, 1 - .05 * g); }   // 레벨 차이 보정
+  if (src && src.kind === 'p' && src.p && !src.p.gm && !v.gm) { const g = src.p.lv - v.lv; if (g > 0) dmg *= Math.max(.6, 1 - .05 * g); else if (g < 0) dmg *= Math.min(1.5, 1 - .05 * g); if (src.p.job && COUNTER[src.p.job] === v.job) { dmg *= 1.2; src.ct = 1; } }   // 레벨 차이 보정 + 직업 상성
   const st = stat(v);
   let d = dmg * (1 - st.def) * (v.shieldT > 0 ? .4 : 1);
   d = Math.max(1, Math.round(d));
   v.hp -= d; v.lastHurt = Date.now();
   let kb = [0, 0];
   if (src && (src.kind === 'm' || src.kind === 'p') && v.hp > 0) { const sx = src.kind === 'm' ? (src.m && src.m.x != null ? src.m.x : null) : src.fx, sz = src.kind === 'm' ? (src.m && src.m.z != null ? src.m.z : null) : src.fz;
-    const amt = src.kind === 'p' ? .7 * (src.kb || 1) : src.m && src.m.type === 'boss' ? 1.8 : (MON_HIT_KB[src.m && src.m.type] || .8); if (sx != null) kb = knock(v, sx, sz, amt * (v.job === 'warrior' ? .6 : 1), .45); }
+    const amt = src.kind === 'p' ? .7 * (src.kb || 1) : src.m && src.m.type === 'boss' ? 1.8 : (MON_HIT_KB[src.m && src.m.type] || .8); if (sx != null && !(Date.now() < (v.ccImmuneUntil || 0) && Date.now() >= (v.stunUntil || 0) && Date.now() >= (v.rootUntil || 0))) kb = knock(v, sx, sz, amt * (v.job === 'warrior' ? .6 : 1), .45); }
   if (v.task) cancelTask(v, '공격을 받아서 과제가 취소됐어요! 주변을 살피고 다시 하세요.');
   if (src && src.kind === 'p') { v.dmgBy.set(src.p.id, Date.now()); src.p.lastHurt = Date.now(); }
-  ev({ k: 'hit', t: 'p', id: v.id, d, x: +v.x.toFixed(1), z: +v.z.toFixed(1), kx: kb[0], kz: kb[1], big: d >= 30 ? 1 : 0 });
+  ev({ k: 'hit', t: 'p', id: v.id, d, x: +v.x.toFixed(1), z: +v.z.toFixed(1), kx: kb[0], kz: kb[1], big: d >= 30 ? 1 : 0, ct: src && src.ct ? 1 : 0 });
   if (v.splash) { v.splash = false; if (v.hp > 0) return seaFall(v, src); }
   if (v.hp <= 0) killPlayer(v, src);
 }
 function killPlayer(v, src) {
   const kp = src && src.kind === 'p' && src.p && src.p.id !== v.id ? src.p : null, gap = kp ? kp.lv - v.lv : 0, soft = !!kp && !v.gm && !kp.gm && gap >= 5;   // 5레벨 이상 높은 사람에게 쓰러지면 손해를 줄여 줌
-  v.shopUntil = 0; if (v.gq != null) { const gt = gst[v.gq]; if (gt && gt.solver === v.id) gustRelease(gt, v, 15000); v.gq = null; }
+  v.shopUntil = 0; v.rush = null; v.stunUntil = v.rootUntil = v.slowUntil = 0; if (v.gq != null) { const gt = gst[v.gq]; if (gt && gt.solver === v.id) gustRelease(gt, v, 15000); v.gq = null; }
   if (v.task) cancelTask(v); v.hp = 0; v.alive = false; v.respawnAt = Date.now() + 5000; v.deaths++;
   const vLv = v.lv;
   const wasKing = king === v.id, bounty = wasKing ? bountyOf(v) : 0;
@@ -659,14 +668,71 @@ const MON_KB = { snail: 1.6, slime: 1.4, bee: 1.2, boar: .6, golem: .25, weasel:
 const MON_HIT_KB = { boar: 1.8, golem: 1.6, turtle: 2.6, crab: 1.1 };
 
 /* ======================= actions ======================= */
+/* ---- 상태 이상(기절·묶기·둔화)과 직업 스킬 ---- */
+function applyCC(t, fx, owner) {
+  if (!fx) return; const now = Date.now(), e = t.o;
+  if (t.kind === 'm') { if (e.dead || e.type === 'boss') { if (fx.slow && e.type === 'boss') { e.slowUntil = now + fx.slow[1] * 1000; e.slowMul = Math.max(fx.slow[0], .8); } return; }
+    if (fx.stun || fx.root) e.stun = Math.max(e.stun || 0, fx.stun || fx.root); if (fx.slow) { e.slowUntil = now + fx.slow[1] * 1000; e.slowMul = fx.slow[0]; } return; }
+  if (!e.alive || now < e.prot || e.shopUntil || e.gq != null) return;
+  const immune = now < (e.ccImmuneUntil || 0);
+  if (fx.stun && !immune) { e.stunUntil = Math.max(e.stunUntil || 0, now + fx.stun * 1000); e.ccImmuneUntil = e.stunUntil + 1500; if (e.task) cancelTask(e); ev({ k: 'fx', s: 'stun', id: e.id, x: +e.x.toFixed(1), z: +e.z.toFixed(1) }); }
+  if (fx.root && !immune) { e.rootUntil = Math.max(e.rootUntil || 0, now + fx.root * 1000); e.ccImmuneUntil = e.rootUntil + 1500; ev({ k: 'fx', s: 'root', id: e.id, x: +e.x.toFixed(1), z: +e.z.toFixed(1) }); }
+  if (fx.slow && !immune) { e.slowUntil = now + fx.slow[1] * 1000; e.slowMul = fx.slow[0]; }
+}
+function hitFx(owner, t, dmg, kb, from, fx) { hitTarget(owner, t, dmg, kb, from); if (t.kind === 'p' && sameTeam(owner, t.o)) return; applyCC(t, fx, owner); }
+function aimAt(p, range, cone = .5) {   // 보는 쪽 ±약 29° 안의 가장 가까운 적을 살짝 겨눠 줌(조준 보조)
+  let best = null, bd = 1e9;
+  for (const t of enemiesNear(p, range, 3)) { const a = Math.atan2(t.o.x - p.x, t.o.z - p.z), da = Math.abs(((a - p.dir + Math.PI * 3) % (Math.PI * 2)) - Math.PI); if (da < cone && t.d < bd) { bd = t.d; best = a; } }
+  return best == null ? p.dir : best;
+}
+const allies = (p, r) => [...players.values()].filter(q => q.alive && online(q) && (q === p || sameTeam(p, q)) && Math.hypot(q.x - p.x, q.z - p.z) <= r);
+function startRush(p, ang, spd, secs, kind) { p.rush = { vx: Math.sin(ang) * spd, vz: Math.cos(ang) * spd, until: Date.now() + secs * 1000, kind }; p.dir = ang; p.mx = p.mz = 0; }
+function endRush(p) { const r = p.rush; p.rush = null; if (!r) return; const st = stat(p);
+  if (r.kind === 'leap') { for (const t of enemiesNear(p, 3.8, 2.4)) hitFx(p, t, Math.round(st.atk * 2.6), 2.4, p, { stun: 1 }); ev({ k: 'fx', s: 'slam', x: +p.x.toFixed(1), z: +p.z.toFixed(1), r: 3.8 }); } }
+function tickRush(p, dt, now) {   // 돌진·구르기·도약: 짧고 빠른 이동 (벽은 못 뚫음)
+  const r = p.rush; if (now >= r.until) return endRush(p);
+  let nx = p.x + r.vx * dt, nz = p.z + r.vz * dt; if ((p.y || 0) < .5) [nx, nz] = collide(nx, nz, .45);
+  if (blockedAt(nx, nz, p.y || 0, .36)) return endRush(p);
+  moveY(p, nx, nz, .4, dt);
+  if (r.kind === 'charge') { const t = enemiesNear(p, 1.5, 1.8)[0]; if (t) { hitFx(p, t, Math.round(stat(p).atk * 1.6), 1.6, p, { stun: .8 }); p.rush = null; } }
+}
+function jobSkill(p, id, st) {
+  const now = Date.now(), j = p.job, mul = st.skillMul;
+  if (j === 'warrior') {
+    if (id === 'dash') { startRush(p, aimAt(p, 9), 26, .28, 'charge'); ev({ k: 'fx', s: 'dash', id: p.id, x: p.x, z: p.z }); }
+    else if (id === 'cannon') { const a = aimAt(p, 7); p.dir = a; const ux = Math.sin(a), uz = Math.cos(a);
+      for (const t of enemiesNear(p, 7.6, 2)) { const rx = t.o.x - p.x, rz = t.o.z - p.z, al = rx * ux + rz * uz, pe = Math.abs(-rx * uz + rz * ux); if (al > -.5 && al < 7.5 && pe < 1.6) hitFx(p, t, Math.round(st.atk * 1.8), 1.4, p, { slow: [.6, 2] }); }
+      for (let i = 1; i <= 3; i++) ev({ k: 'fx', s: 'slam', x: +(p.x + ux * i * 2.2).toFixed(1), z: +(p.z + uz * i * 2.2).toFixed(1), r: 1.5 }); }
+    else if (id === 'thunder') { p.ccImmuneUntil = Math.max(p.ccImmuneUntil || 0, now + 600); startRush(p, aimAt(p, 9), 22, .3, 'leap'); ev({ k: 'fx', s: 'job', id: p.id, job: 'warrior' }); }
+  } else if (j === 'archer') {
+    if (id === 'dash') { const ml = Math.hypot(p.mx, p.mz); const a = ml > .1 ? Math.atan2(p.mx, p.mz) : p.dir + Math.PI; startRush(p, a, 24, .22, 'roll'); p.prot = Math.max(p.prot, now + 300); ev({ k: 'fx', s: 'dash', id: p.id, x: p.x, z: p.z }); }
+    else if (id === 'cannon') { const a = aimAt(p, 18, .35); p.dir = a; projs.push({ id: nextId++, kind: 'pierce', by: p.id, x: p.x, z: p.z, y: p.y || 0, dx: Math.sin(a), dz: Math.cos(a), spd: 34, life: 18 / 34, dmg: Math.round(st.atk * 2), hit: new Set(), r: .9, kb: 1.2, fx: { slow: [.7, 1.5] } }); }
+    else if (id === 'thunder') { const a = aimAt(p, 13, .45); p.dir = a; const t = enemiesNear(p, 13, 3).find(t => Math.abs(((Math.atan2(t.o.x - p.x, t.o.z - p.z) - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < .45);
+      const d = t ? Math.min(13, t.d) : 9, x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d;
+      for (let k = 0; k < 3; k++) pending.push({ at: now + 900 + k * 450, by: p.id, x, z, r: 4, dmg: Math.round(st.atk * 1.1), fx: { slow: [.6, 1] }, look: 'rain' });
+      ev({ k: 'fx', s: 'warn', x: +x.toFixed(1), z: +z.toFixed(1), r: 4, t: 1 }); }
+  } else if (j === 'mage') {
+    if (id === 'dash') { const a = p.dir, ox = p.x, oz = p.z; let x = p.x, z = p.z;
+      for (let i = 1; i <= 13; i++) { let nx = ox + Math.sin(a) * i * .5, nz = oz + Math.cos(a) * i * .5; if ((p.y || 0) < .5) [nx, nz] = collide(nx, nz, .45); if (blockedAt(nx, nz, p.y || 0, .36)) break; x = nx; z = nz; }
+      ev({ k: 'fx', s: 'blink', id: p.id, x: +ox.toFixed(1), z: +oz.toFixed(1), x2: +x.toFixed(1), z2: +z.toFixed(1) }); moveY(p, x, z, .4, .05); p.x = x; p.z = z; }
+    else if (id === 'cannon') { const a = aimAt(p, 14, .35); p.dir = a; projs.push({ id: nextId++, kind: 'bind', by: p.id, x: p.x, z: p.z, y: p.y || 0, dx: Math.sin(a), dz: Math.cos(a), spd: 22, life: 14 / 22, dmg: Math.round(st.atk * 1.6 * mul), r: .9, kb: .5, fx: { root: 1.5 } }); }
+    else if (id === 'thunder') { pending.push({ at: now + 600, by: p.id, x: p.x, z: p.z, r: 6.5, dmg: Math.round(st.atk * 3.2 * mul), fx: { stun: .6 }, follow: true }); ev({ k: 'fx', s: 'warn', x: +p.x.toFixed(1), z: +p.z.toFixed(1), r: 6.5, t: .6 }); }
+  } else if (j === 'healer') {
+    if (id === 'dash') { for (const q of allies(p, 7)) { const qs = stat(q); q.hp = Math.min(qs.maxHp, q.hp + qs.maxHp * .25); q.stunUntil = q.rootUntil = q.slowUntil = 0; ev({ k: 'fx', s: 'heal', id: q.id, x: q.x, z: q.z }); } }
+    else if (id === 'cannon') { const a = aimAt(p, 15, .35); p.dir = a; projs.push({ id: nextId++, kind: 'pulse', by: p.id, x: p.x, z: p.z, y: p.y || 0, dx: Math.sin(a), dz: Math.cos(a), spd: 24, life: 15 / 24, dmg: Math.round(st.atk * 1.5), r: .9, kb: .8, fx: { slow: [.7, 1.5] }, leech: .6 }); }
+    else if (id === 'thunder') { for (const q of allies(p, 8)) { q.shieldT = Math.max(q.shieldT || 0, 4); q.ccImmuneUntil = Math.max(q.ccImmuneUntil || 0, now + 4000); ev({ k: 'fx', s: 'shield', id: q.id, x: q.x, z: q.z }); } }
+  }
+}
 function useSkill(p, id) {
   const sk = SKILLS[id]; if (!sk || !p.alive || p.lv < sk.lv) return;
   if (p.shopUntil || p.gq != null) return;   // 상점·문제 풀이 중(무적)에는 공격 못 함
-  const now = Date.now() / 1000;
+  if (Date.now() < (p.stunUntil || 0) || p.rush) return;   // 기절·돌진 중에는 스킬 못 씀
+  const now = Date.now() / 1000, js = p.job && JSK[p.job] && JSK[p.job][id];
   if ((p.cds[id] || 0) > now) return;
-  p.cds[id] = now + sk.cd * (id === 'punch' ? 1 : 1 - stat(p).cdr);
+  p.cds[id] = now + (js ? js.cd : sk.cd) * (id === 'punch' ? 1 : 1 - stat(p).cdr);
   if (p.prot > Date.now() && id !== 'dash' && id !== 'heal' && id !== 'shield') p.prot = 0;   // attacking ends spawn protection
   const st = stat(p);
+  if (js) { if (p.prot > Date.now() && id !== 'dash') p.prot = 0; return jobSkill(p, id, st); }
   if (id === 'punch') {
     if (p.job === 'archer') {
       const t = enemiesNear(p, 9, 3)[0], a = t ? Math.atan2(t.o.x - p.x, t.o.z - p.z) : p.dir; p.dir = a;
@@ -854,9 +920,11 @@ function step(dt) {
     p.dashT -= dt; p.shieldT -= dt;
     if (p.task) { const t = STATIONS[p.task.sid]; if (Math.hypot(t.x - p.x, t.z - p.z) > TASK_R + .8) cancelTask(p, '기계에서 멀어져서 과제가 취소됐어요.'); }
     const st = stat(p);
-    const len = Math.hypot(p.mx, p.mz), [gx, gz] = gustPush(p, true);
+    if (p.rush) { tickRush(p, dt, now); continue; }
+    const held = now < (p.stunUntil || 0) || now < (p.rootUntil || 0);
+    const len = held ? 0 : Math.hypot(p.mx, p.mz), [gx, gz] = gustPush(p, true);
     if (len > .05 || gx || gz) {
-      const k = Math.min(1, len), mv = len > .05 ? st.spd * k / len : 0; let nx = p.x + (p.mx * mv + gx) * dt, nz = p.z + (p.mz * mv + gz) * dt;
+      const k = Math.min(1, len), mv = len > .05 ? st.spd * k / len * (now < (p.slowUntil || 0) ? p.slowMul || .6 : 1) : 0; let nx = p.x + (p.mx * mv + gx) * dt, nz = p.z + (p.mz * mv + gz) * dt;
       if ((p.y || 0) < .5) [nx, nz] = collide(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } }
       moveY(p, nx, nz, .4, dt); if (len > .05) p.dir = Math.atan2(p.mx, p.mz);
     } else moveY(p, p.x, p.z, .4, dt);
@@ -910,7 +978,7 @@ function step(dt) {
     const def = MON[m.type];
     let tgt = null, td = def.aggro;
     for (const p of alive) { if (now < p.prot) continue; const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < td || (m.tgt === p.id && d < def.aggro * 1.6)) { if (d < td || !tgt) { tgt = p; td = d; } } }
-    let spd = def.spd * (m.spdMul || 1); m.cd2 = (m.cd2 || 0) - dt; if (m.stun > 0) { m.stun -= dt; spd = 0; }
+    let spd = def.spd * (m.spdMul || 1) * (m.slowUntil > now ? m.slowMul || .6 : 1); m.cd2 = (m.cd2 || 0) - dt; if (m.stun > 0) { m.stun -= dt; spd = 0; }
     if (tgt) m.dir = Math.atan2(tgt.x - m.x, tgt.z - m.z) + (m.type === 'bee' || m.type === 'bat' ? Math.sin(now / 200 + m.id) * .6 : 0);
     else { spd *= .4; m.wT -= dt; if (m.wT <= 0) { m.wT = 2 + Math.random() * 3; m.dir = Math.random() * 6.28; } }
     if (def.beh === 'runner' && tgt && m.flee > 0) { m.flee -= dt; m.dir = Math.atan2(m.x - tgt.x, m.z - tgt.z) + Math.sin(now / 300 + m.id) * .5; }   // 물고 빠지기
@@ -927,7 +995,7 @@ function step(dt) {
     if (fly) { m.x = cx; m.z = cz; m.y = tgt ? (tgt.y || 0) : 0; } else { const ox = m.x, oz = m.z; moveY(m, cx, cz, def.r * .6, dt); if (Math.hypot(m.x - ox, m.z - oz) < spd * dt * .2 && spd > .5) m.wT = 0; }
     if (Math.hypot(m.x, m.z) > zr + 4) { m.dir += Math.PI; }
     m.atkCd -= dt;
-    if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, (m.dmg || def.dmg), { kind: 'm', m }); if (def.beh === 'runner') { m.flee = .9; m.atkCd = 1.4; } }
+    if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && !(m.stun > 0) && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, (m.dmg || def.dmg), { kind: 'm', m }); if (def.beh === 'runner') { m.flee = .9; m.atkCd = 1.4; } }
   }
   tickBossStrikes(now, alive);
   tickChest(dt, now); tickGusts(now);
@@ -944,11 +1012,11 @@ function step(dt) {
     pr.x += pr.dx * pr.spd * dt; pr.z += pr.dz * pr.spd * dt;
     if (pr.mon) { let hit = false; for (const p of alive) if (now >= p.prot && Math.hypot(p.x - pr.x, p.z - pr.z) < pr.r + .45) { hurtPlayer(p, pr.dmg, { kind: 'm', m: { type: 'flower' } }); hit = true; break; } if (hit || pr.life <= 0) projs.splice(i, 1); continue; }
     if (!owner) { projs.splice(i, 1); continue; }
-    if (pr.kind === 'arrow' || pr.kind === 'warrow') {
+    if (pr.kind === 'arrow' || pr.kind === 'warrow' || pr.kind === 'bind' || pr.kind === 'pulse') {
       const t = enemiesNear({ x: pr.x, z: pr.z, y: pr.y, id: -1, team: owner.team }, pr.r + .4, 3).find(t => !(t.kind === 'p' && (t.o.id === pr.by || sameTeam(owner, t.o))));
-      if (t) { hitTarget(owner, t, pr.dmg, pr.kb, { x: pr.x - pr.dx, z: pr.z - pr.dz }); projs.splice(i, 1); continue; }
-    } else if (pr.kind === 'cannon') {
-      for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r + .6)) { if (t.kind === 'p' && t.o.id === pr.by) continue; const key = t.kind + t.o.id; if (pr.hit.has(key)) continue; pr.hit.add(key); hitTarget(owner, t, pr.dmg, pr.kb || 1.5, { x: pr.x - pr.dx * 2, z: pr.z - pr.dz * 2 }); }
+      if (t) { hitFx(owner, t, pr.dmg, pr.kb, { x: pr.x - pr.dx, z: pr.z - pr.dz }, pr.fx); if (pr.leech) { const os = stat(owner); owner.hp = Math.min(os.maxHp, owner.hp + pr.dmg * pr.leech); } if (pr.kind === 'bind' || pr.kind === 'pulse') ev({ k: 'fx', s: pr.kind, x: +pr.x.toFixed(1), z: +pr.z.toFixed(1) }); projs.splice(i, 1); continue; }
+    } else if (pr.kind === 'cannon' || pr.kind === 'pierce') {
+      for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r + .6)) { if (t.kind === 'p' && t.o.id === pr.by) continue; const key = t.kind + t.o.id; if (pr.hit.has(key)) continue; pr.hit.add(key); hitFx(owner, t, pr.dmg, pr.kb || 1.5, { x: pr.x - pr.dx * 2, z: pr.z - pr.dz * 2 }, pr.fx); }
     } else {
       pr.tick -= dt;
       if (pr.tick <= 0) { pr.tick = .3; for (const t of enemiesNear({ x: pr.x, z: pr.z, id: -1 }, pr.r)) { if (t.kind === 'p' && t.o.id === pr.by) continue; hitTarget(owner, t, pr.dmg); if (t.kind === 'm' && t.o.type !== 'boss') { t.o.x += (pr.x - t.o.x) * .15; t.o.z += (pr.z - t.o.z) * .15; } } }
@@ -958,9 +1026,10 @@ function step(dt) {
   // delayed strikes
   for (let i = pending.length - 1; i >= 0; i--) {
     const s = pending[i]; if (now < s.at) continue; pending.splice(i, 1);
-    const owner = players.get(s.by); ev({ k: 'fx', s: 'thunder', x: +s.x.toFixed(1), z: +s.z.toFixed(1) });
-    if (!owner) continue;
-    for (const t of enemiesNear({ x: s.x, z: s.z, id: -1 }, s.r)) { if (t.kind === 'p' && t.o.id === s.by) continue; hitTarget(owner, t, s.dmg); }
+    const owner = players.get(s.by); if (s.follow && owner) { s.x = owner.x; s.z = owner.z; }
+    ev({ k: 'fx', s: s.look === 'rain' ? 'rain' : s.follow ? 'storm' : 'thunder', x: +s.x.toFixed(1), z: +s.z.toFixed(1), r: s.r });
+    if (!owner || (s.follow && !owner.alive)) continue;
+    for (const t of enemiesNear({ x: s.x, z: s.z, id: -1 }, s.r)) { if (t.kind === 'p' && t.o.id === s.by) continue; if (s.fx) hitFx(owner, t, s.dmg, 1, { x: s.x, z: s.z }, s.fx); else hitTarget(owner, t, s.dmg); }
   }
   // pickups ttl
   for (const k of picks.values()) { k.ttl -= dt; if (k.ttl <= 0) picks.delete(k.id); }
@@ -977,7 +1046,7 @@ function step(dt) {
 const t0g = () => Date.now();
 function sendSnap(rl) {
   const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null ? 512 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null ? 512 : 0) | (t < (p.stunUntil || 0) || t < (p.rootUntil || 0) ? 1024 : 0) | (t < (p.slowUntil || 0) ? 2048 : 0) | (p.rush ? 4096 : 0) | (t < (p.stunUntil || 0) ? 8192 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2), m.lv || (MON[m.type] ? MON[m.type].lv : 20)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);

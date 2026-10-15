@@ -168,6 +168,7 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 @keyframes gqT{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 .gqq{font-size:18px;font-weight:800;margin:4px 0 10px;line-height:1.45}.gqo{display:grid;gap:8px}.gqo .btn{text-align:left;justify-content:flex-start;white-space:normal;height:auto;min-height:48px;padding:10px 12px;line-height:1.35}
 .gqd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:360px;margin:0 auto}.gqd .btn{height:72px;font-size:26px;flex-direction:column;gap:2px}.gqd .btn small{font-size:12px;font-weight:600}
+.jsl{margin:6px 0 4px;padding-left:16px;font-size:12.5px;line-height:1.45}.jsl li{margin:3px 0}.jsl kbd{font-size:10px}.jmu{font-size:12.5px;margin:4px 0 0;color:#4A5B60}.sk.jsk{background:rgba(70,90,190,.78)}
 </style>
 </head>
 <body>
@@ -658,6 +659,8 @@ function makePick(kind, val) {
 }
 function makeProj(kind) {
   let m;
+  if (kind === 'pierce') { const ag = new THREE.Group(); const sh = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 1.8, 6), new THREE.MeshBasicMaterial({ color: '#FFD45A' })); sh.rotation.x = Math.PI / 2; ag.add(sh); const tip = new THREE.Mesh(new THREE.ConeGeometry(.18, .45, 8), new THREE.MeshBasicMaterial({ color: '#FFF4C2' })); tip.rotation.x = Math.PI / 2; tip.position.z = 1.05; ag.add(tip); ag.position.y = 1.2; const g = new THREE.Group(); g.add(ag); g.userData.m = ag; scene.add(g); return g; }
+  if (kind === 'bind' || kind === 'pulse') { const c = kind === 'bind' ? '#B57BFF' : '#7BD88F'; const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 1), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .85 })); orb.position.y = 1.2; const halo = new THREE.Mesh(new THREE.TorusGeometry(.6, .05, 6, 20), new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: .6 })); orb.add(halo); const g = new THREE.Group(); g.add(orb); g.userData.m = orb; scene.add(g); return g; }
   if (kind === 'warrow') { const ag = new THREE.Group(); const mat = new THREE.MeshBasicMaterial({ color: '#BFF6FF' }); const sh = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 2, 6), mat); sh.rotation.x = Math.PI / 2; ag.add(sh); const tip = new THREE.Mesh(new THREE.ConeGeometry(.2, .5, 8), new THREE.MeshBasicMaterial({ color: '#FFFFFF' })); tip.rotation.x = Math.PI / 2; tip.position.z = 1.2; ag.add(tip); const tail = new THREE.Mesh(new THREE.ConeGeometry(.35, 1.4, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#7FE8FF', transparent: true, opacity: .45, side: THREE.DoubleSide, depthWrite: false })); tail.rotation.x = -Math.PI / 2; tail.position.z = -1.3; ag.add(tail); ag.position.y = 1.2; const g = new THREE.Group(); g.add(ag); g.userData.m = ag; scene.add(g); return g; }
   if (kind === 'arrow') { const ag = new THREE.Group(); const sh = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, 1.2, 5), new THREE.MeshBasicMaterial({ color: '#F2E3C8' })); sh.rotation.x = Math.PI / 2; ag.add(sh); const tip = new THREE.Mesh(new THREE.ConeGeometry(.12, .3, 6), new THREE.MeshBasicMaterial({ color: '#8FD3FF' })); tip.rotation.x = Math.PI / 2; tip.position.z = .7; ag.add(tip); ag.position.y = 1.2; m = ag; }
   else if (kind === 'spit') { m = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 1), new THREE.MeshStandardMaterial({ color: '#6B5A8A', emissive: '#3A2A55', roughness: .9 })); m.position.y = 1.1; }
@@ -846,6 +849,7 @@ function onEv(e) {
     const mine = e.t === 'p' && e.id === myId, col = mine ? '#FF8A7A' : e.big ? '#FFD45A' : '#FFFFFF';
     const o = e.t === 'm' ? MO.get(e.id) : PL.get(e.id), oy = o ? o.g.position.y : 0;
     fxText('-' + e.d, e.x + (Math.random() - .5) * .6, oy + (e.t === 'm' ? 2.4 : 3), e.z, col, e.big || e.d >= 40 ? 1.5 : 1);
+    if (e.ct) fxText('상성 +20%', e.x, oy + (e.t === 'm' ? 3 : 3.7), e.z, '#FF9CF2', .9);
     if (o) o.flash = .14;
     fxSpark(e.x, oy + 1.1, e.z, mine ? '#FF6B5A' : '#FFF4C2');
     if (mine) { hurtFlash(); shake = Math.min(.6, shake + (e.big ? .45 : .22)); if (e.kx || e.kz) { local.x += e.kx; local.z += e.kz; } }
@@ -855,6 +859,13 @@ function onEv(e) {
     if (e.s === 'punch') fxRing(p.x + Math.sin(e.a) * 1.4, p.z + Math.cos(e.a) * 1.4, '#CFF7F1', .3, 1.3, .25, 1.1);
     if (e.s === 'whirl') { fxRing(p.x, p.z, '#BFF3EC', .8, 6, .5, .6); fxRing(p.x, p.z, '#7FE0D2', .6, 5, .6, 1.4); }
     if (e.s === 'dash') fxRing(p.x, p.z, '#FFC21A', .6, 2.4, .45);
+    if (e.s === 'stun') { fxRing(p.x, p.z, '#FFE45A', .3, 1.2, .8, 3.1); fxText('💫 기절', p.x, 4, p.z, '#FFE45A', 1.1); if (e.id === myId) toast('💫 <b>기절!</b> 잠깐 움직일 수 없어요.', 1400); }
+    if (e.s === 'root') { fxRing(p.x, p.z, '#B57BFF', 1.2, .5, .9, .2); fxText('⛓ 묶임', p.x, 4, p.z, '#D9B8FF', 1.1); if (e.id === myId) toast('⛓ <b>묶였어요!</b> 1.5초 동안 못 움직여요.', 1600); }
+    if (e.s === 'blink') { fxRing(e.x, e.z, '#B57BFF', .4, 2.2, .45, 1); fxRing(e.x2, e.z2, '#E2CCFF', 2.2, .4, .45, 1); }
+    if (e.s === 'rain') { fxRing(e.x, e.z, '#9FD8FF', .5, e.r || 4, .45, .3); for (let i = 0; i < 4; i++) fxSpark(e.x + (Math.random() - .5) * (e.r || 4), .4, e.z + (Math.random() - .5) * (e.r || 4), '#DDF2FF'); }
+    if (e.s === 'storm') { for (let i = 0; i < 3; i++) setTimeout(() => fxRing(e.x, e.z, ['#B57BFF', '#FFE45A', '#FFFFFF'][i], 1, (e.r || 6) + i * .4, .5, .4 + i * .5), i * 80); fxBolt(e.x, e.z); }
+    if (e.s === 'bind') fxRing(e.x, e.z, '#B57BFF', .3, 1.8, .4, 1);
+    if (e.s === 'pulse') fxRing(e.x, e.z, '#7BD88F', .3, 1.8, .4, 1);
     if (e.s === 'heal') fxRing(p.x, p.z, '#7BD88F', 1.4, .4, .7, 1);
     if (e.s === 'shield') fxRing(p.x, p.z, '#7FF0E0', .4, 1.6, .5, 1.2);
     if (e.s === 'upg') fxRing(p.x, p.z, '#FFC21A', .4, 2.4, .8, 1.5);
@@ -906,9 +917,10 @@ function renderMe() {
     if (best) { const cd = s.tcd ? s.tcd[best.id] : 0; b.innerHTML = cd ? `⚙ ${cd}초 뒤 가능` : `⚙ ${esc(TASKN[best.type])} 하기 <kbd>E</kbd>`; b.disabled = !!cd; } }
   { const inShop = nearShopL(); if (inShop && !wasInShop && SHOP) toast('<b>바람상회</b>에 왔어요! <b>B</b> 또는 상점 버튼을 누르면 <b>10초 동안 안전</b>하게 살 수 있어요.', 2800); wasInShop = inShop; } $('#kdT').innerHTML = `${s.kills} 처치 · ${s.deaths} 쓰러짐${s.streak >= 2 ? ` · ${s.streak}연속` : ''}${s.boost > 1 ? ` · <b class="boostB" title="레벨이 평균보다 낮아서 경험치를 더 받아요">🔥 경험치 ×${s.boost}</b>` : ''}`;
   for (const b of document.querySelectorAll('.sk')) {
-    const sk = SK.find(k => k.id === b.dataset.id), lock = mp.lv < sk.lv, cd = s.cds[sk.id] || 0, full = { dash: 8, whirl: 7, cannon: 6, heal: 18, shield: 16, thunder: 10, tornado: 14 }[sk.id];
+    const sk = SK.find(k => k.id === b.dataset.id), ov = s.job && JOBS[s.job] && JOBS[s.job].sk ? JOBS[s.job].sk[sk.id] : null, lock = mp.lv < sk.lv, cd = s.cds[sk.id] || 0, full = ov ? ov.cd : { dash: 8, whirl: 7, cannon: 6, heal: 18, shield: 16, thunder: 10, tornado: 14 }[sk.id];
+    const icn = ov ? ov.ic : sk.ic, em = b.querySelector('em'); if (em.textContent !== icn) { em.textContent = icn; b.classList.toggle('jsk', !!ov); b.title = ov ? `${ov.n}: ${ov.d}` : sk.name; }
     b.classList.toggle('lock', lock); b.style.setProperty('--cd', lock ? 0 : cd / full);
-    const lab = lock ? `Lv ${sk.lv}` : cd > 0 ? Math.ceil(cd) + '초' : sk.name; const n = b.querySelector('span'); if (n.textContent !== lab) n.textContent = lab;
+    const lab = lock ? `Lv ${sk.lv}` : cd > 0 ? Math.ceil(cd) + '초' : ov ? ov.n : sk.name; const n = b.querySelector('span'); if (n.textContent !== lab) n.textContent = lab;
   }
   const tp = $('#topT');
   if (phase === 'play') { const l = leftS || 0; tp.textContent = `결승 라운드 ${Math.floor(l / 60)}:${String(l % 60).padStart(2, '0')}${zr < R - .5 ? ' · 바람의 벽이 좁혀져요!' : ''}`; tp.classList.toggle('warn', zr < R - .5); }
@@ -1053,7 +1065,7 @@ function openJob() {
   const s = meS; if (!s) return; const mp = snaps.length && snaps[snaps.length - 1].P.get(myId); const lv = mp ? mp.lv : 1;
   const can = lv >= JOB_LV || s.gm, near = Math.hypot(local.x, local.z) <= SHRINE_R + 1;
   openModal('job', `<h2>⛩ 바람의 신전 · 전직</h2><p>Lv ${JOB_LV}부터 직업을 고를 수 있어요. 처음 전직은 무료, 바꿀 때는 ${JOB_COST}코인.</p>${!can ? `<div class="shopw">아직 Lv ${lv}예요. Lv ${JOB_LV}가 되면 다시 오세요!</div>` : !near ? '<div class="shopw">섬 가운데 신전 안에서 고를 수 있어요.</div>' : ''}
-<div class="shop">${Object.entries(JOBS).map(([k, j]) => `<section style="${s.job === k ? 'border-color:#5FA8FF;background:#EEF6FF' : ''}"><h3>${j.ic} ${esc(j.n)}${s.job === k ? '<small>지금 직업</small>' : ''}</h3><p style="font-size:13px;margin:0">${esc(j.d)}</p>${s.job === k ? '' : `<div class="si" style="border:0"><span></span><b></b><button data-job="${k}" ${!can || !near ? 'disabled' : ''}>${s.job && !s.gm ? JOB_COST : '무료'}</button></div>`}</section>`).join('')}</div><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>J</kbd></button></div>`);
+<div class="shop">${Object.entries(JOBS).map(([k, j]) => `<section style="${s.job === k ? 'border-color:#5FA8FF;background:#EEF6FF' : ''}"><h3>${j.ic} ${esc(j.n)}${s.job === k ? '<small>지금 직업</small>' : ''}</h3><p style="font-size:13px;margin:0">${esc(j.d)}</p>${j.sk ? `<ul class="jsl">${['dash', 'cannon', 'thunder'].map(id => `<li><b>${j.sk[id].ic} ${esc(j.sk[id].n)}</b> <kbd>${{ dash: 1, cannon: 3, thunder: 6 }[id]}</kbd> ${esc(j.sk[id].d)}</li>`).join('')}</ul>` : ''}${j.beats || j.weak ? `<p class="jmu">${j.beats ? `💪 <b>${esc(JOBS[j.beats].n)}</b>에게 강함` : ''}${j.beats && j.weak ? ' · ' : ''}${j.weak ? `😵 <b>${esc(JOBS[j.weak].n)}</b>에게 약함` : ''}${!j.beats ? '상성 없음 · 친구를 지켜 주는 직업' : ''}</p>` : ''}${s.job === k ? '' : `<div class="si" style="border:0"><span></span><b></b><button data-job="${k}" ${!can || !near ? 'disabled' : ''}>${s.job && !s.gm ? JOB_COST : '무료'}</button></div>`}</section>`).join('')}</div><div class="acts"><button class="btn ghost" id="mX">닫기 <kbd>J</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal);
   document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', () => { send({ t: 'job', job: b.dataset.job }); closeModal(); }));
 }
@@ -1167,11 +1179,13 @@ function loop(now) {
     if (keys.cl) cam.yaw += dt * 1.9; if (keys.cr) cam.yaw -= dt * 1.9;
     let mx = fx * f + rx * s, mz = fz * f + rz * s; if (window.__arena.force) { mx = window.__arena.force.mx; mz = window.__arena.force.mz; } const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
     const alive = mp && (mp.f & 1);
-    moving = alive && ml > .05;
+    const heldL = mp && (mp.f & (1024 | 4096));
+    moving = alive && ml > .05 && !heldL;
     sendT -= dt; const key = mx.toFixed(2) + ',' + mz.toFixed(2);
     if (key !== lastSent || sendT <= 0) { send({ t: 'in', mx: +mx.toFixed(2), mz: +mz.toFixed(2) }); lastSent = key; sendT = .25; }
     const [lgx, lgz] = alive ? gustPushL(mp) : [0, 0];
-    if (moving || lgx || lgz) { const spd = !moving ? 0 : 7.6 * (1 + (Math.min(mp.lv, 15) - 1) * .04) * (mp.f & 128 ? 1.15 : 1) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1); let nx = local.x + (mx * spd + lgx) * dt, nz = local.z + (mz * spd + lgz) * dt; if (local.y < .5) [nx, nz] = collideLocal(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } } moveY(local, nx, nz, .4, dt); if (moving) local.dir = Math.atan2(mx, mz); } else if (alive) moveY(local, local.x, local.z, .4, dt);
+    if (heldL && mp.f & 4096) { local.x += (mp.x - local.x) * Math.min(1, dt * 14); local.z += (mp.z - local.z) * Math.min(1, dt * 14); }
+    else if (moving || lgx || lgz) { const spd = !moving ? 0 : 7.6 * (1 + (Math.min(mp.lv, 15) - 1) * .04) * (mp.f & 128 ? 1.15 : 1) * (1 + ((meS && meS.spdB) || 0) / 100) * (mp.f & 8 ? 1.8 : 1) * (mp.f & 64 ? 1.1 : 1) * (mp.f & 2048 ? .62 : 1); let nx = local.x + (mx * spd + lgx) * dt, nz = local.z + (mz * spd + lgz) * dt; if (local.y < .5) [nx, nz] = collideLocal(nx, nz, .45); else { const d = Math.hypot(nx, nz), lim = R - 1.2; if (d > lim) { nx *= lim / d; nz *= lim / d; } } moveY(local, nx, nz, .4, dt); if (moving) local.dir = Math.atan2(mx, mz); } else if (alive) moveY(local, local.x, local.z, .4, dt);
     // players
     for (const [id, o] of PL) {
       if (id === myId && !mp) continue;
@@ -1192,7 +1206,7 @@ function loop(now) {
       o.ring.material.color.set(e.f & (256 | 512) ? '#FFD45A' : e.f & 16 ? '#FFC21A' : tc || (id === myId ? '#3FE0C5' : '#FFFFFF')); o.ring.visible = id === myId || !!(e.f & 16) || !!tc || !!(e.f & (256 | 512));
       const nm = names.get(id) || (id === myId ? me.name : '');
       const jic = e.job && JOBS[JOBK[e.job]] ? JOBS[JOBK[e.job]].ic + ' ' : '';
-      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : e.f & 512 ? '📘 문제 푸는 중 · ' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & (256 | 512) ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
+      drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : e.f & 512 ? '📘 문제 푸는 중 · ' : ''}${e.f & 8192 ? '💫' : e.f & 1024 ? '⛓' : ''}${e.f & 2048 ? '🐌' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & (256 | 512) ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
     for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, (e.y || 0) + (o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0), e.z);
