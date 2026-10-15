@@ -503,9 +503,10 @@ function buildWorld() {
   zoneMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 40, 64, 1, true), new THREE.MeshBasicMaterial({ color: '#B44CFF', transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false }));
   zoneMesh.position.y = 18; scene.add(zoneMesh);
 }
+let FONTF_ = ''; const FONTF = () => FONTF_ || (FONTF_ = getComputedStyle(document.body).fontFamily);   // 글꼴 이름은 한 번만 읽기 (매번 읽으면 느림)
 function canvasTex(draw, w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; return t; }
 function label(text, color = '#FFFFFF') {
-  const t = canvasTex((x, w, h) => { x.font = '800 30px ' + getComputedStyle(document.body).fontFamily; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 7; x.strokeStyle = 'rgba(9,27,34,.9)'; x.strokeText(text, w / 2, h / 2); x.fillStyle = color; x.fillText(text, w / 2, h / 2); }, 320, 52);
+  const t = canvasTex((x, w, h) => { x.font = '800 30px ' + FONTF(); x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 7; x.strokeStyle = 'rgba(9,27,34,.9)'; x.strokeText(text, w / 2, h / 2); x.fillStyle = color; x.fillText(text, w / 2, h / 2); }, 320, 52);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.scale.set(4.6, .75, 1); s.renderOrder = 20; return s;
 }
 /* name+hp tag (redrawn on change) */
@@ -518,7 +519,7 @@ function makeTag() {
 function drawTag(tag, text, hp, max, color, crown) {
   const key = text + '|' + Math.round(hp / max * 40) + '|' + color + crown; if (tag.key === key) return; tag.key = key;
   const { x, c } = tag; x.clearRect(0, 0, c.width, c.height);
-  x.font = '800 26px ' + getComputedStyle(document.body).fontFamily; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '800 26px ' + FONTF(); x.textAlign = 'center'; x.textBaseline = 'middle';
   if (crown) { x.fillStyle = '#FFC21A'; x.beginPath(); x.moveTo(140, 22); x.lineTo(146, 6); x.lineTo(155, 16); x.lineTo(160, 2); x.lineTo(165, 16); x.lineTo(174, 6); x.lineTo(180, 22); x.closePath(); x.fill(); }
   x.lineWidth = 6; x.strokeStyle = 'rgba(9,27,34,.9)'; x.strokeText(text, 160, crown ? 42 : 34); x.fillStyle = color; x.fillText(text, 160, crown ? 42 : 34);
   const k = clamp(hp / max, 0, 1), y = crown ? 62 : 56;
@@ -670,21 +671,28 @@ function makeProj(kind) {
 }
 /* fx */
 const FX = [];
+let RING_G = null;
+const fxFar = (x, z, d = 32) => Math.hypot(x - local.x, z - local.z) > d || FX.length > 70;   // 멀리서 난 효과·효과가 너무 많을 땐 건너뜀(렉 줄이기)
 function fxRing(x, z, color, r0, r1, life, y = .2) {
-  const m = new THREE.Mesh(new THREE.TorusGeometry(1, .1, 6, 40), new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }));
+  if (fxFar(x, z, 40)) return;
+  const m = new THREE.Mesh(RING_G || (RING_G = new THREE.TorusGeometry(1, .1, 6, 32)), new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false })); m.userData.shared = true;
   m.rotation.x = Math.PI / 2; m.position.set(x, y, z); scene.add(m);
   FX.push({ o: m, t: 0, life, u: k => { const r = lerp(r0, r1, k); m.scale.set(r, r, 1); m.material.opacity = 1 - k; } });
 }
 function fxSpark(x, y, z, color) {
+  if (fxFar(x, z, 30)) return;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex || (sparkTex = glowTex()), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   sp.position.set(x, y, z); sp.scale.setScalar(.6); scene.add(sp); FX.push({ o: sp, t: 0, life: .22, u: k => { sp.scale.setScalar(.6 + k * 2.2); sp.material.opacity = 1 - k; } });
 }
 let sparkTex = null, shake = 0;
+const TXT_CACHE = new Map();
 function fxText(text, x, y, z, color, big = 1) {
-  const t = canvasTex((c, w, h) => { c.font = '900 40px ' + getComputedStyle(document.body).fontFamily; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 7; c.strokeStyle = 'rgba(9,27,34,.9)'; c.strokeText(text, w / 2, h / 2); c.fillStyle = color; c.fillText(text, w / 2, h / 2); }, 256, 64);
+  if (fxFar(x, z, 28)) return;
+  const ck = text + '|' + color; let t = TXT_CACHE.get(ck);
+  if (!t) { if (TXT_CACHE.size > 160) { const k0 = TXT_CACHE.keys().next().value; TXT_CACHE.get(k0).dispose(); TXT_CACHE.delete(k0); } t = canvasTex((c, w, h) => { c.font = '900 40px ' + FONTF(); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 7; c.strokeStyle = 'rgba(9,27,34,.9)'; c.strokeText(text, w / 2, h / 2); c.fillStyle = color; c.fillText(text, w / 2, h / 2); }, 256, 64); TXT_CACHE.set(ck, t); }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.renderOrder = 25; s.scale.set(2.2, .55, 1); s.position.set(x, y, z); scene.add(s);
   s.scale.set(2.2 * big, .55 * big, 1);
-  FX.push({ o: s, t: 0, life: .9, tex: t, u: k => { const pop = k < .15 ? 1 + (1 - k / .15) * .5 : 1; s.scale.set(2.2 * big * pop, .55 * big * pop, 1); s.position.y = y + k * 1.3; s.material.opacity = 1 - k * k; } });
+  FX.push({ o: s, t: 0, life: .9, u: k => { const pop = k < .15 ? 1 + (1 - k / .15) * .5 : 1; s.scale.set(2.2 * big * pop, .55 * big * pop, 1); s.position.y = y + k * 1.3; s.material.opacity = 1 - k * k; } });
 }
 function fxBolt(x, z) {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(.25, .6, 30, 6), new THREE.MeshBasicMaterial({ color: '#FFF3A0', transparent: true }));
@@ -741,7 +749,7 @@ function renderRaid() {
   } else qb.hidden = true;
 }
 function tickFx(dt) {
-  for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.u(k); if (k >= 1) { scene.remove(f.o); f.o.material && f.o.material.dispose(); f.o.geometry && f.o.geometry.dispose(); f.tex && f.tex.dispose(); FX.splice(i, 1); } }
+  for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.u(k); if (k >= 1) { scene.remove(f.o); f.o.material && f.o.material.dispose(); f.o.geometry && !(f.o.userData && f.o.userData.shared) && f.o.geometry.dispose(); f.tex && f.tex.dispose(); FX.splice(i, 1); } }
 }
 
 /* ================= entities ================= */
@@ -1191,7 +1199,7 @@ function loop(now) {
       if (id === myId && !mp) continue;
       const e = id === myId ? { ...mp, x: local.x, z: local.z, y: local.y, dir: moving ? local.dir : (o.g.rotation.y) } : interp(id, 'P'); if (!e) continue;
       const wasX = o.g.position.x, wasZ = o.g.position.z;
-      o.g.position.set(e.x, e.y || 0, e.z); o.g.visible = !!(e.f & 1);
+      o.g.position.set(e.x, e.y || 0, e.z); o.g.visible = !!(e.f & 1) && (id === myId || Math.abs(e.x - local.x) + Math.abs(e.z - local.z) < 70);   // 멀리 있는 친구는 그리지 않음
       let dr = ((e.dir - o.g.rotation.y + Math.PI * 3) % TAU) - Math.PI; o.g.rotation.y += dr * Math.min(1, dt * 12);
       const sp = Math.hypot(e.x - wasX, e.z - wasZ) / Math.max(dt, .001); o.walk = lerp(o.walk, sp > .5 ? 1 : 0, Math.min(1, dt * 10)); o.t += dt * o.walk;
       const a = Math.sin(o.t * 9) * .65 * o.walk; o.legs[0].rotation.x = a; o.legs[1].rotation.x = -a; o.armL.rotation.x = -a * .8;
@@ -1209,7 +1217,7 @@ function loop(now) {
       drawTag(o.tag, e.f & 128 ? `🛡 운영자 ${nm}` : `${e.f & 256 ? '🛒 쇼핑 중 · ' : e.f & 512 ? '📘 문제 푸는 중 · ' : ''}${e.f & 8192 ? '💫' : e.f & 1024 ? '⛓' : ''}${e.f & 2048 ? '🐌' : ''}${e.f & 32 ? '⚙ ' : ''}${jic}Lv${e.lv} · ${nm}`, e.hp, e.max, e.f & 128 ? '#FF9CF2' : e.f & (256 | 512) ? '#FFE9A8' : e.f & 16 ? '#FFD45A' : tc || (id === myId ? '#7FF0E0' : '#FFFFFF'), !!(e.f & 16));
     }
     swing -= dt;
-    for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.position.set(e.x, (e.y || 0) + (o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0), e.z);
+    for (const [id, o] of MO) { const e = interp(id, 'M'); if (!e) continue; o.g.visible = o.type === 'boss' || Math.abs(e.x - local.x) + Math.abs(e.z - local.z) < 60; if (!o.g.visible) continue; o.g.position.set(e.x, (e.y || 0) + (o.type === 'slime' ? Math.max(0, Math.sin(clockT * 5 + id)) * .4 : 0), e.z);
       if (o.parts.wl) { o.parts.wl.rotation.z = Math.sin(clockT * 40) * .6; o.parts.wr.rotation.z = -Math.sin(clockT * 40) * .6; o.body.position.y = 1.6 + Math.sin(clockT * 3 + id) * .3; }
       if (o.flash > 0 || o.wasFlash) { o.flash = (o.flash || 0) - dt; const on = o.flash > 0; if (!o.mats) { o.mats = []; o.body.traverse(c => { if (c.isMesh && c.material && c.material.emissive) o.mats.push(c.material); }); } for (const m of o.mats) m.emissive.setRGB(on ? .9 : 0, on ? .9 : 0, on ? .9 : 0); o.wasFlash = on; o.body.scale.setScalar(on ? 1 + o.flash * .8 : 1) ; if (o.type === 'boss') o.body.scale.setScalar(1.25); }
       if (o.parts.spin) o.parts.spin.rotation.z += dt * 14;

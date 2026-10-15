@@ -87,7 +87,7 @@ setInterval(() => { for (const r of Object.values(ROOMS)) for (const c of r.conn
 
 /* ======================= game constants ======================= */
 const R = 62;
-const MON_CAP = +process.env.MON_CAP || 110, MON_PER = +process.env.MON_PER || 5.6;   // 몬스터 최대 수 · 학생 1명당 몬스터 (2026-10-15 두 배)
+const MON_CAP = +process.env.MON_CAP || 55, MON_PER = +process.env.MON_PER || 2.8;   // 몬스터 최대 수 · 학생 1명당 몬스터 (2026-10-15 렉 때문에 다시 절반으로)
 const VIEW_R = 40;   // 학생 화면에는 40m 안 몬스터만 자세히 보냄(통신량·태블릿 부담 줄이기), 먼 몬스터는 미니맵 점만                          // island radius
 const TICK = 1 / 20;
 const MAXLV = 15;
@@ -952,7 +952,7 @@ function step(dt) {
   { const lp = live(); lvAvg = lp.length ? lp.reduce((a, q) => a + q.lv, 0) / lp.length : 1; }
   const cap = Math.min(MON_CAP, 8 + Math.ceil(alive.length * MON_PER));   // 접속 인원에 따라 늘어남
   if (monT <= 0 && alive.length && mons.size < cap) {
-    monT = .35;
+    monT = .6;
     const studs = alive.filter(p => !p.gm), anchor = studs.length ? studs[Math.floor(Math.random() * studs.length)] : null;   // 한 학생 근처에, 그 학생 레벨에 맞는 몬스터
     const avgLv = anchor ? anchor.lv : alive.reduce((s, p) => s + p.lv, 0) / Math.max(1, alive.length);
     const pool = Object.entries(MON).filter(([, d]) => d.lv <= Math.max(2, avgLv + 2));
