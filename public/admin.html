@@ -73,7 +73,8 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
       <p class="muted" id="bossHelp">1부: 접속자 절반 이상이 Lv 10이 되면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원. 지금 바로 부르려면 위 버튼.</p>
       <div id="questBox" hidden>
         <div class="addr" id="qTxt" style="font-size:20px;color:#FFD45A"></div>
-        <div class="rowx" style="margin-top:8px"><button class="btn g" id="qNext">다음 단계로 넘기기</button><button class="btn g" id="qReset">퀘스트 처음부터</button></div>
+        <div class="rowx" style="margin-top:8px"><button class="btn g" id="sqGo">⏳ 모으는 중인 팀 바로 출발</button><button class="btn g" id="qNext">모든 팀 다음 미션으로</button><button class="btn g" id="qReset">팀 미션 처음부터</button></div>
+        <p class="muted">2부는 학생이 <b>들어온 순서대로 3~4명</b>이 한 팀이 돼요. 3명이 모이면 팀 미션 시작(4번째는 진행 중 합류). 2명만 2분 넘게 기다리면 자동으로 먼저 출발해요. 수업 끝 무렵 남은 친구들은 [바로 출발] 또는 아래 [들어온 순서대로 다시 나누기]로 정리하세요.</p>
       </div>
     </div>
     <div class="panel">
@@ -114,8 +115,8 @@ function go() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
-    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) $('#bossHelp').textContent = '2부: 협동 퀘스트 ③단계가 되면 자동으로 나타나요. 체력 = 5000 + 9000×접속 인원.'; R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; $('#locked').checked = !!m.locked; if (m.kicked != null) $('#kickMsg').textContent = `${m.kicked}명을 내보내고 입장을 잠갔어요.`; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
-    if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
+    if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) { $('#bossHelp').textContent = '2부: 미션 중인 팀의 절반 이상이 팀 CLEAR하면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원.'; $('#shuffle').textContent = '들어온 순서대로 다시 나누기'; } R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; $('#locked').checked = !!m.locked; if (m.kicked != null) $('#kickMsg').textContent = `${m.kicked}명을 내보내고 입장을 잠갔어요.`; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
+    if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.tdefs) TEAMS = m.tdefs; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
     if (m.t === 's') { last = m; renderBQ(m); const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
     if (m.t === 'code') { $('#code').textContent = m.code; return; }
   };
@@ -127,12 +128,13 @@ const cmd = o => ws && ws.send(JSON.stringify({ t: 'cmd', ...o }));
 const QN = ['', '① 발전기 수리 (과제)', '② 매연 정화 (몬스터)', '③ 태풍 마수 토벌 (보스)', '🎉 옥정섬 완전 복구!'];
 function renderBQ(m) {
   $('#bossBox').innerHTML = m.bs ? `<b style="color:#FF8A7A;font-size:22px">🌪 돌개 체력 ${m.bs[1].toLocaleString()} / ${m.bs[2].toLocaleString()}${m.bs[3] ? ' · 분노!' : ''}</b>` : '보스 없음';
-  $('#questBox').hidden = !m.q; if (m.q) $('#qTxt').textContent = `협동 퀘스트 ${QN[m.q[0]]}${m.q[0] <= 2 ? ` · ${m.q[1]} / ${m.q[2]}` : ''}`;
+  $('#questBox').hidden = !ROOM2; if (ROOM2) { const on = teams.filter(t => t.n), cl = on.filter(t => t.st >= 5).length, wait = on.filter(t => !t.st).length; $('#qTxt').textContent = `팀 ${on.length}개 · 🏆 CLEAR ${cl} · 미션 중 ${on.length - cl - wait} · ⏳ 모으는 중 ${wait}`; }
 }
 $('#chestGo').addEventListener('click', () => cmd({ c: 'chest' }));
 $('#bossGo').addEventListener('click', () => { if (confirm('레이드 보스 태풍 마수 돌개를 지금 소환할까요?')) cmd({ c: 'boss' }); });
-$('#qNext').addEventListener('click', () => { if (confirm('협동 퀘스트를 다음 단계로 넘길까요? (모두 보상을 받아요)')) cmd({ c: 'qnext' }); });
-$('#qReset').addEventListener('click', () => { if (confirm('협동 퀘스트를 1단계부터 다시 시작할까요?')) cmd({ c: 'qreset' }); });
+$('#qNext').addEventListener('click', () => { if (confirm('미션 중인 모든 팀을 다음 미션으로 넘길까요? (팀원 모두 보상을 받아요)')) cmd({ c: 'qnext' }); });
+$('#qReset').addEventListener('click', () => { if (confirm('모든 팀의 팀 미션을 1단계부터 다시 시작할까요?')) cmd({ c: 'qreset' }); });
+$('#sqGo').addEventListener('click', () => { if (confirm('팀원을 모으는 중인 팀(3명 미만)을 지금 바로 출발시킬까요?')) cmd({ c: 'sqgo' }); });
 $('#start').addEventListener('click', () => { if (confirm('모두 Lv 1로 다시 시작해요. 결승 라운드를 시작할까요?')) cmd({ c: 'start', min: +$('#min').value }); });
 $('#stop').addEventListener('click', () => cmd({ c: 'stop' }));
 $('#free').addEventListener('click', () => cmd({ c: 'free' }));
@@ -141,11 +143,11 @@ $('#gate').addEventListener('change', e => cmd({ c: 'gate', on: e.target.checked
 $('#locked').addEventListener('change', e => { cmd({ c: 'lock', on: e.target.checked }); $('#kickMsg').textContent = e.target.checked ? '입장을 잠갔어요.' : '입장을 다시 열었어요.'; });
 $('#kickAll').addEventListener('click', () => { if (confirm('선생님을 뺀 모든 학생을 내보내고 입장을 잠글까요?')) cmd({ c: 'kickall', lock: true }); });
 $('#teamsOn').addEventListener('change', e => cmd({ c: 'teams', on: e.target.checked }));
-$('#shuffle').addEventListener('click', () => { if (confirm('팀을 무작위로 다시 나눌까요? 팀 게이지와 팀 기록이 0이 돼요.')) cmd({ c: 'shuffle' }); });
+$('#shuffle').addEventListener('click', () => { if (confirm(ROOM2 ? '지금 있는 학생을 들어온 순서대로 3~4명씩 다시 나눌까요? 팀 미션이 처음부터 시작돼요.' : '팀을 무작위로 다시 나눌까요? 팀 게이지와 팀 기록이 0이 돼요.')) cmd({ c: 'shuffle' }); });
 $('#cgo').addEventListener('click', () => cmd({ c: 'code', name: $('#cname').value }));
 function render() {
   $('#teams').hidden = !teamsOn || !TEAMS.length;
-  $('#teams').innerHTML = TEAMS.map((T, i) => { const t = teams[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점 <small>${t.n}명 · 팀 레벨 업 ${t.lvups}번${t.bless ? ` · 🌪 축복 ${t.bless}초` : ''}<br>과제 ${t.tasks} · 처치 ${t.kills}</small><i><b style="width:${Math.min(100, t.pts / t.goal * 100)}%"></b></i><small>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('');
+  $('#teams').innerHTML = TEAMS.map((T, i) => { const t = teams[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; if (t.st != null) return t.n ? `<div style="background:${T.c}">${esc(T.n)} 팀 · ${t.st >= 5 ? '🏆 CLEAR ' + (t.clear || '') + '등' : t.st ? '미션 ' + t.st + '/4' : '⏳ 모으는 중'}<small>${(t.mem || []).map(esc).join(' · ')}</small><i><b style="width:${t.st >= 5 ? 100 : Math.min(100, ((Math.max(0, t.st - 1)) + (t.st === 2 || t.st === 4 ? 0 : t.pr / t.gl)) / 4 * 100)}%"></b></i><small>${t.st === 0 ? '팀원 기다리는 중' : t.st >= 5 ? '과제 ' + t.tasks + ' · 처치 ' + t.kills : t.st === 2 || t.st === 4 ? '발전기 문제 도전 중' : t.pr + ' / ' + t.gl}</small></div>` : ''; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점 <small>${t.n}명 · 팀 레벨 업 ${t.lvups}번${t.bless ? ` · 🌪 축복 ${t.bless}초` : ''}<br>과제 ${t.tasks} · 처치 ${t.kills}</small><i><b style="width:${Math.min(100, t.pts / t.goal * 100)}%"></b></i><small>게이지 ${t.pts}/${t.goal}</small></div>`; }).join('');
   $('#tb').innerHTML = lb.map((r, i) => `<tr class="${r[0] === king ? 'k' : ''}"><td class="m">${r[12] ? '🛡' : r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="dot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[10] || 0}</td><td style="font-size:14px">${GEAR[r[7]]} · ${ARM[r[8]]}</td><td><button class="kick" data-id="${r[0]}">퇴장</button></td></tr>`).join('') || '<tr><td colspan="9" style="color:#8FB3B0">아직 아무도 없어요</td></tr>';
   document.querySelectorAll('.kick').forEach(b => b.addEventListener('click', () => { if (confirm('이 학생을 퇴장시킬까요?')) cmd({ c: 'kick', id: +b.dataset.id }); }));
 }

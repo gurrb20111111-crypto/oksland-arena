@@ -293,7 +293,8 @@ const SALT = COOP ? ARENA_SALT + '-2' : ARENA_SALT;
 const OBS = COOP ? OBS_ALL : OBS_BATTLE;
 const SHOPX = COOP ? SHOP : SHOP_BATTLE;
 const STN = COOP ? STATIONS : [];
-const teamSt = TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
+const squads = [];   // 2부: 들어온 순서대로 3~4명 팀 (p.team = 팀 번호)
+const teamSt = COOP ? squads : TEAMS.map(() => ({ pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }));
 let teamsOn = COOP;
 const blessed = p => teamsOn && !!teamSt[p.team] && teamSt[p.team].buffUntil > Date.now();
 function collide(x, z, rad) {
@@ -346,7 +347,7 @@ const stat = p => ({
 });
 function newPlayer(c, name) {
   const [x, z] = freeSpot(10);
-  const p = { id: nextId++, c, name, x, z, y: 0, vy: 0, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, team: pickTeam(), tcd: {}, task: null, tasks: 0, parts: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
+  const p = { id: nextId++, c, name, x, z, y: 0, vy: 0, dir: 0, mx: 0, mz: 0, lv: 1, xp: 0, coins: 0, wpn: 0, arm: 0, boot: 0, helm: 0, pot: 1, potAt: 0, team: COOP ? -1 : pickTeam(), tcd: {}, task: null, tasks: 0, parts: 0, hp: 100, kills: 0, deaths: 0, streak: 0, best: 0,
     alive: true, respawnAt: 0, prot: Date.now() + 3000, cds: {}, dashT: 0, shieldT: 0, lastHurt: 0, dmgBy: new Map(), joined: Date.now(), lastIn: Date.now() };
   p.hp = stat(p).maxHp;
   return p;
@@ -356,13 +357,14 @@ const GM_LV = 100;
 function bye(p, s) {   // 내보내기: 학생 화면은 다시 연결하지 않고 입장 화면으로 돌아감
   if (chest && chest.opener === p.id) chest.opener = null;
   if (p.task) cancelTask(p);
+  sqLeave(p);
   const c = p.c; p.c = null; players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name });
   if (c) { c.pid = null; c.send({ t: 'bye', s }); setTimeout(() => { try { c.close(); } catch (e) { /* already closed */ } }, 300); }
 }
-function applyGM(p) { p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
+function applyGM(p) { if (COOP) sqLeave(p); p.gm = true; p.lv = GM_LV; p.xp = 0; p.team = -1; p.wpn = 4; p.arm = 4; p.boot = 3; p.helm = 3; p.pot = 3; p.coins = 9999; p.parts = 99; p.hp = stat(p).maxHp; }
 const live = () => [...players.values()].filter(p => online(p) && !p.gm);
 function resetPlayer(p) {
-  p.lv = 1; p.xp = 0; p.shopUntil = 0; p.shopCdUntil = 0; p.catchUp = 0; p.gustCd = 0; p.gq = null; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0;
+  p.lv = 1; p.xp = 0; p.shopUntil = 0; p.shopCdUntil = 0; p.catchUp = 0; p.gustCd = 0; p.gq = null; p.coins = 0; p.wpn = 0; p.arm = 0; p.boot = 0; p.helm = 0; p.pot = 1; p.potAt = 0; p.tcd = {}; p.task = null; p.tasks = 0; p.parts = 0; p.kills = 0; p.deaths = 0; p.streak = 0; p.best = 0; p.cds = {}; p.dashT = 0; p.shieldT = 0; p.solo = null;
   const [x, z] = freeSpot(10); p.x = x; p.z = z; p.y = 0; p.vy = 0; p.alive = true; p.prot = Date.now() + 3000; p.hp = stat(p).maxHp; p.dmgBy.clear();
   if (p.gm) applyGM(p);
 }
@@ -373,12 +375,14 @@ function pickTeam() { let best = 0, bn = 1e9; const order = [0, 1, 2, 3].sort(()
 const teamGoal = ti => 4 + 3 * Math.max(1, teamCount(ti));
 const sameTeam = (a, b) => a && b && a !== b && (COOP || (teamsOn && a.team === b.team));
 function shuffleTeams() {
+  if (COOP) return sqRebuild();
   const list = live().sort(() => Math.random() - .5);
   list.forEach((p, i) => { p.team = i % 4; });
   for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
 }
 const shuf = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function startTask(p) {
+  if (inMq(p)) return;
   if (p.shopUntil || p.gq != null) return tell(p, '상점이나 돌풍 발전기 문제를 푸는 중에는 할 수 없어요.');
   if (!COOP || !p.alive || p.task) return;
   const now = Date.now();
@@ -403,8 +407,9 @@ const DIRK = ['남', '남동', '동', '북동', '북', '북서', '서', '남서'
 const dirName = a => DIRK[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 function gustStart(p) {
   const now = Date.now();
-  if (!p.alive || p.shopUntil || p.gq != null) return;
+  if (!p.alive || p.shopUntil || p.gq != null || inMq(p)) return;
   const t = gst.find(g => Math.hypot(g.x - p.x, g.z - p.z) <= GUST.r && (p.y || 0) < 1); if (!t) return tell(p, '돌풍 발전기(섬의 풍력발전기) 가까이 가야 해요.');
+  { const s = sqOf(p); if (s && (s.stage === 2 || s.stage === 4)) return sqTurbine(p, t); }
   if (t.active) return tell(p, `이 발전기는 지금 돌고 있어요. ${Math.ceil((t.active.until - now) / 1000)}초 뒤에 다시 쓸 수 있어요.`);
   const sv = t.solver && players.get(t.solver); if (sv && sv.alive && online(sv)) return tell(p, `<b>${sv.name}</b>이(가) 이 발전기 문제를 풀고 있어요. 다른 발전기를 찾아보세요!`);
   if (now < (p.gustCd || 0)) return tell(p, `돌풍 발전기는 <b>${Math.ceil((p.gustCd - now) / 1000)}초</b> 뒤에 다시 돌릴 수 있어요. (친구들과 돌아가며!)`);
@@ -420,7 +425,7 @@ function gustAnswer(p, a) {
   const t = p.gq != null && gst[p.gq]; if (!t || t.solver !== p.id || !t.qUntil) return;
   const now = Date.now();
   if (+a === t.qAns) {
-    const xp = Math.round(xpNeed(p.lv) * .35); gainXpB(p, xp); addCoins(p, 10);
+    const xp = Math.round(xpNeed(p.lv) * .35); gainXpB(p, xp); addCoins(p, 10); soloHit(p, 'gq');
     t.qUntil = 0; t.pickUntil = now + GUST.pick; p.prot = t.pickUntil;
     if (p.c) p.c.send({ t: 'gq', s: 'ok', xp: Math.round(xp * xpBoost(p)), secs: GUST.pick / 1000, def: +p.dir.toFixed(2) });
     ev({ k: 'fx', s: 'gqok', id: p.id, x: +p.x.toFixed(1), z: +p.z.toFixed(1) });
@@ -477,6 +482,7 @@ function dropChest(why) {
   broadcast({ t: 'chest', s: 'drop', x: chest.x, z: chest.z, y, high: y > 0, why });
 }
 function startOpen(p) {
+  if (inMq(p)) return;
   if (p.shopUntil || p.gq != null) return tell(p, '상점이나 돌풍 발전기 문제를 푸는 중에는 할 수 없어요.');
   const now = Date.now();
   if (!chest || now < chest.landAt || !p.alive) return;
@@ -517,17 +523,17 @@ function answerTask(p, a) {
   else ok = +a === tk.ans;
   p.task = null;
   if (!ok) { p.tcd[t.id] = now + TASK_WRONG_CD; p.c && p.c.send({ t: 'tres', ok: false, s: '앗, 틀렸어요! 8초 뒤에 다시 도전하거나 다른 기계로 가세요.' }); return; }
-  p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1; questTask();
+  p.tcd[t.id] = now + TASK_CD; p.tasks++; p.parts = (p.parts || 0) + 1; soloHit(p, 'task'); sqTask(p);
   const xp = Math.round(xpNeed(p.lv) * .4); gainXpB(p, xp); addCoins(p, 12);
   { const st = stat(p); p.hp = Math.min(st.maxHp, p.hp + st.maxHp * .25); }
   let tl = null;
-  if (teamsOn) {
+  if (teamsOn && !COOP) {
     const ts = teamSt[p.team] || { pts: 0, tasks: 0 }; ts.pts++; ts.tasks++;
     if (teamSt[p.team] && ts.pts >= teamGoal(p.team)) { ts.pts = 0; ts.lvups++; tl = p.team; ts.buffUntil = now + BLESS_MS;
       for (const q of players.values()) if (online(q) && q.team === p.team && q.lv < MAXLV) gainXp(q, xpNeed(q.lv) - q.xp);
       broadcast({ t: 'tlv', team: p.team, by: p.name, n: ts.lvups }); }
   }
-  p.c && p.c.send({ t: 'tres', ok: true, xp, coins: 12, s: `과제 성공! 부품 ⚙+1 · 경험치 +${xp} · 코인 +12 · 체력 회복${teamsOn ? ' · 팀 게이지 +1' : ''}` });
+  p.c && p.c.send({ t: 'tres', ok: true, xp, coins: 12, s: `과제 성공! 부품 ⚙+1 · 경험치 +${xp} · 코인 +12 · 체력 회복${COOP ? (sqOf(p) && sqOf(p).stage === 1 ? ' · 팀 미션 +1' : '') : teamsOn ? ' · 팀 게이지 +1' : ''}` });
   ev({ k: 'task', id: p.id, sid: t.id, team: p.team, tl });
 }
 
@@ -624,7 +630,7 @@ function hurtMon(m, dmg, p, kb = 1, fx, fz) {
   if (m.hp <= 0) {
     m.dead = true; mons.delete(m.id);
     const def = MON[m.type];
-    if (COOP) questKill();
+    if (COOP) { sqKill(p); soloHit(p, 'kill'); }
     const rw = m.rw || 1; gainXpB(p, Math.round(def.xp * rw)); addCoins(p, Math.round((def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1))) * rw));
     const r = Math.random(), gearP = { snail: .06, slime: .1, bee: .14, boar: .28, golem: .6, weasel: .1, flower: .14, crab: .25, bat: .05, turtle: .45, wolf: .18 }[m.type] || .1;
     if (r < gearP) { const tier = Math.min(4, 1 + Math.floor(Math.random() * ({ snail: 1, slime: 1.6, bee: 2, boar: 3, golem: 4, weasel: 1.6, flower: 2, crab: 3, bat: 1, turtle: 3.6 }[m.type] || 1))); const sl = ['wpn', 'arm', 'wpn', 'arm', 'boot', 'helm'][Math.floor(Math.random() * 6)]; dropPick(sl, sl === 'boot' || sl === 'helm' ? Math.min(3, tier) : tier, m.x, m.z); }
@@ -767,7 +773,7 @@ const tell = (p, s) => p.c && p.c.send({ t: 'msg', s });
 const SHOP_SAFE = 10000, SHOP_CD = 10000;
 function enterShop(p) {
   const now = Date.now();
-  if (!p.alive || p.shopUntil || p.gq != null) return;
+  if (!p.alive || p.shopUntil || p.gq != null || inMq(p)) return;
   if (!nearShop(p)) return tell(p, '동·서·남·북에 있는 <b>바람상회</b>(미니맵 노란 네모) 노란 원 안에서 상점에 들어갈 수 있어요.');
   if (now < (p.shopCdUntil || 0)) { const left = Math.ceil((p.shopCdUntil - now) / 1000); if (p.c) p.c.send({ t: 'shop', s: 'cd', left }); return tell(p, `상점은 <b>${left}초</b> 뒤에 다시 들어갈 수 있어요.`); }
   if (p.task) cancelTask(p);
@@ -861,7 +867,6 @@ function bossDie(m, killer) {
   broadcast({ t: 'boss', s: 'die', by: killer.name, n: list.length, top: list.slice(0, 3).map(([p, d]) => [p.name, Math.round(d / tot * 100)]) });
   ev({ k: 'fx', s: 'bossdie', x: +m.x.toFixed(1), z: +m.z.toFixed(1) });
   boss = null; bossCd = now + 240000;
-  if (COOP && quest.stage === 3) questAdvance();
 }
 function bossAI(m, dt, alive, now) {
   const enr = m.hp < m.max * .3; if (enr && !m.enr) { m.enr = true; broadcast({ t: 'boss', s: 'enrage' }); }
@@ -887,19 +892,238 @@ function tickBossStrikes(now, alive) {
     for (const p of alive) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d > s.r || now < p.prot || (s.ground && (p.y || 0) > 1.2)) continue; if (s.kb && d > .1) { const [kx, kz] = collide(p.x + (p.x - s.x) / d * s.kb, p.z + (p.z - s.z) / d * s.kb, .45); if (!blockedAt(kx, kz, p.y || 0, .4)) { p.x = kx; p.z = kz; } } hurtPlayer(p, s.dmg, src); }
   }
 }
-/* ======================= 2부 협동 퀘스트 (다같이) ======================= */
-const QSTAGES = [null, { n: '발전기 수리', d: '과제 기계에서 과제를 다 함께 해내세요' }, { n: '매연 정화', d: '섬의 매연 몬스터를 다 함께 정화하세요' }, { n: '태풍 마수 토벌', d: '태풍 마수 돌개를 모두 힘을 합쳐 쓰러뜨리세요!' }, { n: '옥정섬 완전 복구!', d: '축하해요! 자유롭게 사냥하고 장비를 모으세요' }];
-const quest = { stage: 1, prog: 0, goal: 10 };
-function questGoal() { const n = Math.max(1, live().length); return quest.stage === 1 ? Math.max(8, n * 2) : quest.stage === 2 ? Math.max(15, n * 4) : 1; }
-function questReset() { quest.stage = 1; quest.prog = 0; }
-function questAdvance() {
-  for (const p of players.values()) if (online(p)) { if (p.lv < MAXLV) gainXp(p, xpNeed(p.lv) - p.xp); addCoins(p, 40); p.parts = (p.parts || 0) + 1; }
-  const done = QSTAGES[quest.stage].n; quest.stage = Math.min(4, quest.stage + 1); quest.prog = 0;
-  broadcast({ t: 'quest', s: 'next', done, stage: quest.stage, name: QSTAGES[quest.stage].n, desc: QSTAGES[quest.stage].d });
-  if (quest.stage === 3) setTimeout(() => spawnBoss('quest'), 4000);
+/* ======================= 2부 팀 미션: 들어온 순서대로 3~4명이 한 팀 (2026-10-18) =======================
+   팀원이 3명 모이면 팀 미션 시작(4번째는 진행 중에 합류). 모이기 전에는 '혼자 훈련'.
+   미션: ① 분담 수리 → ② 릴레이 풍력 퀴즈 → ③ 함께 매연 정화 → ④ 동시 가동 → 🏆 팀 CLEAR
+   절반 이상의 팀이 CLEAR하면 태풍 마수 돌개(연합 레이드)가 나타남. */
+const SQ_MIN = 3, SQ_MAX = 4, SQ_WAIT = +process.env.SQ_WAIT || 120000, SQ_NEAR = 9, SQ_KILL_R = 15;
+const SQN = ['바람', '태양', '바다', '번개', '구름', '파도', '별빛', '무지개', '소나무', '등대', '반딧불', '돌고래'];
+const SQC = ['#3FB6FF', '#FFA51F', '#22CFA0', '#B57BFF', '#FF6B8A', '#4FD1E8', '#FFD23F', '#8BD450', '#FF8C42', '#7C9CFF', '#E879F9', '#2DD4BF'];
+const SQM = [
+  { n: '팀원 모으는 중', ic: '⏳', d: '친구가 들어오는 순서대로 팀이 돼요. 그동안 혼자 훈련!' },
+  { n: '분담 수리', ic: '🔧', d: '과제 기계에서 과제를 함께 해내요. 팀원 모두 1개 이상!' },
+  { n: '릴레이 풍력 퀴즈', ic: '📘', d: '팀 모두 한 풍력발전기(청록 원)에 모여 E → 한 명씩 돌아가며 5문제, 4개 이상 정답' },
+  { n: '함께 매연 정화', ic: '🌫', d: '팀원 곁(15m 안)에서 매연 몬스터를 정화해요. 혼자 잡으면 인정 안 돼요!' },
+  { n: '동시 가동', ic: '⚡', d: '팀 모두 한 풍력발전기에 모여 E → 각자 다른 문제를 동시에! 모두 맞히면 성공' },
+  { n: '팀 CLEAR!', ic: '🏆', d: '다른 팀을 도와주고, 태풍 마수가 나타나면 함께 토벌해요' }
+];
+const RELAY_N = 5, RELAY_OK = 4, MQ_SECS = 20, MQ_CD = 15000;
+const sqOf = p => COOP && p && p.team >= 0 ? squads[p.team] || null : null;
+const sqMem = s => s.members.map(id => players.get(id)).filter(Boolean);
+const sqOn = s => sqMem(s).filter(q => online(q) && !q.gm);
+const sqSize = s => Math.max(1, sqOn(s).length);
+function sqGoal(s) { const n = Math.max(2, sqSize(s)); return s.stage === 1 ? n * 2 : s.stage === 2 ? RELAY_N : s.stage === 3 ? n * 5 : s.stage === 4 ? sqSize(s) : 1; }
+const sqScore = s => s.stage >= 5 ? 500 + Math.max(0, 300 - Math.floor((s.clearAt - s.startAt) / 10000)) : Math.max(0, s.stage - 1) * 100 + Math.round(Math.min(1, s.prog / sqGoal(s)) * 99);
+const inMq = p => { const s = sqOf(p); return !!(s && s.mq && s.mq.order.includes(p.id)); };
+const sqDefs = () => squads.map(s => ({ n: s.n, c: s.c }));
+function sqTell(s, obj) { for (const q of sqOn(s)) q.c.send(obj); }
+function sqMsg(s, html) { sqTell(s, { t: 'msg', s: html, ms: 6000 }); }
+const tellL = (p, s) => p.c && p.c.send({ t: 'msg', s, ms: 6500 });
+function sqNew() {
+  const i = squads.length;
+  const s = { id: i, n: SQN[i % SQN.length] + (i >= SQN.length ? String(Math.floor(i / SQN.length) + 1) : ''), c: SQC[i % SQC.length], members: [], stage: 0, prog: 0, contrib: {}, at: Date.now(), lastJoin: Date.now(), startAt: 0, clearAt: 0, pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0, mq: null, mqCd: 0, pingAt: 0, usedQ: new Set(), warned: 0 };
+  squads.push(s); return s;
 }
-function questTask() { if (COOP && quest.stage === 1) { quest.prog++; if (quest.prog >= questGoal()) questAdvance(); } }
-function questKill() { if (quest.stage === 2) { quest.prog++; if (quest.prog >= questGoal()) questAdvance(); } }
+function sqJoin(p, quiet) {
+  if (!COOP || p.gm) return;
+  // 들어온 순서대로: ① 모으는 중인 팀 → ② 미션 중인데 자리가 빈 팀 → ③ 새 팀
+  let s = squads.find(s => s.stage === 0 && s.members.length < SQ_MAX)
+    || squads.find(s => s.stage > 0 && s.stage < 5 && s.members.length > 0 && s.members.length < SQ_MAX)
+    || sqNew();
+  s.members.push(p.id); p.team = s.id; s.lastJoin = Date.now();
+  if (quiet) return s;
+  const n = sqOn(s).length;
+  if (s.stage === 0 && n >= SQ_MIN) sqStart(s);
+  else if (s.stage === 0) {
+    for (const q of sqOn(s)) if (q !== p) tellL(q, `👋 <b>${p.name}</b>이(가) 우리 <b>${s.n} 팀</b>에 들어왔어요! (${n}/${SQ_MIN}명)`);
+    setTimeout(() => tellL(p, `⏳ <b>${s.n} 팀</b>에 들어왔어요 (${n}/${SQ_MIN}명). 친구 <b>${SQ_MIN - n}명</b>이 더 들어오면 <b>팀 미션</b>이 시작돼요.<br>그동안 화면 위 <b>혼자 훈련</b>을 해 보세요!`), 600);
+  } else {
+    sqMsg(s, `🤝 <b>${p.name}</b>이(가) 우리 <b>${s.n} 팀</b>에 합류했어요! (${n}명)`);
+    setTimeout(() => tellL(p, `🤝 <b>${s.n} 팀</b>에 합류했어요! 지금 팀 미션: <b>${SQM[s.stage].ic} ${SQM[s.stage].n}</b> — ${SQM[s.stage].d}`), 600);
+  }
+  return s;
+}
+function sqLeave(p) {
+  const s = sqOf(p); if (!s) return;
+  s.members = s.members.filter(id => id !== p.id);
+  if (s.mq) s.mq.order = s.mq.order.filter(id => id !== p.id);
+}
+function sqStart(s, why) {
+  s.stage = 1; s.prog = 0; s.contrib = {}; s.mq = null; s.mqCd = 0; if (!s.startAt) s.startAt = Date.now();
+  const names = sqOn(s).map(q => q.name).join(' · ');
+  sqTell(s, { t: 'sq', s: 'start', n: s.n, c: s.c, names, why: why || '', mn: SQM[1].ic + ' ' + SQM[1].n, md: SQM[1].d });
+}
+function sqReward(s, coins, parts) {
+  for (const q of sqOn(s)) { if (q.lv < MAXLV) gainXp(q, xpNeed(q.lv) - q.xp); addCoins(q, coins); q.parts = (q.parts || 0) + parts; }
+}
+function sqAdvance(s) {
+  const now = Date.now(), done = SQM[s.stage].ic + ' ' + SQM[s.stage].n;
+  for (const q of sqMem(s)) if (s.mq && s.mq.order.includes(q.id)) q.prot = now + 1500;
+  s.mq = null; s.mqCd = 0; s.lvups++;
+  sqReward(s, 40, 1);
+  s.stage = Math.min(5, s.stage + 1); s.prog = 0; s.contrib = {};
+  if (s.stage >= 5) {
+    s.clearAt = now; s.buffUntil = now + BLESS_MS; sqReward(s, 60, 2);
+    const rank = squads.filter(x => x.clearAt).length;
+    broadcast({ t: 'sq', s: 'clear', team: s.id, n: s.n, c: s.c, rank, names: sqOn(s).map(q => q.name).join(' · ') });
+    return;
+  }
+  sqTell(s, { t: 'sq', s: 'next', done, stage: s.stage, mn: SQM[s.stage].ic + ' ' + SQM[s.stage].n, md: SQM[s.stage].d });
+}
+function sqCheck(s) {   // 진행 조건 확인 (과제 수·인원 변화 때)
+  if (s.stage === 1) {
+    if (s.prog < sqGoal(s)) return;
+    const miss = sqOn(s).filter(q => !s.contrib[q.id]);
+    if (!miss.length) return sqAdvance(s);
+    const now = Date.now(); if (now - s.warned > 8000) { s.warned = now; sqMsg(s, `🔧 과제 수는 채웠어요! 아직 과제를 안 한 친구: <b>${miss.map(q => q.name).join(', ')}</b> — 한 개씩만 하면 성공!`); }
+  } else if (s.stage === 3 && s.prog >= sqGoal(s)) sqAdvance(s);
+}
+function sqTask(p) { const s = sqOf(p); if (!s) return; s.tasks++; if (s.stage !== 1) return; s.prog++; s.contrib[p.id] = (s.contrib[p.id] || 0) + 1; sqCheck(s); }
+function sqKill(p) {
+  const s = sqOf(p); if (!s) return; s.kills++; if (s.stage !== 3) return;
+  const on = sqOn(s);
+  if (on.length > 1 && !on.some(q => q !== p && q.alive && Math.hypot(q.x - p.x, q.z - p.z) <= SQ_KILL_R)) {
+    const now = Date.now(); if (now - (p.sqHint || 0) > 10000) { p.sqHint = now; tellL(p, `🌫 혼자 잡은 몬스터는 인정이 안 돼요. <b>팀원 곁(15m 안)</b>으로 가서 함께 정화해요!`); }
+    return;
+  }
+  s.prog++; sqCheck(s);
+}
+function pickQ(s, n) {
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    let free = GQ.map((_, i) => i).filter(i => !s.usedQ.has(i)); if (!free.length) { s.usedQ.clear(); free = GQ.map((_, i) => i); }
+    const qi = free[Math.floor(Math.random() * free.length)]; s.usedQ.add(qi);
+    const it = GQ[qi], o = shuf(it.slice(1)); out.push({ q: it[0], o, a: o.indexOf(it[1]), right: it[1] });
+  }
+  return out;
+}
+function sqTurbine(p, t) {   // 미션 ②·④: 팀 모두 한 발전기에 모이면 시작
+  const s = sqOf(p), now = Date.now();
+  if (s.mq) return tellL(p, '팀 문제를 푸는 중이에요.');
+  if (now < s.mqCd) return tellL(p, `⏳ <b>${Math.ceil((s.mqCd - now) / 1000)}초</b> 뒤에 팀이 다시 도전할 수 있어요.`);
+  const on = sqOn(s), here = on.filter(q => q.alive && Math.hypot(q.x - t.x, q.z - t.z) <= SQ_NEAR && (q.y || 0) < 1.5), away = on.filter(q => !here.includes(q));
+  if (away.length) {
+    if (now - s.pingAt > 4000) { s.pingAt = now; sqTell(s, { t: 'sq', s: 'ping', x: t.x, z: t.z, by: p.name, here: here.length, of: on.length, away: away.map(q => q.name) }); }
+    else tellL(p, `팀원이 모두 모여야 시작해요 (${here.length}/${on.length}명). 아직: <b>${away.map(q => q.name).join(', ')}</b>`);
+    return;
+  }
+  for (const q of here) { if (q.task) cancelTask(q); if (q.shopUntil) exitShop(q, 'close'); if (q.gq != null) { const g = gst[q.gq]; if (g) gustRelease(g, q, 0); if (q.c) q.c.send({ t: 'gq', s: 'cancel' }); } if (chest && chest.opener === q.id) chest.opener = null; q.prot = now + 3000; q.mx = q.mz = 0; }
+  const order = here.map(q => q.id);
+  if (s.stage === 2) { s.mq = { kind: 'relay', tid: t.id, order, qs: pickQ(s, RELAY_N), i: 0, ok: 0, who: 0, phase: 'q', until: 0, next: 0 }; relayAsk(s); }
+  else {
+    const qs = pickQ(s, order.length);
+    s.mq = { kind: 'sync', tid: t.id, order, qs, ans: {}, until: now + MQ_SECS * 1000 };
+    order.forEach((id, k) => { const q = players.get(id); if (q && q.c) q.c.send({ t: 'sq', s: 'sq', q: qs[k].q, o: qs[k].o, secs: MQ_SECS, mates: here.filter(x => x !== q).map(x => x.name), dbgA: process.env.ARENA_TEST ? qs[k].a : undefined }); });
+  }
+  ev({ k: 'fx', s: 'gqok', id: p.id, x: +t.x.toFixed(1), z: +t.z.toFixed(1) });
+}
+function relayAsk(s) {
+  const mq = s.mq, now = Date.now();
+  let who = null;
+  for (let k = 0; k < mq.order.length && !who; k++) { const q = players.get(mq.order[(mq.i + k) % mq.order.length]); if (q && online(q)) who = q; }
+  if (!who) return sqFail(s, '팀원이 모두 나가서 퀴즈가 멈췄어요.');
+  const cur = mq.qs[mq.i]; mq.who = who.id; mq.phase = 'q'; mq.until = now + MQ_SECS * 1000;
+  sqTell(s, { t: 'sq', s: 'rq', i: mq.i + 1, total: RELAY_N, ok: mq.ok, need: RELAY_OK, q: cur.q, o: cur.o, who: who.name, whoId: who.id, secs: MQ_SECS, dbgA: process.env.ARENA_TEST ? cur.a : undefined });
+}
+function relayResult(s, a) {
+  const mq = s.mq, cur = mq.qs[mq.i], ok = a === cur.a, who = players.get(mq.who);
+  if (ok) mq.ok++;
+  mq.phase = 'r'; mq.next = Date.now() + 2600; mq.i++;
+  sqTell(s, { t: 'sq', s: 'rr', ok, pick: a, ansI: cur.a, right: cur.right, who: who ? who.name : '?', okN: mq.ok, i: mq.i, total: RELAY_N, need: RELAY_OK });
+}
+function sqAnswer(p, a) {
+  const s = sqOf(p), mq = s && s.mq; if (!mq || !mq.order.includes(p.id)) return;
+  a = Number.isInteger(+a) ? +a : -1;
+  if (mq.kind === 'relay') { if (mq.phase === 'q' && p.id === mq.who) relayResult(s, a); return; }
+  if (mq.ans[p.id] != null) return;
+  mq.ans[p.id] = a;
+  const n = Object.keys(mq.ans).length;
+  sqTell(s, { t: 'sq', s: 'sa', name: p.name, n, of: mq.order.length });
+  if (n >= mq.order.length) syncResult(s);
+}
+function syncResult(s) {
+  const mq = s.mq;
+  const list = mq.order.map((id, k) => { const q = players.get(id); return { name: q ? q.name : '?', ok: mq.ans[id] === mq.qs[k].a, q: mq.qs[k].q, right: mq.qs[k].right }; });
+  const all = list.every(x => x.ok);
+  sqTell(s, { t: 'sq', s: 'sr', ok: all, list });
+  if (all) setTimeout(() => { if (s.stage === 4) sqAdvance(s); }, 2600);
+  else sqFail(s, null);
+}
+function sqFail(s, why) {
+  const now = Date.now();
+  for (const q of sqMem(s)) if (s.mq && s.mq.order.includes(q.id)) q.prot = now + 1500;
+  s.mq = null; s.mqCd = now + MQ_CD;
+  sqTell(s, { t: 'sq', s: 'fail', why: why || '', cd: MQ_CD / 1000 });
+}
+function tickSquads(now) {
+  for (const s of squads) {
+    const mq = s.mq;
+    if (mq) {
+      for (const id of mq.order) { const q = players.get(id); if (q) q.prot = Math.max(q.prot, now + 1200); }
+      if (mq.kind === 'relay') {
+        if (mq.phase === 'q' && (now > mq.until || !online(players.get(mq.who) || {}))) relayResult(s, -1);
+        else if (mq.phase === 'r' && now >= mq.next) {
+          if (mq.ok >= RELAY_OK) { sqTell(s, { t: 'sq', s: 'rdone', ok: mq.ok, total: RELAY_N }); sqAdvance(s); }
+          else if (mq.ok + (RELAY_N - mq.i) < RELAY_OK || mq.i >= RELAY_N) sqFail(s, `정답 ${mq.ok}개 — ${RELAY_OK}개가 필요해요.`);
+          else relayAsk(s);
+        }
+      } else if (mq.kind === 'sync' && now > mq.until && s.mq === mq) syncResult(s);
+      continue;
+    }
+    const on = sqOn(s);
+    if (s.stage === 0 && on.length >= SQ_MIN) sqStart(s);
+    else if (s.stage === 0 && now - s.lastJoin > SQ_WAIT) {
+      if (on.length === 2) sqStart(s, `${SQ_WAIT / 60000}분 동안 새 친구가 없어서 2명이 먼저 출발해요!`);
+      else if (on.length === 1) {   // 혼자 남은 친구: 자리가 빈 팀에 넣어 줌
+        const to = squads.find(x => x !== s && x.stage > 0 && x.stage < 5 && sqOn(x).length > 0 && x.members.length < SQ_MAX);
+        if (to) { const p = on[0]; sqLeave(p); to.members.push(p.id); p.team = to.id; to.lastJoin = now; sqMsg(to, `🤝 <b>${p.name}</b>이(가) 우리 <b>${to.n} 팀</b>에 합류했어요!`); tellL(p, `🤝 <b>${to.n} 팀</b>에 합류했어요! 지금 팀 미션: <b>${SQM[to.stage].ic} ${SQM[to.stage].n}</b>`); }
+      }
+    } else if (s.stage === 1 || s.stage === 3) sqCheck(s);
+  }
+  if (!boss && now > bossCd) {   // 절반 이상의 팀이 CLEAR → 연합 레이드
+    const st = squads.filter(s => s.startAt && sqOn(s).length), cl = st.filter(s => s.stage >= 5);
+    if (cl.length && cl.length >= Math.ceil(st.length / 2)) spawnBoss('quest');
+  }
+}
+function sqResetAll() {
+  for (const s of squads) Object.assign(s, { stage: s.startAt ? 1 : 0, prog: 0, contrib: {}, mq: null, mqCd: 0, clearAt: 0, buffUntil: 0, lvups: 0, tasks: 0, kills: 0 });
+  for (const p of players.values()) p.solo = null;
+  for (const s of squads) if (s.stage) sqTell(s, { t: 'sq', s: 'reset', mn: SQM[1].ic + ' ' + SQM[1].n, md: SQM[1].d });
+}
+function sqRebuild() {   // 선생님: 지금 있는 학생을 들어온 순서대로 3~4명씩 다시 나눔
+  const list = live().sort((a, b) => a.joined - b.joined);
+  for (const p of players.values()) p.team = -1;
+  squads.length = 0;
+  const n = list.length, k = Math.max(1, Math.ceil(n / SQ_MAX)), base = Math.floor(n / k), extra = n % k;
+  let idx = 0;
+  for (let i = 0; i < k && idx < n; i++) { const s = sqNew(), size = base + (i < extra ? 1 : 0); for (let j = 0; j < size; j++) { const p = list[idx++]; s.members.push(p.id); p.team = s.id; } }
+  for (const s of squads) if (s.members.length >= 2) sqStart(s, '선생님이 들어온 순서대로 팀을 다시 나눴어요!');
+  for (const p of players.values()) p.solo = null;
+}
+function sqGo() {   // 선생님: 모으는 중인 팀을 지금 바로 출발
+  let n = 0; for (const s of squads) if (s.stage === 0 && sqOn(s).length) { sqStart(s, '선생님이 팀을 바로 출발시켰어요!'); n++; } return n;
+}
+/* 혼자 훈련: 팀원이 모이기 전 */
+const SOLO = r => ({ gq: 2, task: 1, kill: Math.min(10, 4 + 2 * r) });
+const soloOn = p => { const s = sqOf(p); return COOP && !p.gm && (!s || s.stage === 0); };
+function soloHit(p, k) {
+  if (!soloOn(p)) return;
+  const so = p.solo || (p.solo = { r: 0, gq: 0, task: 0, kill: 0 }), g = SOLO(so.r);
+  if (so[k] >= g[k]) return; so[k]++;
+  if (so.gq >= g.gq && so.task >= g.task && so.kill >= g.kill) {
+    so.r++; const xp = Math.round(xpNeed(p.lv) * .5); gainXpB(p, xp); addCoins(p, 40); p.parts = (p.parts || 0) + 2; p.pot = Math.min(POT.max, (p.pot || 0) + 1);
+    tellL(p, `🎯 <b>혼자 훈련 ${so.r}단계 완료!</b> 경험치 +${xp} · 코인 +40 · 부품 ⚙+2 · 회복 음료 +1<br>다음 훈련이 이어져요. 팀원이 모이면 팀 미션이 시작돼요!`);
+    so.gq = so.task = so.kill = 0;
+  }
+}
+function sqMe(p, t) {
+  const s = sqOf(p);
+  const so = p.solo || { r: 0, gq: 0, task: 0, kill: 0 }, g = SOLO(so.r);
+  return {
+    sq: s ? { id: s.id, st: s.stage, pr: s.prog, gl: sqGoal(s), mem: sqMem(s).map(q => [q.name, online(q) ? 1 : 0, s.stage === 1 && s.contrib[q.id] ? 1 : 0, q.id]), wait: s.stage === 0 ? Math.max(0, SQ_MIN - sqOn(s).length) : 0, cd: s.mqCd > t ? Math.ceil((s.mqCd - t) / 1000) : 0, mq: s.mq ? 1 : 0, rank: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0 } : null,
+    solo: soloOn(p) ? [so.r + 1, so.gq, g.gq, so.task, g.task, so.kill, g.kill] : null
+  };
+}
 
 /* ======================= simulation ======================= */
 let monT = 0, lbT = 0, snapT = 0, snapN = 0;
@@ -910,7 +1134,7 @@ function step(dt) {
   const zr = zoneR();
   // players
   for (const p of [...players.values()]) {
-    if (!online(p)) { if (now - (p.offAt || now) > 180000) { players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name }); } continue; }
+    if (!online(p)) { if (now - (p.offAt || now) > 180000) { sqLeave(p); players.delete(p.id); broadcast({ t: 'ro', gone: p.id, name: p.name }); } continue; }
     if (p.shopUntil && (now >= p.shopUntil || !p.alive || !nearShop(p))) exitShop(p, now >= p.shopUntil ? 'time' : 'left');
     if (!p.gm && now - (p.actAt || p.joined) > IDLE_MS) { bye(p, '5분 동안 움직이지 않아서 아레나에서 나왔어요. 다시 하려면 [입장하기]를 누르세요.'); continue; }
     if (!p.alive) {
@@ -998,13 +1222,13 @@ function step(dt) {
     if (def.beh !== 'heavy' && def.beh !== 'ranged' && tgt && !(m.stun > 0) && td < def.r + .6 && m.atkCd <= 0 && (fly || dyOk(m, tgt, 1.6))) { m.atkCd = 1.1; hurtPlayer(tgt, (m.dmg || def.dmg), { kind: 'm', m }); if (def.beh === 'runner') { m.flee = .9; m.atkCd = 1.4; } }
   }
   tickBossStrikes(now, alive);
+  if (COOP) tickSquads(now);
   tickChest(dt, now); tickGusts(now);
   // boss trigger (1부: 레벨이 높아지면 / 2부: 퀘스트 3단계)
   bossChk -= dt;
   if (bossChk <= 0) { bossChk = 5;
     const on = live();
     if (!COOP && !boss && now > bossCd && on.length >= 2 && on.filter(p => p.lv >= 10).length >= on.length * .5) spawnBoss('level');
-    if (COOP && quest.stage === 3 && !boss && now > bossCd - 200000) spawnBoss('quest');
   }
   // projectiles
   for (let i = projs.length - 1; i >= 0; i--) {
@@ -1046,11 +1270,11 @@ function step(dt) {
 const t0g = () => Date.now();
 function sendSnap(rl) {
   const t = Date.now(); snapN++; const farTick = snapN % 5 === 0;
-  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null ? 512 : 0) | (t < (p.stunUntil || 0) || t < (p.rootUntil || 0) ? 1024 : 0) | (t < (p.slowUntil || 0) ? 2048 : 0) | (p.rush ? 4096 : 0) | (t < (p.stunUntil || 0) ? 8192 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
+  const P = [...players.values()].filter(online).map(p => [p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.dir.toFixed(2), Math.ceil(p.hp), stat(p).maxHp, p.lv, (p.alive ? 1 : 0) | (t < p.prot && !p.shopUntil && p.gq == null ? 2 : 0) | (p.shopUntil ? 256 : 0) | (p.gq != null || inMq(p) ? 512 : 0) | (t < (p.stunUntil || 0) || t < (p.rootUntil || 0) ? 1024 : 0) | (t < (p.slowUntil || 0) ? 2048 : 0) | (p.rush ? 4096 : 0) | (t < (p.stunUntil || 0) ? 8192 : 0) | (p.shieldT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (king === p.id ? 16 : 0) | (p.task ? 32 : 0) | (blessed(p) ? 64 : 0) | (p.gm ? 128 : 0), p.wpn, p.arm, p.team, +(p.y || 0).toFixed(2), JOBK.indexOf(p.job || null)]);
   const M = [...mons.values()].map(m => [m.id, m.type, +m.x.toFixed(2), +m.z.toFixed(2), +m.dir.toFixed(2), Math.ceil(m.hp), m.max, FLYERS.has(m.type) ? 0 : +(m.y || 0).toFixed(2), m.lv || (MON[m.type] ? MON[m.type].lv : 20)]);
   const J = projs.map(p => [p.id, p.kind, +p.x.toFixed(2), +p.z.toFixed(2), +(p.y || 0).toFixed(1)]);
   const K = [...picks.values()].map(k => [k.id, k.kind, k.val, +k.x.toFixed(2), +k.z.toFixed(2), +(k.y || 0).toFixed(2)]);
-  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: COOP ? [quest.stage, quest.prog, questGoal()] : null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, gt: gst.map(t => [t.id, t.active ? 2 : t.solver ? 1 : 0, t.active ? Math.ceil((t.active.until - t0g()) / 1000) : 0, t.active ? t.active.owner : t.solver, t.active ? +t.active.dir.toFixed(3) : 0, t.active ? t.active.team : -1]), left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
+  const base = { t: 's', tm: t, P, M, J, K, ev: evq.splice(0), zr: +zoneR().toFixed(2), ph: round.phase, q: null, bs: boss ? [boss.id, Math.ceil(boss.hp), boss.max, boss.enr ? 1 : 0] : null, ch: chest ? [chest.x, chest.z, chest.y, t >= chest.landAt ? 1 : 0, chest.opener || 0, chest.opener ? Math.min(1, (t - chest.openAt) / (CHEST.open * 1000)) : 0, Math.max(0, Math.ceil(((t < chest.landAt ? chest.landAt : chest.expireAt) - t) / 1000))] : null, gt: gst.map(t => [t.id, t.active ? 2 : t.solver ? 1 : 0, t.active ? Math.ceil((t.active.until - t0g()) / 1000) : 0, t.active ? t.active.owner : t.solver, t.active ? +t.active.dir.toFixed(3) : 0, t.active ? t.active.team : -1]), left: round.phase === 'play' ? Math.max(0, Math.round((round.endsAt - t) / 1000)) : null };
   const rankOf = new Map(rl.map((p, i) => [p.id, i + 1]));
   for (const c of conns) {
     if (!c.open) continue;
@@ -1065,16 +1289,17 @@ function sendSnap(rl) {
     const nowS = t / 1000, cds = {};
     for (const k in SKILLS) cds[k] = Math.max(0, +((p.cds[k] || 0) - nowS).toFixed(1));
     base.me = { xp: p.xp, need: xpNeed(p.lv), coins: p.coins, wpn: p.wpn, arm: p.arm, boot: p.boot, helm: p.helm, pot: p.pot, potCd: Math.max(0, Math.ceil((p.potAt - t) / 1000)), spdB: p.boot * 7, cdr: p.helm * 8, kills: p.kills, deaths: p.deaths, streak: p.streak, rank: p.gm ? '운영자' : rankOf.get(p.id), n: rl.length, gm: !!p.gm, job: p.job || null, cds, atk: stat(p).atk, def: Math.round(stat(p).def * 100), respawn: p.alive ? 0 : Math.max(0, Math.ceil((p.respawnAt - t) / 1000)), bounty: king === p.id ? bountyOf(p) : 0, safe: t - p.lastHurt > 4000, tcd: STN.map(s => Math.max(0, Math.ceil(((p.tcd[s.id] || 0) - t) / 1000))), team: p.team, tasks: p.tasks, parts: p.parts || 0, gcd: Math.max(0, Math.ceil(((p.gustCd || 0) - t) / 1000)), gq: p.gq != null ? 1 : 0, shop: p.shopUntil ? Math.max(0, Math.ceil((p.shopUntil - t) / 1000)) : 0, shopCd: Math.max(0, Math.ceil(((p.shopCdUntil || 0) - t) / 1000)), boost: xpBoost(p), catchUp: p.catchUp || 0, bless: blessed(p) ? Math.ceil((teamSt[p.team].buffUntil - t) / 1000) : 0 };
+    if (COOP && !p.gm) Object.assign(base.me, sqMe(p, t));
     c.send(base);
   }
 }
 function sendBoard(rl) {
-  broadcast({ t: 'lb', king, teamsOn, teams: teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: [...rl, ...[...players.values()].filter(p => online(p) && p.gm)].map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0, p.gm ? 1 : 0]) });
+  broadcast({ t: 'lb', king, teamsOn, tdefs: COOP ? sqDefs() : undefined, teams: COOP ? squads.map(s => ({ n: sqOn(s).length, st: s.stage, pr: s.prog, gl: sqGoal(s), pts: s.prog, goal: sqGoal(s), score: sqScore(s), tasks: s.tasks, kills: s.kills, lvups: s.lvups, bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), clear: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0, mem: sqMem(s).map(q => q.name) })) : teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: [...rl, ...[...players.values()].filter(p => online(p) && p.gm)].map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0, p.gm ? 1 : 0]) });
 }
 function endRound() {
   const rl = rankList();
   round.phase = 'end'; round.final = rl.slice(0, 10).map(p => ({ name: p.name, lv: p.lv, coins: p.coins, kills: p.kills, deaths: p.deaths }));
-  const tr = teamsOn ? TEAMS.map((T, i) => ({ i, n: T.n, c: T.c, score: teamScore(teamSt[i]), tasks: teamSt[i].tasks, kills: teamSt[i].kills, lvups: teamSt[i].lvups })).filter(t => teamCount(t.i) > 0).sort((a, b) => b.score - a.score) : null;
+  const tr = COOP ? squads.filter(s => sqOn(s).length).map(s => ({ i: s.id, n: s.n, c: s.c, score: sqScore(s), tasks: s.tasks, kills: s.kills, lvups: s.lvups })).sort((a, b) => b.score - a.score) : teamsOn ? TEAMS.map((T, i) => ({ i, n: T.n, c: T.c, score: teamScore(teamSt[i]), tasks: teamSt[i].tasks, kills: teamSt[i].kills, lvups: teamSt[i].lvups })).filter(t => teamCount(t.i) > 0).sort((a, b) => b.score - a.score) : null;
   round.teamFinal = tr;
   broadcast({ t: 'end', top: round.final, teams: tr });
   setTimeout(() => { if (round.phase === 'end') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전으로 돌아왔어요.' }); } }, 30000);
@@ -1093,26 +1318,27 @@ function onConnect(c) {
       const tok = String(msg.tok || '');
       const old = tok && [...players.values()].find(p => p.tok === tok && !online(p));
       if (old && locked && String(msg.code || '').trim() !== ADMIN_KEY && !old.gm) { players.delete(old.id); return c.send({ t: 'err', s: '지금은 아레나가 닫혀 있어요. 선생님이 열어 주면 들어올 수 있어요.' }); }
-      if (old) { old.c = c; old.actAt = Date.now(); c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); return; }
+      if (old) { old.c = c; old.actAt = Date.now(); c.pid = old.id; old.offAt = 0; if (String(msg.code || '').trim() === ADMIN_KEY && !old.gm) applyGM(old); c.send({ t: 'welcome', id: old.id, name: old.name, tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: null, sqm: COOP ? SQM : null, sqMin: SQ_MIN, sqMax: SQ_MAX, shopR: SHOP_R, teams: COOP ? sqDefs() : TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase, resumed: true }); broadcast({ t: 'ro', joined: old.id, name: old.name }); if (COOP && !old.gm && !sqOf(old)) sqJoin(old); return; }
       let name = cleanName(msg.name);
       if (!name) return c.send({ t: 'err', s: '이름을 적어 주세요.' });
       const code = String(msg.code || '').trim();
       if (locked && code !== ADMIN_KEY) return c.send({ t: 'err', s: '지금은 아레나가 닫혀 있어요. 선생님이 열어 주면 들어올 수 있어요.' });
       if (gate && code !== ADMIN_KEY && ![-1, 0, 1].some(d => clearCode(name, kstYmd(d), SALT) === code)) return c.send({ t: 'err', s: '입장 코드가 맞지 않아요. 옥정섬 SOS를 클리어한 화면의 이름과 코드를 그대로 적어 주세요.' });
       const same = [...players.values()].find(p => p.name === name && !online(p));
-      if (same) players.delete(same.id);
+      if (same) { sqLeave(same); players.delete(same.id); }
       if ([...players.values()].some(p => p.name === name)) { let i = 2; while ([...players.values()].some(p => p.name === name + i)) i++; name = name + i; }
       if ([...players.values()].filter(online).length >= 40) return c.send({ t: 'err', s: '아레나가 가득 찼어요 (40명).' });
       const p = newPlayer(c, name); p.tok = crypto.randomBytes(8).toString('hex'); players.set(p.id, p); c.pid = p.id;
       if (code === ADMIN_KEY) applyGM(p); else catchUpStart(p);
-      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: COOP ? QSTAGES : null, shopR: SHOP_R, teams: TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
+      c.send({ t: 'welcome', id: p.id, name, tok: p.tok, R, obs: OBS, skills: SKILLS, upg: UPG, gearN: GEARN, armN: ARMN, shop: SHOPX, pot: POT, mode: MODE, qst: null, sqm: COOP ? SQM : null, sqMin: SQ_MIN, sqMax: SQ_MAX, shopR: SHOP_R, teams: COOP ? sqDefs() : TEAMS, teamsOn, structs: STRUCTS, shops: SHOPS, jobs: JOBS, jobLv: JOB_LV, jobCost: JOB_CHANGE, shrineR: SHRINE_R, gusts: GTS, gust: { r: GUST.r, len: GUST.len, w: GUST.w, push: GUST.push }, stations: STN, taskN: TASKN, taskR: TASK_R, ph: round.phase });
       if (p.catchUp) tell(p, `🚀 <b>따라잡기 출발!</b> 친구들이 벌써 많이 컸어요. <b>Lv ${p.catchUp}</b>과 기본 장비로 시작해요. 레벨이 평균보다 낮으면 <b>경험치를 더 많이</b> 받아요!`);
       broadcast({ t: 'ro', joined: p.id, name });
+      if (COOP && !p.gm) { sqJoin(p); sendBoard(rankList()); }
       return;
     }
     if (msg.t === 'admin') {
       if (msg.key !== ADMIN_KEY) return c.send({ t: 'err', s: '관리자 비밀번호가 틀렸어요.' });
-      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, teams: TEAMS, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
+      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, teams: COOP ? sqDefs() : TEAMS, sqm: COOP ? SQM : null, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
       return;
     }
     if (c.admin && msg.t === 'cmd') return adminCmd(c, msg);
@@ -1131,6 +1357,7 @@ function onConnect(c) {
     else if (msg.t === 'gqd') { const t = p.gq != null && gst[p.gq]; if (t && t.solver === p.id && t.pickUntil) gustFire(t, p, +msg.d); }
     else if (msg.t === 'job') changeJob(p, String(msg.job));
     else if (msg.t === 'ans') answerTask(p, msg.a);
+    else if (msg.t === 'sqa') sqAnswer(p, msg.a);
     else if (msg.t === 'tcancel') cancelTask(p);
     else if (msg.t === 'emo') { const e = ['좋아!', '도와줘!', '1등 잡자!', 'ㅋㅋㅋ', '미안!', '고마워!'][msg.i | 0]; if (e && (!p.emoT || Date.now() - p.emoT > 2500)) { p.emoT = Date.now(); ev({ k: 'emo', id: p.id, s: e }); } }
   };
@@ -1140,17 +1367,18 @@ function adminCmd(c, msg) {
     const min = Math.max(2, Math.min(30, +msg.min || 10));
     for (const p of players.values()) resetPlayer(p);
     for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 });
-    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0; chest = null; chestT = 45; boss = null; bossStrikes.length = 0; bossCd = 0; if (COOP) questReset();
+    mons.clear(); projs.length = 0; picks.clear(); pending.length = 0; chest = null; chestT = 45; boss = null; bossStrikes.length = 0; bossCd = 0; if (COOP) sqResetAll();
     round.phase = 'play'; round.len = min * 60; round.endsAt = Date.now() + min * 60000;
     broadcast({ t: 'round', s: `${min}분 결승 라운드 시작! 모두 Lv 1부터 다시 시작해요. 마지막에는 바람의 벽이 좁혀져요.` });
   } else if (msg.c === 'stop') { if (round.phase === 'play') endRound(); }
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
-  else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) questReset(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
+  else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) sqResetAll(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
   else if (msg.c === 'boss') { bossCd = 0; spawnBoss('teacher'); }
   else if (msg.c === 'chest') { if (chest) { broadcast({ t: 'chest', s: 'gone' }); chest = null; } dropChest('teacher'); }
-  else if (msg.c === 'qreset') { questReset(); broadcast({ t: 'quest', s: 'reset', stage: 1, name: QSTAGES[1].n, desc: QSTAGES[1].d }); }
-  else if (msg.c === 'qnext') { if (COOP && quest.stage < 4) questAdvance(); }
-  else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: '선생님이 팀을 새로 나눴어요!' }); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
+  else if (msg.c === 'qreset') { if (COOP) { sqResetAll(); sendBoard(rankList()); } }
+  else if (msg.c === 'qnext') { if (COOP) { for (const s of squads) if (s.stage >= 1 && s.stage < 5 && sqOn(s).length) sqAdvance(s); } }
+  else if (msg.c === 'sqgo') { if (COOP) { const n = sqGo(); c.send({ t: 'msg', s: `${n}개 팀을 바로 출발시켰어요.` }); sendBoard(rankList()); } }
+  else if (msg.c === 'shuffle') { shuffleTeams(); broadcast({ t: 'teams', teamsOn, mine: null, s: COOP ? '선생님이 들어온 순서대로 팀을 다시 나눴어요!' : '선생님이 팀을 새로 나눴어요!' }); if (COOP) sendBoard(rankList()); for (const p of players.values()) if (online(p)) p.c.send({ t: 'myteam', team: p.team }); }
   else if (msg.c === 'teams') { teamsOn = !!msg.on; broadcast({ t: 'teams', teamsOn, s: teamsOn ? '팀전이 켜졌어요! 같은 팀끼리는 공격되지 않아요.' : '팀전이 꺼졌어요. 이제 모두가 적이에요!' }); c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'gate') { gate = !!msg.on; c.send({ t: 'adminok', R, obs: OBS, gate, locked, ph: round.phase, addr: addresses() }); }
   else if (msg.c === 'kick') { const p = players.get(+msg.id); if (p) bye(p, '선생님이 아레나에서 내보냈어요.'); }
