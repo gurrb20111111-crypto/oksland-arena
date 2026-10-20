@@ -426,6 +426,7 @@ function gustAnswer(p, a) {
   const now = Date.now();
   if (+a === t.qAns) {
     const xp = Math.round(xpNeed(p.lv) * .35); gainXpB(p, xp); addCoins(p, 10); soloHit(p, 'gq');
+    { const s = sqOf(p); if (s && s.stage === 1 && !s.contrib[p.name]) setTimeout(() => tellL(p, '🔧 돌풍 발전기 문제는 미션 ①에 들어가지 않아요. <b>과제 기계</b>(⚙ 이름표: 전선 연결·나셀 돌리기·부품 순서·바람 퀴즈)에서 과제를 해야 내 이름에 ✔가 붙어요!'), 1500); }
     t.qUntil = 0; t.pickUntil = now + GUST.pick; p.prot = t.pickUntil;
     if (p.c) p.c.send({ t: 'gq', s: 'ok', xp: Math.round(xp * xpBoost(p)), secs: GUST.pick / 1000, def: +p.dir.toFixed(2) });
     ev({ k: 'fx', s: 'gqok', id: p.id, x: +p.x.toFixed(1), z: +p.z.toFixed(1) });
@@ -919,6 +920,7 @@ const sqDefs = () => squads.map(s => ({ n: s.n, c: s.c }));
 function sqTell(s, obj) { for (const q of sqOn(s)) q.c.send(obj); }
 function sqMsg(s, html) { sqTell(s, { t: 'msg', s: html, ms: 6000 }); }
 const tellL = (p, s) => p.c && p.c.send({ t: 'msg', s, ms: 6500 });
+const sqHome = new Map();   // 이름 → 팀 (다시 들어와도 같은 팀·같은 기록)
 function sqNew() {
   const i = squads.length;
   const s = { id: i, n: SQN[i % SQN.length] + (i >= SQN.length ? String(Math.floor(i / SQN.length) + 1) : ''), c: SQC[i % SQC.length], members: [], stage: 0, prog: 0, contrib: {}, at: Date.now(), lastJoin: Date.now(), startAt: 0, clearAt: 0, pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0, mq: null, mqCd: 0, pingAt: 0, usedQ: new Set(), warned: 0 };
@@ -927,10 +929,12 @@ function sqNew() {
 function sqJoin(p, quiet) {
   if (!COOP || p.gm) return;
   // 들어온 순서대로: ① 모으는 중인 팀 → ② 미션 중인데 자리가 빈 팀 → ③ 새 팀
-  let s = squads.find(s => s.stage === 0 && s.members.length < SQ_MAX)
+  const home = squads[sqHome.get(p.name)];
+  let s = (home && home.members.length < SQ_MAX + 1 && sqOn(home).length > 0 ? home : null)   // 나갔다 다시 들어온 친구는 원래 팀으로
+    || squads.find(s => s.stage === 0 && s.members.length < SQ_MAX)
     || squads.find(s => s.stage > 0 && s.stage < 5 && s.members.length > 0 && s.members.length < SQ_MAX)
     || sqNew();
-  s.members.push(p.id); p.team = s.id; s.lastJoin = Date.now();
+  s.members.push(p.id); p.team = s.id; s.lastJoin = Date.now(); sqHome.set(p.name, s.id);
   if (quiet) return s;
   const n = sqOn(s).length;
   if (s.stage === 0 && n >= SQ_MIN) sqStart(s);
@@ -973,12 +977,13 @@ function sqAdvance(s) {
 function sqCheck(s) {   // 진행 조건 확인 (과제 수·인원 변화 때)
   if (s.stage === 1) {
     if (s.prog < sqGoal(s)) return;
-    const miss = sqOn(s).filter(q => !s.contrib[q.id]);
+    const miss = sqOn(s).filter(q => !s.contrib[q.name]);
     if (!miss.length) return sqAdvance(s);
-    const now = Date.now(); if (now - s.warned > 8000) { s.warned = now; sqMsg(s, `🔧 과제 수는 채웠어요! 아직 과제를 안 한 친구: <b>${miss.map(q => q.name).join(', ')}</b> — 한 개씩만 하면 성공!`); }
+    if (s.prog >= sqGoal(s) * 2) { sqMsg(s, `🔧 과제를 넉넉히(${s.prog}개) 해냈어요! 팀 모두의 힘으로 통과!`); return sqAdvance(s); }   // 한 친구 때문에 멈추지 않게
+    const now = Date.now(); if (now - s.warned > 8000) { s.warned = now; sqMsg(s, `🔧 과제 수는 채웠어요! 아직 과제를 안 한 친구: <b>${miss.map(q => q.name).join(', ')}</b> — <b>과제 기계</b>(⚙ 이름표: 전선 연결·나셀 돌리기·부품 순서·바람 퀴즈)에서 한 개씩만 하면 성공!`); }
   } else if (s.stage === 3 && s.prog >= sqGoal(s)) sqAdvance(s);
 }
-function sqTask(p) { const s = sqOf(p); if (!s) return; s.tasks++; if (s.stage !== 1) return; s.prog++; s.contrib[p.id] = (s.contrib[p.id] || 0) + 1; sqCheck(s); }
+function sqTask(p) { const s = sqOf(p); if (!s) return; s.tasks++; if (s.stage !== 1) return; s.prog++; s.contrib[p.name] = (s.contrib[p.name] || 0) + 1; sqCheck(s); }
 function sqKill(p) {
   const s = sqOf(p); if (!s) return; s.kills++; if (s.stage !== 3) return;
   const on = sqOn(s);
@@ -1093,10 +1098,10 @@ function sqResetAll() {
 function sqRebuild() {   // 선생님: 지금 있는 학생을 들어온 순서대로 3~4명씩 다시 나눔
   const list = live().sort((a, b) => a.joined - b.joined);
   for (const p of players.values()) p.team = -1;
-  squads.length = 0;
+  squads.length = 0; sqHome.clear();
   const n = list.length, k = Math.max(1, Math.ceil(n / SQ_MAX)), base = Math.floor(n / k), extra = n % k;
   let idx = 0;
-  for (let i = 0; i < k && idx < n; i++) { const s = sqNew(), size = base + (i < extra ? 1 : 0); for (let j = 0; j < size; j++) { const p = list[idx++]; s.members.push(p.id); p.team = s.id; } }
+  for (let i = 0; i < k && idx < n; i++) { const s = sqNew(), size = base + (i < extra ? 1 : 0); for (let j = 0; j < size; j++) { const p = list[idx++]; s.members.push(p.id); p.team = s.id; sqHome.set(p.name, s.id); } }
   for (const s of squads) if (s.members.length >= 2) sqStart(s, '선생님이 들어온 순서대로 팀을 다시 나눴어요!');
   for (const p of players.values()) p.solo = null;
 }
@@ -1120,7 +1125,7 @@ function sqMe(p, t) {
   const s = sqOf(p);
   const so = p.solo || { r: 0, gq: 0, task: 0, kill: 0 }, g = SOLO(so.r);
   return {
-    sq: s ? { id: s.id, st: s.stage, pr: s.prog, gl: sqGoal(s), mem: sqMem(s).map(q => [q.name, online(q) ? 1 : 0, s.stage === 1 && s.contrib[q.id] ? 1 : 0, q.id]), wait: s.stage === 0 ? Math.max(0, SQ_MIN - sqOn(s).length) : 0, cd: s.mqCd > t ? Math.ceil((s.mqCd - t) / 1000) : 0, mq: s.mq ? 1 : 0, rank: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0 } : null,
+    sq: s ? { id: s.id, st: s.stage, pr: s.prog, gl: sqGoal(s), mem: sqMem(s).map(q => [q.name, online(q) ? 1 : 0, s.stage === 1 && s.contrib[q.name] ? 1 : 0, q.id]), wait: s.stage === 0 ? Math.max(0, SQ_MIN - sqOn(s).length) : 0, cd: s.mqCd > t ? Math.ceil((s.mqCd - t) / 1000) : 0, mq: s.mq ? 1 : 0, rank: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0 } : null,
     solo: soloOn(p) ? [so.r + 1, so.gq, g.gq, so.task, g.task, so.kill, g.kill] : null
   };
 }
