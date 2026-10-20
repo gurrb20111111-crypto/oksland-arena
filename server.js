@@ -953,7 +953,7 @@ function sqLeave(p) {
   if (s.mq) s.mq.order = s.mq.order.filter(id => id !== p.id);
 }
 function sqStart(s, why) {
-  s.stage = 1; s.prog = 0; s.contrib = {}; s.mq = null; s.mqCd = 0; if (!s.startAt) s.startAt = Date.now();
+  s.stage = 1; s.prog = 0; s.contrib = {}; s.mq = null; s.mqCd = 0; if (!s.startAt) s.startAt = Date.now(); s.stageAt = Date.now(); s.splits = [];
   const names = sqOn(s).map(q => q.name).join(' · ');
   sqTell(s, { t: 'sq', s: 'start', n: s.n, c: s.c, names, why: why || '', mn: SQM[1].ic + ' ' + SQM[1].n, md: SQM[1].d });
 }
@@ -964,15 +964,16 @@ function sqAdvance(s) {
   const now = Date.now(), done = SQM[s.stage].ic + ' ' + SQM[s.stage].n;
   for (const q of sqMem(s)) if (s.mq && s.mq.order.includes(q.id)) q.prot = now + 1500;
   s.mq = null; s.mqCd = 0; s.lvups++;
+  const dur = now - (s.stageAt || s.startAt || now); (s.splits || (s.splits = []))[s.stage] = dur; s.stageAt = now;   // 미션별 걸린 시간
   sqReward(s, 40, 1);
   s.stage = Math.min(5, s.stage + 1); s.prog = 0; s.contrib = {};
   if (s.stage >= 5) {
     s.clearAt = now; s.buffUntil = now + BLESS_MS; sqReward(s, 60, 2);
     const rank = squads.filter(x => x.clearAt).length;
-    broadcast({ t: 'sq', s: 'clear', team: s.id, n: s.n, c: s.c, rank, names: sqOn(s).map(q => q.name).join(' · ') });
+    broadcast({ t: 'sq', s: 'clear', team: s.id, n: s.n, c: s.c, rank, names: sqOn(s).map(q => q.name).join(' · '), total: s.clearAt - s.startAt, sp: sqSplits(s) });
     return;
   }
-  sqTell(s, { t: 'sq', s: 'next', done, stage: s.stage, mn: SQM[s.stage].ic + ' ' + SQM[s.stage].n, md: SQM[s.stage].d });
+  sqTell(s, { t: 'sq', s: 'next', done, dur, stage: s.stage, mn: SQM[s.stage].ic + ' ' + SQM[s.stage].n, md: SQM[s.stage].d });
 }
 function sqCheck(s) {   // 진행 조건 확인 (과제 수·인원 변화 때)
   if (s.stage === 1) {
@@ -1090,8 +1091,10 @@ function tickSquads(now) {
     if (cl.length && cl.length >= Math.ceil(st.length / 2)) spawnBoss('quest');
   }
 }
+const sqSplits = s => [1, 2, 3, 4].map(i => s.splits && s.splits[i] ? Math.round(s.splits[i] / 1000) : 0);
+const sqTime = (s, t = Date.now()) => s.startAt ? Math.round(((s.clearAt || t) - s.startAt) / 1000) : 0;   // 팀 결성부터 지금(또는 CLEAR)까지 초
 function sqResetAll() {
-  for (const s of squads) Object.assign(s, { stage: s.startAt ? 1 : 0, prog: 0, contrib: {}, mq: null, mqCd: 0, clearAt: 0, buffUntil: 0, lvups: 0, tasks: 0, kills: 0 });
+  for (const s of squads) Object.assign(s, { stage: s.startAt ? 1 : 0, prog: 0, contrib: {}, mq: null, mqCd: 0, clearAt: 0, startAt: s.startAt ? Date.now() : 0, stageAt: Date.now(), splits: [], buffUntil: 0, lvups: 0, tasks: 0, kills: 0 });
   for (const p of players.values()) p.solo = null;
   for (const s of squads) if (s.stage) sqTell(s, { t: 'sq', s: 'reset', mn: SQM[1].ic + ' ' + SQM[1].n, md: SQM[1].d });
 }
@@ -1125,7 +1128,7 @@ function sqMe(p, t) {
   const s = sqOf(p);
   const so = p.solo || { r: 0, gq: 0, task: 0, kill: 0 }, g = SOLO(so.r);
   return {
-    sq: s ? { id: s.id, st: s.stage, pr: s.prog, gl: sqGoal(s), mem: sqMem(s).map(q => [q.name, online(q) ? 1 : 0, s.stage === 1 && s.contrib[q.name] ? 1 : 0, q.id]), wait: s.stage === 0 ? Math.max(0, SQ_MIN - sqOn(s).length) : 0, cd: s.mqCd > t ? Math.ceil((s.mqCd - t) / 1000) : 0, mq: s.mq ? 1 : 0, rank: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0 } : null,
+    sq: s ? { id: s.id, st: s.stage, pr: s.prog, gl: sqGoal(s), mem: sqMem(s).map(q => [q.name, online(q) ? 1 : 0, s.stage === 1 && s.contrib[q.name] ? 1 : 0, q.id]), wait: s.stage === 0 ? Math.max(0, SQ_MIN - sqOn(s).length) : 0, cd: s.mqCd > t ? Math.ceil((s.mqCd - t) / 1000) : 0, mq: s.mq ? 1 : 0, rank: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0, tm: sqTime(s, t), stm: s.stage >= 1 && s.stage <= 4 && s.stageAt ? Math.round((t - s.stageAt) / 1000) : 0, sp: sqSplits(s) } : null,
     solo: soloOn(p) ? [so.r + 1, so.gq, g.gq, so.task, g.task, so.kill, g.kill] : null
   };
 }
@@ -1299,12 +1302,12 @@ function sendSnap(rl) {
   }
 }
 function sendBoard(rl) {
-  broadcast({ t: 'lb', king, teamsOn, tdefs: COOP ? sqDefs() : undefined, teams: COOP ? squads.map(s => ({ n: sqOn(s).length, st: s.stage, pr: s.prog, gl: sqGoal(s), pts: s.prog, goal: sqGoal(s), score: sqScore(s), tasks: s.tasks, kills: s.kills, lvups: s.lvups, bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), clear: s.clearAt ? squads.filter(x => x.clearAt && x.clearAt <= s.clearAt).length : 0, mem: sqMem(s).map(q => q.name) })) : teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: [...rl, ...[...players.values()].filter(p => online(p) && p.gm)].map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0, p.gm ? 1 : 0]) });
+  broadcast({ t: 'lb', king, teamsOn, tdefs: COOP ? sqDefs() : undefined, teams: COOP ? squads.map(s => ({ n: sqOn(s).length, st: s.stage, pr: s.prog, gl: sqGoal(s), pts: s.prog, goal: sqGoal(s), score: sqScore(s), tasks: s.tasks, kills: s.kills, lvups: s.lvups, bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), clear: s.clearAt ? squads.filter(x => x.clearAt && sqTime(x) <= sqTime(s)).length : 0, tm: sqTime(s), sp: sqSplits(s), mem: sqMem(s).map(q => q.name) })) : teamSt.map((s, i) => ({ pts: s.pts, lvups: s.lvups, tasks: s.tasks, kills: s.kills, score: teamScore(s), bless: Math.max(0, Math.ceil((s.buffUntil - Date.now()) / 1000)), goal: teamGoal(i), n: teamCount(i) })), list: [...rl, ...[...players.values()].filter(p => online(p) && p.gm)].map(p => [p.id, p.name, p.lv, p.coins, p.kills, p.deaths, p.best, p.wpn, p.arm, p.team, p.tasks, p.parts || 0, p.gm ? 1 : 0]) });
 }
 function endRound() {
   const rl = rankList();
   round.phase = 'end'; round.final = rl.slice(0, 10).map(p => ({ name: p.name, lv: p.lv, coins: p.coins, kills: p.kills, deaths: p.deaths }));
-  const tr = COOP ? squads.filter(s => sqOn(s).length).map(s => ({ i: s.id, n: s.n, c: s.c, score: sqScore(s), tasks: s.tasks, kills: s.kills, lvups: s.lvups })).sort((a, b) => b.score - a.score) : teamsOn ? TEAMS.map((T, i) => ({ i, n: T.n, c: T.c, score: teamScore(teamSt[i]), tasks: teamSt[i].tasks, kills: teamSt[i].kills, lvups: teamSt[i].lvups })).filter(t => teamCount(t.i) > 0).sort((a, b) => b.score - a.score) : null;
+  const tr = COOP ? squads.filter(s => sqOn(s).length).map(s => ({ i: s.id, n: s.n, c: s.c, score: sqScore(s), tm: sqTime(s), clear: !!s.clearAt, tasks: s.tasks, kills: s.kills, lvups: s.lvups })).sort((a, b) => b.score - a.score) : teamsOn ? TEAMS.map((T, i) => ({ i, n: T.n, c: T.c, score: teamScore(teamSt[i]), tasks: teamSt[i].tasks, kills: teamSt[i].kills, lvups: teamSt[i].lvups })).filter(t => teamCount(t.i) > 0).sort((a, b) => b.score - a.score) : null;
   round.teamFinal = tr;
   broadcast({ t: 'end', top: round.final, teams: tr });
   setTimeout(() => { if (round.phase === 'end') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전으로 돌아왔어요.' }); } }, 30000);

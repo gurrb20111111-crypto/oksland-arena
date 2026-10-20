@@ -1005,19 +1005,22 @@ function gustPushL(mp) {   // 서버와 같은 규칙으로 내 캐릭터도 밀
 }
 /* ================= 2부 팀 미션 (들어온 순서대로 3~4명 팀) ================= */
 let SQM = null, sqPhase = null, sqPing = null;
+const mmss = sec => { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+const minsec = sec => { sec = Math.max(0, Math.round(sec || 0)); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}분 ${r}초` : `${r}초`; };
+const spTxt = sp => (sp || []).map((v, i) => v ? `${'①②③④'[i]} ${mmss(v)}` : '').filter(Boolean).join(' · ');
 const sqMine = () => meS && meS.sq ? meS.sq : null;
 function sqOpts(o, mine) { return `<div class="gqo">${o.map((x, i) => `<button class="btn ghost" data-sqa="${i}" ${mine ? '' : 'disabled'}><kbd>${i + 1}</kbd> ${esc(x)}</button>`).join('')}</div>`; }
 function sqBind() { document.querySelectorAll('[data-sqa]').forEach(b => b.addEventListener('click', () => { if (sqPhase !== 'q' || b.disabled) return; sqPhase = 'wait'; document.querySelectorAll('[data-sqa]').forEach(x => { x.disabled = true; if (x === b) x.style.outline = '3px solid #FFD45A'; }); send({ t: 'sqa', a: +b.dataset.sqa }); })); }
 function sqCloseSoon(ms) { setTimeout(() => { if ($('#mCard').dataset.kind === 'sq' && !sqPhase) $('#modal').hidden = true; }, ms); }
 function sqMsgH(m) {
   if (m.s === 'start') { sqPhase = null; toast(`🤝 <b style="color:${m.c}">${esc(m.n)} 팀</b> 결성! ${esc(m.names)}<br>${m.why ? esc(m.why) + '<br>' : ''}팀 미션 1/4: <b>${esc(m.mn)}</b> — ${esc(m.md)}`, 8000); feed(`🤝 <b style="color:${m.c}">${esc(m.n)} 팀</b> 결성!`); fxRing(local.x, local.z, m.c, .6, 4, 1); return; }
-  if (m.s === 'next') { sqPhase = null; if ($('#mCard').dataset.kind === 'sq') $('#modal').hidden = true; toast(`✅ <b>${esc(m.done)} 성공!</b> 팀 모두 레벨 업 + 40코인 + 부품 ⚙1<br>다음 미션 ${m.stage}/4: <b>${esc(m.mn)}</b> — ${esc(m.md)}`, 8000); fxRing(local.x, local.z, '#FFD45A', .6, 4, 1); return; }
+  if (m.s === 'next') { sqPhase = null; if ($('#mCard').dataset.kind === 'sq') $('#modal').hidden = true; toast(`✅ <b>${esc(m.done)} 성공!</b>${m.dur ? ` <span style="color:#9FE8F5">⏱ ${minsec(m.dur / 1000)}</span>` : ''} 팀 모두 레벨 업 + 40코인 + 부품 ⚙1<br>다음 미션 ${m.stage}/4: <b>${esc(m.mn)}</b> — ${esc(m.md)}`, 8000); fxRing(local.x, local.z, '#FFD45A', .6, 4, 1); return; }
   if (m.s === 'reset') { sqPhase = null; toast(`선생님이 팀 미션을 처음부터 다시 시작했어요. 미션 1/4: <b>${esc(m.mn)}</b>`, 4500); return; }
   if (m.s === 'clear') {
     const mine = sqMine() && sqMine().id === m.team;
     if (mine) { sqPhase = null; if ($('#mCard').dataset.kind === 'sq') $('#modal').hidden = true; fxRing(local.x, local.z, m.c, .6, 6, 1.4); }
-    toast(mine ? `🏆 <b style="color:${m.c}">${esc(m.n)} 팀 CLEAR!</b> (${m.rank}번째) 팀 모두 레벨 업 + 코인 + 부품 + 🌪 바람의 축복 60초!<br>이제 다른 팀을 도와주세요. 절반 이상의 팀이 CLEAR하면 <b>태풍 마수</b>가 나타나요!` : `🏆 <b style="color:${m.c}">${esc(m.n)} 팀</b>이 팀 미션을 모두 해냈어요! (${m.rank}번째)`, mine ? 9000 : 3500);
-    feed(`🏆 <b style="color:${m.c}">${esc(m.n)} 팀</b> CLEAR! (${m.rank}번째)`); return;
+    toast(mine ? `🏆 <b style="color:${m.c}">${esc(m.n)} 팀 CLEAR!</b> (${m.rank}번째 · ⏱ <b>${minsec(m.total / 1000)}</b>)<br><small>${spTxt(m.sp)}</small> 팀 모두 레벨 업 + 코인 + 부품 + 🌪 바람의 축복 60초!<br>이제 다른 팀을 도와주세요. 절반 이상의 팀이 CLEAR하면 <b>태풍 마수</b>가 나타나요!` : `🏆 <b style="color:${m.c}">${esc(m.n)} 팀</b>이 팀 미션을 모두 해냈어요! (${m.rank}번째 · ⏱ ${minsec(m.total / 1000)})`, mine ? 9000 : 3500);
+    feed(`🏆 <b style="color:${m.c}">${esc(m.n)} 팀</b> CLEAR! ${minsec(m.total / 1000)} (${m.rank}번째)`); return;
   }
   if (m.s === 'ping') { sqPing = { x: m.x, z: m.z, until: performance.now() + 15000 }; fxRing(m.x, m.z, '#FFD45A', 1, 7, 1.6); toast(`📍 <b>${esc(m.by)}</b>이(가) 풍력발전기 앞에서 기다려요! 미니맵의 <b style="color:#FFD45A">깜빡이는 노란 원</b>으로 모여요 (${m.here}/${m.of}명)<br>아직 안 온 친구: <b>${m.away.map(esc).join(', ')}</b>`, 6000); return; }
   if (m.s === 'rq') {
@@ -1065,9 +1068,9 @@ function renderSq() {   // 화면 위 미션 바 (2부)
     name = `⏳ ${tn} 팀원 모으는 중 · <b style="color:#FFD45A">${sq ? sq.wait : '?'}명</b> 더 오면 시작`;
     if (so) { const a = so[1] + so[3] + so[5], b = so[2] + so[4] + so[6]; num = `훈련 ${a}/${b}`; fill = a / b; desc = `🎯 혼자 훈련 ${so[0]}단계: 🌪 돌풍 발전기 문제 ${so[1]}/${so[2]} · 🔧 과제 ${so[3]}/${so[4]} · 👾 몬스터 ${so[5]}/${so[6]}`; }
     else { fill = 0; desc = SQM[0].d; }
-  } else if (st >= 5) { name = `🏆 ${tn} CLEAR!${sq.rank ? ` (${sq.rank}번째)` : ''}`; fill = 1; desc = SQM[5].d; }
+  } else if (st >= 5) { name = `🏆 ${tn} CLEAR!${sq.rank ? ` (${sq.rank}번째)` : ''} · ⏱ <b style="color:#FFD45A">${minsec(sq.tm)}</b>`; fill = 1; desc = (spTxt(sq.sp) ? '미션별 ' + spTxt(sq.sp) + '<br>' : '') + SQM[5].d; }
   else {
-    name = `${tn} 미션 ${st}/4 · ${SQM[st].ic} ${esc(SQM[st].n)}`;
+    name = `${tn} 미션 ${st}/4 · ${SQM[st].ic} ${esc(SQM[st].n)} <span style="font:700 12px var(--mono);color:#9FE8F5">⏱ ${mmss(sq.tm)}</span>`;
     if (st === 2 || st === 4) { num = sq.mq ? '문제 푸는 중' : sq.cd ? `${sq.cd}초 뒤 재도전` : '발전기로 모여요'; fill = sq.mq ? .5 : 0; }
     else { num = `${sq.pr} / ${sq.gl}`; fill = sq.pr / sq.gl; }
     desc = esc(SQM[st].d);
@@ -1157,7 +1160,7 @@ function openJob() {
   document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', () => { send({ t: 'job', job: b.dataset.job }); closeModal(); }));
 }
 function openRank() {
-  const ts = teamsOn && TEAMS.length ? `<div class="tstand">${TEAMS.map((T, i) => { const t = teamInfo[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; if (t.st != null) return t.n ? `<div style="background:${T.c}">${esc(T.n)} 팀 · ${t.st >= 5 ? '🏆 CLEAR' + (t.clear ? ' ' + t.clear + '등' : '') : t.st ? '미션 ' + t.st + '/4' : '⏳ 모으는 중'}<small>${(t.mem || []).map(esc).join(' · ')}<br>과제 ${t.tasks} · 처치 ${t.kills}</small></div>` : ''; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점<small>${t.n}명 · 과제 ${t.tasks} · 처치 ${t.kills} · 레벨 업 ${t.lvups}<br>게이지 ${t.pts}/${t.goal}${t.bless ? ` · 🌪축복 ${t.bless}초` : ''}</small></div>`; }).join('')}</div>` : '';
+  const ts = teamsOn && TEAMS.length ? `<div class="tstand">${TEAMS.map((T, i) => { const t = teamInfo[i] || { pts: 0, goal: 1, lvups: 0, tasks: 0, kills: 0, n: 0 }; if (t.st != null) return t.n ? `<div style="background:${T.c}">${esc(T.n)} 팀 · ${t.st >= 5 ? '🏆 CLEAR' + (t.clear ? ' · 기록 ' + t.clear + '위' : '') : t.st ? '미션 ' + t.st + '/4' : '⏳ 모으는 중'}${t.tm ? ` · ⏱ ${t.st >= 5 ? minsec(t.tm) : mmss(t.tm)}` : ''}<small>${spTxt(t.sp) ? spTxt(t.sp) + '<br>' : ''}${(t.mem || []).map(esc).join(' · ')}<br>과제 ${t.tasks} · 처치 ${t.kills}</small></div>` : ''; return `<div style="background:${T.c}">${T.n} 팀 · ${t.score || 0}점<small>${t.n}명 · 과제 ${t.tasks} · 처치 ${t.kills} · 레벨 업 ${t.lvups}<br>게이지 ${t.pts}/${t.goal}${t.bless ? ` · 🌪축복 ${t.bless}초` : ''}</small></div>`; }).join('')}</div>` : '';
   const rows = lb.map((r, i) => `<tr style="${r[0] === myId ? 'background:#E3F4F0' : ''}"><td class="m">${r[12] ? '🛡' : r[0] === king ? '👑' : i + 1}</td><td>${teamsOn && TEAMS[r[9]] ? `<span class="tdot" style="background:${TEAMS[r[9]].c}"></span>` : ''}<b>${esc(r[1])}</b></td><td class="m">Lv ${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('');
   openModal('rank', `<h2>순위</h2>${ts ? `<p style="font-size:13px">${SQM ? '들어온 순서대로 3~4명이 한 팀. 팀 미션 4개를 먼저 해낸 팀부터 CLEAR 순위가 매겨져요!' : '팀 점수 = 과제 ×3 + 처치 ×1 + 팀 레벨 업 ×10 · 결승 라운드가 끝나면 점수가 가장 높은 팀이 우승!'}</p>${ts}` : ''}<p>레벨 → 경험치 → 코인 순서. 👑 1등은 현상금이 걸려 있어요.</p><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th><th>최고 연속</th></tr>${rows}</table><div class="acts"><button class="btn ghost" id="gfxB">그래픽: ${GFX === 'high' ? '고급' : '가볍게'}</button><button class="btn ghost" id="mX">닫기 <kbd>Tab</kbd></button></div>`);
   $('#mX').addEventListener('click', closeModal); $('#gfxB').addEventListener('click', () => { setGfx(GFX === 'high' ? 'low' : 'high'); openRank(); });
@@ -1176,7 +1179,7 @@ function showEnd(top, teams) {
   const p = top.slice(0, 3), hs = [150, 190, 120], cols = ['#9AA6AC', '#FFB800', '#C98A4A'], order = [1, 0, 2];
   const pod = order.filter(i => p[i]).map(i => `<div style="height:${hs[order.indexOf(i)]}px;background:${cols[order.indexOf(i)]}"><span>${i + 1}등</span>${esc(p[i].name)}<span>Lv ${p[i].lv} · ${p[i].coins}코인</span></div>`).join('');
   const rows = top.map((r, i) => `<tr><td class="m">${i + 1}</td><td><b>${esc(r.name)}</b></td><td class="m">Lv ${r.lv}</td><td class="m">${r.coins}</td><td class="m">${r.kills}</td><td class="m">${r.deaths}</td></tr>`).join('');
-  const tw = teams && teams.length ? `<div class="twin" style="background:${teams[0].c}">🏆 ${esc(teams[0].n)} 팀 우승! <small>${teams[0].score}점 · 과제 ${teams[0].tasks} · 처치 ${teams[0].kills} · 팀 레벨 업 ${teams[0].lvups}</small></div><div class="tstand">${teams.map((t, i) => `<div style="background:${t.c}">${i + 1}위 ${esc(t.n)} 팀<small>${t.score}점 · 과제 ${t.tasks} · 처치 ${t.kills}</small></div>`).join('')}</div><h3 style="margin:10px 0 0">개인 순위</h3>` : '';
+  const tw = teams && teams.length ? `<div class="twin" style="background:${teams[0].c}">🏆 ${esc(teams[0].n)} 팀 우승! <small>${teams[0].score}점 · 과제 ${teams[0].tasks} · 처치 ${teams[0].kills} · 팀 레벨 업 ${teams[0].lvups}</small></div><div class="tstand">${teams.map((t, i) => `<div style="background:${t.c}">${i + 1}위 ${esc(t.n)} 팀${t.tm ? ` · ${t.clear ? '🏆 ' : ''}⏱ ${minsec(t.tm)}` : ''}<small>${t.score}점 · 과제 ${t.tasks} · 처치 ${t.kills}</small></div>`).join('')}</div><h3 style="margin:10px 0 0">개인 순위</h3>` : '';
   openModal('end', `<h2>결승 라운드 종료!</h2>${tw}<div class="pod">${pod}</div><table><tr><th>#</th><th>이름</th><th>레벨</th><th>코인</th><th>처치</th><th>쓰러짐</th></tr>${rows}</table><div class="acts"><button class="btn" id="mX">확인</button></div>`);
   $('#mX').addEventListener('click', closeModal);
 }
