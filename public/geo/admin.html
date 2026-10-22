@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>지열 정비대 TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 선생님 TV 화면: 왼쪽 큰 입장 코드·순위, 오른쪽 모둠 카드(깊이 막대). 교실 TV에서 멀리서도 보이게 크게. */
+:root{--bg:#0d0b0a;--panel:#1a1714;--line:rgba(241,238,232,.14);--ink:#F1EEE8;--ink2:#B8B2A6;--hi:#F2A922;--ok:#7DDB7A;--bad:#FF5A3C;
+  --f-disp:"Black Han Sans","IBM Plex Sans KR",sans-serif;--f-body:"IBM Plex Sans KR","Malgun Gothic",sans-serif;--f-num:"IBM Plex Mono",monospace;color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);word-break:keep-all;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+button{font:inherit;color:inherit;cursor:pointer;border:1.5px solid var(--line);background:rgba(255,255,255,.06);border-radius:10px;padding:8px 14px;font-weight:700}
+button.pri{background:var(--hi);color:#1a1205;border-color:var(--hi)} button.danger{border-color:var(--bad);color:var(--bad)}
+input{font:inherit;font-size:18px;background:#000;color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px}
+.wrap{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px;align-items:start}
+.side{display:grid;gap:12px;position:sticky;top:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+h1{font-family:var(--f-disp);font-weight:400;font-size:30px;margin:0}
+.code{font-family:var(--f-num);font-size:clamp(56px,7vw,92px);letter-spacing:.08em;color:var(--hi);line-height:1}
+.muted{color:var(--ink2);font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.tm{display:grid;grid-template-columns:minmax(0,1fr) 56px;gap:10px}
+.tm h2{margin:0;font-size:22px;display:flex;justify-content:space-between;gap:8px} .tm h2 small{font-family:var(--f-num);font-size:14px;color:var(--ink2)}
+.stg{color:var(--hi);font-weight:700;margin:4px 0} .stg.clear{color:var(--ok)}
+.mem{display:flex;justify-content:space-between;font-size:14px;padding:2px 0;border-bottom:1px solid var(--line)} .mem.off{opacity:.45} .mem span{font-family:var(--f-num);color:var(--ink2)}
+.bar{height:8px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;margin:6px 0} .bar b{display:block;height:100%;background:linear-gradient(90deg,#6fa5c9,#ff5a1c)}
+.gauge{position:relative;height:190px;border-radius:8px;background:linear-gradient(#6fa5c9,#8a6a45 15%,#9a8478 35%,#7a3a24 75%,#ff5a1c)}
+.gauge i{position:absolute;left:4px;right:4px;height:2px;background:rgba(255,255,255,.5)}
+.gauge b{position:absolute;left:50%;transform:translate(-50%,-50%);font-size:11px;background:#fff;color:#111;border-radius:8px;padding:0 4px;white-space:nowrap;transition:top .5s}
+.tools{margin-top:8px} .tools button{font-size:12px;padding:5px 8px}
+.rank li{font-size:16px;margin:4px 0} .rank b{color:var(--hi)}
+#login{max-width:420px;margin:12vh auto;display:grid;gap:12px}
+.confirm{display:none} .confirm.on{display:flex}
+@media (max-width:760px){.wrap{grid-template-columns:1fr}.side{position:static}}
+</style></head><body>
+<div id="login" class="card"><h1>지열 정비대 · 선생님 화면</h1><p class="muted">Render에 정한 관리자 비밀번호(ADMIN_KEY)를 넣어요.</p><input id="key" type="password" placeholder="관리자 비밀번호"><button class="pri" id="go">들어가기</button><p id="lmsg" class="muted"></p></div>
+<div class="wrap" id="main" hidden>
+  <div class="side">
+    <div class="card"><div class="muted">학생 주소</div><div style="font-size:18px;font-weight:700" id="url"></div><div class="muted" style="margin-top:10px">입장 코드</div><div class="code" id="code">----</div>
+      <div class="row" style="margin-top:8px"><button id="newCode">새 코드</button><button id="lock"></button></div></div>
+    <div class="card"><h1 style="font-size:22px">🏆 CLEAR 순위</h1><ol class="rank" id="rank"></ol><p class="muted" id="rankNote">걸린 시간이 짧은 순서</p></div>
+    <div class="card"><div class="row"><button class="danger" id="end">🚪 수업 끝 · 모두 내보내기</button></div><div class="row confirm" id="endC" style="margin-top:8px"><span>정말 모두 내보낼까요? 기록도 지워져요.</span><button class="danger" id="endY">예, 내보내기</button><button id="endN">취소</button></div>
+      <p class="muted" id="stat"></p></div>
+  </div>
+  <div class="teams" id="teams"></div>
+</div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const IC = { drill: '⛏', geo: '🔬', pipe: '🔧', safe: '🦺' }, DEP = [0, 400, 1000, 2000, 3000];
+let ws = null, key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('geoKey') || '', last = null;
+const tfmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/wsgeo');
+  ws.onopen = () => op('snap');
+  ws.onmessage = e => { const m = JSON.parse(e.data); if (m.t === 'err') { $('#lmsg').textContent = m.s; $('#login').hidden = false; $('#main').hidden = true; return; } if (m.t === 'admin') { sessionStorage.setItem('geoKey', key); $('#login').hidden = true; $('#main').hidden = false; last = m; draw(m); } };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+function op(o, extra) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(Object.assign({ c: 'admin', key, op: o }, extra || {}))); }
+function draw(m) {
+  $('#url').textContent = location.host + '/geo'; $('#code').textContent = m.code;
+  $('#lock').textContent = m.locked ? '🔒 입장 잠김 (풀기)' : '🔓 입장 열림 (잠그기)'; $('#lock').onclick = () => op('lock', { on: !m.locked });
+  $('#stat').textContent = `서버 켜진 지 ${tfmt(m.up)} · 보낸 데이터 약 ${(m.kb / 1024).toFixed(1)} MB (Render 무료 한도: 월 5GB)`;
+  const clear = m.teams.filter(t => t.clear).sort((a, b) => (a.tEnd - a.t0) - (b.tEnd - b.t0));
+  $('#rank').innerHTML = clear.map((t, i) => `<li><b>${esc(t.name)}</b> ${tfmt(t.tEnd - t.t0)} · ★${t.stars}</li>`).join('') || '<li class="muted">아직 없음</li>';
+  $('#teams').innerHTML = m.teams.map(t => {
+    const S = m.stages[t.stage] || {}, el = t.started ? (t.clear ? t.tEnd : m.now) - t.t0 : 0, doneN = Object.keys(t.done).length, all = m.stages.reduce((a, s) => a + s.n, 0);
+    const dots = t.members.filter(x => x.on).map(x => `<b style="top:${4 + (x.depth || 0) / 3200 * 92}%">${esc(x.name.slice(0, 3))}</b>`).join('');
+    return `<div class="card tm"><div><h2>${esc(t.name)} <small>${t.started ? tfmt(el) : '대기 중'}</small></h2>
+      <div class="stg${t.clear ? ' clear' : ''}">${t.clear ? '🏆 CLEAR' : t.started ? (t.stage + 1) + '/6 · ' + esc(S.title) : '역할 정하는 중'}</div>
+      <div class="bar"><b style="width:${doneN / all * 100}%"></b></div>
+      ${t.members.map(x => `<div class="mem${x.on ? '' : ' off'}">${esc(x.name)} ${x.roles.map(r => IC[r]).join('')}<span>${x.on ? (x.lv ? x.depth + ' m' : '지상') : '나감'}</span></div>`).join('')}
+      <div class="muted" style="margin-top:6px">★ ${t.stars}/${m.starMax}${t.stage === 4 && t.seqPos ? ' · 펌프 순서 ' + t.seqPos + '/4' : ''}</div>
+      <div class="row tools">${t.started ? '' : `<button data-op="start" data-t="${t.id}">바로 출발</button>`}${t.started && !t.clear ? `<button data-op="skip" data-t="${t.id}">이 단계 넘기기</button>` : ''}<button data-op="resetTeam" data-t="${t.id}">처음부터</button></div></div>
+      <div class="gauge">${DEP.map(d => `<i style="top:${4 + d / 3200 * 92}%"></i>`).join('')}${dots}</div></div>`;
+  }).join('') || '<div class="card muted">아직 들어온 모둠이 없어요. 학생 화면에서 이름·모둠 번호·입장 코드를 넣으면 여기에 나타나요.</div>';
+  document.querySelectorAll('[data-op]').forEach(b => b.onclick = () => op(b.dataset.op, { team: +b.dataset.t }));
+}
+$('#go').onclick = () => { key = $('#key').value.trim(); op('snap'); };
+$('#key').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#newCode').onclick = () => op('code');
+$('#end').onclick = () => $('#endC').classList.add('on'); $('#endN').onclick = () => $('#endC').classList.remove('on'); $('#endY').onclick = () => { op('kickall'); $('#endC').classList.remove('on'); };
+connect();
+</script></body></html>

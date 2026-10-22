@@ -12,11 +12,13 @@ const os = require('os');
 const PORT = +process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY || crypto.randomBytes(3).toString('hex');
 const PUB = path.join(__dirname, 'public');
+const GEO = require('./geo')({ ADMIN_KEY, PUB });   // 지열 정비대 (/geo) — 아레나와 따로 돌아감
 
 /* ======================= tiny static server ======================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (GEO.http(req, res, p)) return;
   if (p === '/' || p === '' || p === '/2' || p === '/2/') p = '/index.html';
   if (p === '/admin' || p === '/tv' || p === '/admin2' || p === '/tv2') p = '/admin.html';
   if (p === '/healthz') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
@@ -80,6 +82,7 @@ server.on('upgrade', (req, sock) => {
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   sock.setNoDelay(true);
+  if ((req.url || '').startsWith('/wsgeo')) return GEO.onConnect(new Conn(sock));
   const room = (req.url || '').startsWith('/ws2') ? ROOMS.coop : ROOMS.battle;
   room.onConnect(new Conn(sock));
 });
