@@ -71,6 +71,8 @@ kbd{font:700 10px var(--mono);background:rgba(255,255,255,.9);color:#10242B;bord
 .toast{position:absolute;left:50%;top:calc(64px + env(safe-area-inset-top));transform:translateX(-50%);border-radius:14px;padding:9px 16px;font-weight:700;font-size:14.5px;max-width:calc(100vw - 32px);text-align:center}
 .toast b{color:var(--y)}
 body.hasq .toast{top:calc(156px + env(safe-area-inset-top))}
+body.hasboss .qbar{top:calc(122px + env(safe-area-inset-top))} body.hasboss .toast{top:calc(222px + env(safe-area-inset-top))}
+@media (max-width:760px){body.hasboss .qbar{top:calc(240px + env(safe-area-inset-top))} body.hasboss .toast{top:calc(64px + env(safe-area-inset-top))}}
 @media (max-width:760px){body.hasq .toast{top:calc(64px + env(safe-area-inset-top))}}
 .joy{position:absolute;left:calc(22px + env(safe-area-inset-left));bottom:calc(22px + env(safe-area-inset-bottom));width:138px;height:138px;border-radius:50%;touch-action:none}
 .joy i{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;border-radius:50%;background:rgba(255,255,255,.85)}
@@ -750,7 +752,7 @@ function renderRaid() {
     $('#qName').textContent = st >= 4 ? '🎉 ' + QST[4].n : `협동 퀘스트 ${st}/3 · ${QST[st].n}`; $('#qNum').textContent = st <= 2 ? `${pr} / ${gl}` : '';
     $('#qDesc').textContent = QST[Math.min(4, st)].d; $('#qFill').style.width = (st >= 3 ? 100 : Math.min(100, pr / gl * 100)) + '%';
   } else qb.hidden = true;
-  document.body.classList.toggle('hasq', !qb.hidden);
+  document.body.classList.toggle('hasq', !qb.hidden); document.body.classList.toggle('hasboss', !!bossInfo && !qb.hidden);
 }
 function tickFx(dt) {
   for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.u(k); if (k >= 1) { scene.remove(f.o); f.o.material && f.o.material.dispose(); f.o.geometry && !(f.o.userData && f.o.userData.shared) && f.o.geometry.dispose(); f.tex && f.tex.dispose(); FX.splice(i, 1); } }
@@ -810,6 +812,7 @@ function onMsg(m) {
     if (m.s === 'spawn') { toast(`🌪 <b>레이드 보스 '태풍 마수 돌개'</b>가 나타났어요! 모두 힘을 합쳐 쓰러뜨리세요! ${m.why === 'level' ? '(레벨 10 친구가 많아졌어요)' : ''}`, 6000); feed('🌪 <b>태풍 마수 돌개</b> 등장!'); bossFlash(); }
     if (m.s === 'enrage') { toast('🔥 <b>돌개가 분노했어요!</b> 더 빠르고 강해졌어요. 노란 원을 피하세요!', 4000); }
     if (m.s === 'summon') { toast('돌개가 <b>부하 몬스터</b>를 불렀어요!', 2600); }
+    if (m.s === 'gone') { toast('선생님이 <b>태풍 마수</b>를 돌려보냈어요. 팀 미션을 계속해요!', 3500); }
     if (m.s === 'die') { toast(`🏆 <b>태풍 마수 돌개 토벌 성공!</b> ${m.n}명이 힘을 합쳤어요.<br>기여 1위 ${m.top.map(t => `${esc(t[0])} ${t[1]}%`).join(' · ')}`, 7000); feed(`🏆 <b>${esc(m.by)}</b>의 마지막 일격으로 돌개 토벌!`); }
     return;
   }
@@ -1058,7 +1061,7 @@ function sqMsgH(m) {
 }
 function renderSq() {   // 화면 위 미션 바 (2부)
   const qb = $('#qBar'), sq = sqMine(), so = meS && meS.solo;
-  if (!SQM || (!sq && !so) || bossInfo) return false;
+  if (!SQM || (!sq && !so)) return false;
   qb.hidden = false;
   const st = sq ? sq.st : 0, T = sq ? TEAMS[sq.id] : null, tn = T ? `<span style="color:${T.c}">${esc(T.n)} 팀</span>` : '';
   $('#qSteps').innerHTML = [1, 2, 3, 4].map(i => `<span class="${i < st ? 'done' : i === st ? 'on' : ''}"></span>`).join('');

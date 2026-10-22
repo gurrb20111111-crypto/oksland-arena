@@ -1382,6 +1382,7 @@ function adminCmd(c, msg) {
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
   else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) sqResetAll(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
   else if (msg.c === 'boss') { bossCd = 0; spawnBoss('teacher'); }
+  else if (msg.c === 'bossoff') { if (boss) { mons.delete(boss.id); boss = null; bossStrikes.length = 0; broadcast({ t: 'boss', s: 'gone' }); } bossCd = Date.now() + 365 * 864e5; c.send({ t: 'msg', s: '태풍 마수를 없앴어요. 선생님이 [소환]을 누르기 전에는 자동으로 나오지 않아요.' }); }
   else if (msg.c === 'chest') { if (chest) { broadcast({ t: 'chest', s: 'gone' }); chest = null; } dropChest('teacher'); }
   else if (msg.c === 'qreset') { if (COOP) { sqResetAll(); sendBoard(rankList()); } }
   else if (msg.c === 'qnext') { if (COOP) { for (const s of squads) if (s.stage >= 1 && s.stage < 5 && sqOn(s).length) sqAdvance(s); } }

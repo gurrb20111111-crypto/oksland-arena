@@ -68,7 +68,7 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
     <div class="panel">
       <h2>레이드 보스 · 협동 퀘스트</h2>
       <div id="bossBox" class="muted" style="font-size:16px;margin-bottom:8px">보스 없음</div>
-      <div class="rowx"><button class="btn r" id="bossGo">🌪 태풍 마수 돌개 소환</button><button class="btn" id="chestGo">📦 보물 상자 떨어뜨리기</button></div>
+      <div class="rowx"><button class="btn r" id="bossGo">🌪 태풍 마수 돌개 소환</button><button class="btn g" id="bossOff">🚫 태풍 마수 없애기</button><button class="btn" id="chestGo">📦 보물 상자 떨어뜨리기</button></div>
       <p class="muted">보물 상자는 2분 30초마다 자동으로 섬 어딘가(가끔 건물 위)에 떨어져요. 3초 동안 열면 코인 90~150 · 장비 1단계 · 회복 음료 · 체력 가득. 여는 중에 맞으면 끊겨요.</p>
       <p class="muted" id="bossHelp">1부: 접속자 절반 이상이 Lv 10이 되면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원. 지금 바로 부르려면 위 버튼.</p>
       <div id="questBox" hidden>
@@ -133,6 +133,7 @@ function renderBQ(m) {
   $('#bossBox').innerHTML = m.bs ? `<b style="color:#FF8A7A;font-size:22px">🌪 돌개 체력 ${m.bs[1].toLocaleString()} / ${m.bs[2].toLocaleString()}${m.bs[3] ? ' · 분노!' : ''}</b>` : '보스 없음';
   $('#questBox').hidden = !ROOM2; if (ROOM2) { const on = teams.filter(t => t.n), cl = on.filter(t => t.st >= 5).length, wait = on.filter(t => !t.st).length; const rec = teams.map((t, i) => ({ t, i })).filter(x => x.t.clear && TEAMS[x.i]).sort((p, q) => p.t.clear - q.t.clear).map(x => `${x.t.clear}위 ${TEAMS[x.i].n} ${minsec(x.t.tm)}`).join(' · '); $('#qTxt').textContent = `팀 ${on.length}개 · 🏆 CLEAR ${cl} · 미션 중 ${on.length - cl - wait} · ⏳ 모으는 중 ${wait}` + (rec ? `\n🏆 CLEAR 기록(걸린 시간 순): ${rec}` : ''); $('#qTxt').style.whiteSpace = 'pre-line'; }
 }
+$('#bossOff').addEventListener('click', () => { if (confirm('태풍 마수를 없앨까요? [소환]을 누르기 전에는 자동으로 다시 나오지 않아요.')) cmd({ c: 'bossoff' }); });
 $('#chestGo').addEventListener('click', () => cmd({ c: 'chest' }));
 $('#bossGo').addEventListener('click', () => { if (confirm('레이드 보스 태풍 마수 돌개를 지금 소환할까요?')) cmd({ c: 'boss' }); });
 $('#qNext').addEventListener('click', () => { if (confirm('미션 중인 모든 팀을 다음 미션으로 넘길까요? (팀원 모두 보상을 받아요)')) cmd({ c: 'qnext' }); });
