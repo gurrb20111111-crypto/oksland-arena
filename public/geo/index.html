@@ -2082,20 +2082,24 @@ function initInput() {
   addEventListener('keyup', e => { IN.keys.delete(e.code); if (e.code === 'Space') IN.jump = false; if (e.code === 'KeyE') IN.e = false; if (e.code === 'KeyF') IN.primary = false; });
   addEventListener('blur', () => { IN.keys.clear(); IN.primary = false; IN.e = false; IN.jump = false; });
   // 마우스: 클릭하면 시점 고정(pointer lock). 안 되는 곳은 끌어서 둘러보기
+  // 캔버스 위를 투명한 #touchLayer가 덮고 있으므로 마우스도 그 층에서 받음 (손가락은 아래 터치 처리)
   let drag = null;
-  cv.addEventListener('mousedown', e => {
+  const ml = $('#touchLayer'), locked = () => document.pointerLockElement === ml;
+  ml.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse') return;
     SND.init();
-    if (MODE.v !== 'dive') return;
-    if (document.pointerLockElement !== cv && cv.requestPointerLock && !QA) { try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (er) { } }
+    if (MODE.v !== 'dive' || MODE.modal) return;
+    if (!locked() && ml.requestPointerLock && !QA) { try { const r = ml.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (er) { } }
     if (e.button === 0) IN.primary = true; if (e.button === 2) { IN.ePress = true; IN.e = true; }
     drag = { x: e.clientX, y: e.clientY };
   });
-  addEventListener('mouseup', e => { if (e.button === 0) IN.primary = false; if (e.button === 2) IN.e = false; drag = null; });
+  addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') return; if (e.button === 0) IN.primary = false; if (e.button === 2) IN.e = false; drag = null; });
   addEventListener('mousemove', e => {
-    if (document.pointerLockElement === cv) { IN.lookX += e.movementX * 0.0024; IN.lookY += e.movementY * 0.0024; }
+    if (MODE.v !== 'dive') return;
+    if (locked()) { IN.lookX += e.movementX * 0.0024; IN.lookY += e.movementY * 0.0024; }
     else if (drag) { IN.lookX += (e.clientX - drag.x) * 0.005; IN.lookY += (e.clientY - drag.y) * 0.005; drag.x = e.clientX; drag.y = e.clientY; }
   });
-  cv.addEventListener('contextmenu', e => e.preventDefault());
+  ml.addEventListener('contextmenu', e => e.preventDefault()); cv.addEventListener('contextmenu', e => e.preventDefault());
   addEventListener('wheel', e => { if (MODE.v === 'dive') selectTool((ME.tool + (e.deltaY > 0 ? 1 : -1) + tools().length) % tools().length); }, { passive: true });
   // 터치: 왼쪽 조이스틱, 오른쪽 끌어서 둘러보기, 버튼
   const joy = $('#joy'), knob = $('#joyK'); let jt = null, lt = null;
