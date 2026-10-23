@@ -962,7 +962,9 @@ function assetBases() {
   if (ASSET.bases) return ASSET.bases;
   const L = location, b = [];
   const isArtifact = /claude\.ai|claudeusercontent|anthropic/.test(L.hostname) || L.protocol === 'blob:' || L.protocol === 'about:';
-  if (PREF.noAssets || isArtifact) return (ASSET.bases = []);
+  if (PREF.noAssets) return (ASSET.bases = []);
+  if (ASSET.artifact) { try { return (ASSET.bases = [new URL('assets/', document.baseURI).href]); } catch (e) { return (ASSET.bases = ['assets/']); } }   // claude.ai 게시본: 그림 파일을 함께 올림
+  if (isArtifact) return (ASSET.bases = []);
   if (/^https?:$/.test(L.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(L.hostname) && ASSET.ref.indexOf('__') !== 0)
     b.push('https://cdn.jsdelivr.net/gh/' + ASSET.repo + '@' + ASSET.ref + '/public/geo/assets/');
   const dir = /\/geo$/.test(L.pathname) ? L.origin + '/geo/' : L.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
