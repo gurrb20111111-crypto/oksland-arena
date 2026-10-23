@@ -28,7 +28,7 @@
 
   /* 단계와 과제. role이 null이면 누구나 */
   const STAGES = [
-    { id: 0, lv: 0, title: '현장 도착 · 케냐 올카리아', goal: '360° 현장 사진에서 세 곳을 찾고 승강기에 타요', tasks: [
+    { id: 0, lv: 0, title: '현장 도착 · 케냐 올카리아', goal: '발전소 현장을 둘러보며 세 곳을 찾고 승강기에 타요', tasks: [
       { id: 'hs_well', role: null, label: '생산정(뜨거운 물·증기가 올라오는 관) 찾기' },
       { id: 'hs_steam', role: null, label: '하얀 수증기 찾기' },
       { id: 'hs_life', role: null, label: '발전소 옆에 사는 야생 동물 찾기' }] },

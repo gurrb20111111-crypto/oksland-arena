@@ -156,7 +156,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .qo.right{border-color:var(--ok);background:rgba(125,219,122,.15)} .qo.wrong{border-color:var(--bad);opacity:.7}
 .warn{color:var(--bad)}
 .qdone details{margin-top:6px;color:var(--ink2)} .qdone summary{color:var(--ok);font-weight:700;cursor:pointer}
-#credit{position:absolute;right:max(10px,env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));font-size:11px;color:var(--ink2);background:rgba(0,0,0,.5);padding:3px 8px;border-radius:6px;max-width:50vw}
+#assetLoad{position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);font-size:12px;color:var(--ink2);background:rgba(0,0,0,.55);padding:4px 10px;border-radius:999px;pointer-events:none;z-index:5}
+#credit{position:absolute;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));font-size:11px;color:var(--ink2);background:rgba(0,0,0,.5);padding:3px 8px;border-radius:6px;max-width:50vw}
 #credit a{color:var(--ink2)}
 /* 승강기 이동 */
 #liftOv{position:absolute;inset:0;z-index:40;background:#050404;display:grid;place-items:center;opacity:0;transition:opacity .45s;pointer-events:none}
@@ -222,6 +223,7 @@ button{font:inherit;color:inherit;cursor:pointer}
     </div>
     <div id="surfUi" class="surf-only" hidden></div>
     <div id="credit" class="surf-only"></div>
+    <div id="assetLoad" hidden></div>
   </div>
   <div id="liftOv" hidden><div class="cage"></div><div class="read"><span>승강기 이동 중</span><b id="liftDepth">0 m</b><span id="liftTemp">15 ℃</span><div class="lb"><i id="liftBar"></i></div></div></div>
   <div id="toasts"></div>
@@ -296,7 +298,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 
   /* 단계와 과제. role이 null이면 누구나 */
   const STAGES = [
-    { id: 0, lv: 0, title: '현장 도착 · 케냐 올카리아', goal: '360° 현장 사진에서 세 곳을 찾고 승강기에 타요', tasks: [
+    { id: 0, lv: 0, title: '현장 도착 · 케냐 올카리아', goal: '발전소 현장을 둘러보며 세 곳을 찾고 승강기에 타요', tasks: [
       { id: 'hs_well', role: null, label: '생산정(뜨거운 물·증기가 올라오는 관) 찾기' },
       { id: 'hs_steam', role: null, label: '하얀 수증기 찾기' },
       { id: 'hs_life', role: null, label: '발전소 옆에 사는 야생 동물 찾기' }] },
@@ -557,7 +559,12 @@ const PREF_KEY = 'geo-dive-v1';
 const PREF = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch (e) { return {}; } })();
 function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(PREF)); } catch (e) { } }
 /* 그래픽 품질: 태블릿이 느리면 자동으로 낮춤 */
-const QUAL = { low: PREF.low != null ? !!PREF.low : /Android|CrOS/.test(navigator.userAgent) && (navigator.hardwareConcurrency || 4) <= 4 };
+/* tier: high(PC·좋은 태블릿) · mid(보통 태블릿) · low(가볍게). 예전 저장값 PREF.low도 읽음 */
+const QUAL = {
+  tier: PREF.tier || (PREF.low ? 'low' : (/Android|CrOS|iPad|Mobile/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) ? ((navigator.hardwareConcurrency || 4) <= 4 ? 'low' : 'mid') : 'high'),
+  get low() { return this.tier === 'low'; }, set low(v) { this.tier = v ? 'low' : 'mid'; }
+};
+if (/[#&]gfx=(high|mid|low)/.test(location.hash)) QUAL.tier = RegExp.$1;
 function fmtTime(ms) { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + '분 ' + String(s % 60).padStart(2, '0') + '초'; }
 function toast(html, ms = 2600, cls = '') {
   const box = $('#toasts'); if (!box) return; const t = document.createElement('div'); t.className = 'toast ' + cls; t.innerHTML = html; box.appendChild(t);
@@ -792,7 +799,7 @@ function genLevel(lv) {
 const MC_CORNER = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]];
 const MC_EDGES = [[0, 1], [1, 2], [3, 2], [0, 3], [4, 5], [5, 6], [7, 6], [4, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
 function meshChunk(F, cx, cy, cz) {
-  const f = F.f, pos = [], nor = [], mat = [], ao = [];
+  const f = F.f, pos = [], nor = [], mat = [], ao = [], vr = [];
   const i0 = cx * CH, j0 = cy * CH, k0 = cz * CH, i1 = Math.min(i0 + CH, NX - 1), j1 = Math.min(j0 + CH, NY - 1), k1 = Math.min(k0 + CH, NZ - 1);
   const val = new Float32Array(8), ev = new Float32Array(36), n = { x: 0, y: 0, z: 0 };
   for (let k = k0; k < k1; k++) for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
@@ -810,9 +817,11 @@ function meshChunk(F, cx, cy, cz) {
       mat.push(rockBlend(F.lv, x, y, z));
       const open = -F.sample(x + n.x * 1.1, y + n.y * 1.1, z + n.z * 1.1);
       ao.push(clamp(0.3 + 0.7 * open / 1.1, 0.3, 1));
+      vr.push(clamp((fbm3(x * 0.28, y * 0.28, z * 0.28, 3, 71) - 0.25) * 2, 0, 1),
+        clamp(0.5 + (fbm3(x * 0.18, y * 0.3, z * 0.18, 2, 33) - 0.5) * 1.8 + (n.y < -0.4 ? 0.25 : 0) + (n.y > 0.7 ? 0.15 : 0), 0, 1));
     }
   }
-  return { pos: new Float32Array(pos), nor: new Float32Array(nor), mat: new Float32Array(mat), ao: new Float32Array(ao) };
+  return { pos: new Float32Array(pos), nor: new Float32Array(nor), mat: new Float32Array(mat), ao: new Float32Array(ao), vr: new Float32Array(vr) };
 }
 
 /* ---------- 몸 충돌 (발·허리·머리 세 공) ---------- */
@@ -941,109 +950,230 @@ function photoTex(name, urlA, urlN) {
   swap('map', urlA); swap('nmap', urlN);
 }
 
-/* ===== render.js — 화면 그리기: 암반 셰이더, 빛, 소품, 입자, 친구 모습 ===== */
-const R3 = {};   // 그리기 관련 공용 상자
-const MAX_SPOT = 4, MAX_PT = 8;
+/* ===== assets.js — 실사 질감·하늘 사진 불러오기 =====
+   순서: jsDelivr(무료 CDN, oksland-arena 공개 저장소) → 같은 서버(Render /geo/assets) → 실패하면 잡음으로 만든 질감 그대로.
+   Render 무료 통신량(월 5 GB)을 아끼려고 큰 그림은 CDN에서 받음. */
+const ASSET = {
+  ref: '__ASSET_REF__',
+  repo: 'gurrb20111111-crypto/oksland-arena',
+  bases: null, pend: 0, done: 0, fail: 0, cache: new Map(), tasks: new Map()
+};
+function assetBases() {
+  if (ASSET.bases) return ASSET.bases;
+  const L = location, b = [];
+  const isArtifact = /claude\.ai|claudeusercontent|anthropic/.test(L.hostname) || L.protocol === 'blob:' || L.protocol === 'about:';
+  if (PREF.noAssets || isArtifact) return (ASSET.bases = []);
+  if (/^https?:$/.test(L.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(L.hostname) && ASSET.ref.indexOf('__') !== 0)
+    b.push('https://cdn.jsdelivr.net/gh/' + ASSET.repo + '@' + ASSET.ref + '/public/geo/assets/');
+  const dir = /\/geo$/.test(L.pathname) ? L.origin + '/geo/' : L.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+  b.push(dir + 'assets/');
+  return (ASSET.bases = b);
+}
+const _tl = new THREE.TextureLoader(); _tl.setCrossOrigin('anonymous');
+function assetUI() {
+  const el = $('#assetLoad'); if (!el) return;
+  const busy = ASSET.pend > 0; el.hidden = !busy;
+  if (busy) el.textContent = `고화질 그림 받는 중 ${ASSET.done}/${ASSET.done + ASSET.pend}`;
+}
+/* 그림 하나 받기 → Promise<Texture|null>. opt: { srgb, repeat, aniso, flipY } */
+function loadAssetTex(path, opt = {}) {
+  const key = path + '|' + (opt.srgb ? 1 : 0);
+  if (ASSET.tasks.has(key)) return ASSET.tasks.get(key);
+  const bases = assetBases();
+  const p = new Promise(res => {
+    if (!bases.length) return res(null);
+    ASSET.pend++; assetUI();
+    let i = 0;
+    const tryNext = () => {
+      if (i >= bases.length) { ASSET.pend--; ASSET.fail++; assetUI(); return res(null); }
+      const url = bases[i++] + path; let done = false;
+      const to = setTimeout(() => { if (!done) { done = true; tryNext(); } }, 15000);
+      _tl.load(url, t => {
+        if (done) return; done = true; clearTimeout(to);
+        if (i > 1) ASSET.bases = bases.slice(i - 1);   // CDN이 안 되면 다음부터 바로 같은 서버로
+        if (opt.srgb) t.encoding = THREE.sRGBEncoding;
+        if (opt.repeat !== false) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        if (opt.flipY === false) t.flipY = false;
+        t.anisotropy = opt.aniso || (QUAL.tier === 'high' ? 8 : 4);
+        t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+        ASSET.pend--; ASSET.done++; assetUI(); res(t);
+      }, undefined, () => { if (done) return; done = true; clearTimeout(to); tryNext(); });
+    };
+    tryNext();
+  });
+  ASSET.tasks.set(key, p); return p;
+}
+/* 바위 질감 세트 (a = 색+빛남, n = 법선, d = AO·거칠기·높이) */
+function texDir() { return QUAL.tier === 'low' ? 'tex/low/' : 'tex/'; }
+function loadRockSet(name) {
+  const d = texDir();
+  return Promise.all([loadAssetTex(d + name + '_a.webp', { srgb: true }), loadAssetTex(d + name + '_n.webp'), loadAssetTex(d + name + '_d.webp')])
+    .then(([a, n, dd]) => (a && n && dd) ? { a, n, d: dd } : null);
+}
+/* 질감이 없을 때 쓰는 1×1 중립 그림 */
+const NEUTRAL = (() => {
+  const mk = (r, g, b, a) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, a]), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
+  return { d: mk(255, 175, 128, 255), n: mk(128, 128, 255, 255), black: mk(0, 0, 0, 255), white: mk(255, 255, 255, 255) };
+})();
 
+/* ===== render.js — 화면 그리기: 물리 기반 바위 셰이더, 빛, 소품, 입자, 친구 모습 =====
+   빛 세기: 예전 숫자(0~6쯤) × LUX = 실제 단위(칸델라 비슷). renderer.physicallyCorrectLights = true. */
+const R3 = {};
+const MAX_SPOT = 4, MAX_PT = 8, LUX = 14;
+
+function pixelRatioFor(tier) { const d = window.devicePixelRatio || 1; return Math.min(d, tier === 'high' ? 1.5 : tier === 'mid' ? 1.0 : 0.85); }
 function initRenderer(canvasBox) {
-  const lowGfx = QUAL.low;
-  const r = new THREE.WebGLRenderer({ antialias: !lowGfx, powerPreference: 'high-performance' });
-  r.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowGfx ? 0.9 : 1.35));
+  const r = new THREE.WebGLRenderer({ antialias: QUAL.tier === 'low', powerPreference: 'high-performance', stencil: false });
+  r.setPixelRatio(pixelRatioFor(QUAL.tier));
   r.setSize(innerWidth, innerHeight);
+  r.physicallyCorrectLights = true;
   r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
   canvasBox.appendChild(r.domElement);
   R3.r = r;
-  R3.scene = new THREE.Scene(); R3.scene.background = new THREE.Color(0x020202);
+  R3.scene = new THREE.Scene(); R3.scene.background = new THREE.Color(0x000000);
   R3.cam = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 140);
   R3.scene.add(R3.cam);
   // 소품용 three.js 빛 (암반 셰이더는 같은 값을 따로 받음)
-  R3.amb = new THREE.AmbientLight(0xffffff, 0.04); R3.scene.add(R3.amb);
+  R3.amb = new THREE.HemisphereLight(0x8090a0, 0x2a2018, 0.05); R3.scene.add(R3.amb);
   R3.spots = []; R3.pts = [];
-  for (let i = 0; i < MAX_SPOT; i++) { const s = new THREE.SpotLight(0xfff1dc, 0, 18, 0.55, 0.45, 1.6); s.target = new THREE.Object3D(); R3.scene.add(s, s.target); R3.spots.push(s); }
-  for (let i = 0; i < MAX_PT; i++) { const p = new THREE.PointLight(0xffc48a, 0, 10, 1.6); R3.scene.add(p); R3.pts.push(p); }
-  addEventListener('resize', () => { r.setSize(innerWidth, innerHeight); R3.cam.aspect = innerWidth / innerHeight; R3.cam.updateProjectionMatrix(); });
+  for (let i = 0; i < MAX_SPOT; i++) { const s = new THREE.SpotLight(0xfff1dc, 0, 22, 0.48, 0.7, 2); s.target = new THREE.Object3D(); R3.scene.add(s, s.target); R3.spots.push(s); }
+  for (let i = 0; i < MAX_PT; i++) { const p = new THREE.PointLight(0xffc48a, 0, 10, 2); R3.scene.add(p); R3.pts.push(p); }
+  addEventListener('resize', () => { r.setSize(innerWidth, innerHeight); R3.cam.aspect = innerWidth / innerHeight; R3.cam.updateProjectionMatrix(); if (window.POST) POST.resize(); });
   R3.lightU = { sPos: { value: [] }, sDir: { value: [] }, sCol: { value: [] }, sPar: { value: [] }, pPos: { value: [] }, pCol: { value: [] }, pRange: { value: [] } };
   for (let i = 0; i < MAX_SPOT; i++) { R3.lightU.sPos.value.push(new THREE.Vector3()); R3.lightU.sDir.value.push(new THREE.Vector3(0, -1, 0)); R3.lightU.sCol.value.push(new THREE.Vector3()); R3.lightU.sPar.value.push(new THREE.Vector4(0.8, 0.9, 18, 0)); }
   for (let i = 0; i < MAX_PT; i++) { R3.lightU.pPos.value.push(new THREE.Vector3()); R3.lightU.pCol.value.push(new THREE.Vector3()); R3.lightU.pRange.value.push(1); }
-  R3.common = { uAmb: { value: new THREE.Vector3(0.012, 0.011, 0.01) }, uFog: { value: new THREE.Vector3(0.006, 0.005, 0.005) }, uFogD: { value: 0.05 }, uTime: { value: 0 } };
+  R3.common = { uAmb: { value: new THREE.Vector3(0.01, 0.01, 0.01) }, uFog: { value: new THREE.Vector3(0.006, 0.005, 0.005) }, uFogD: { value: 0.05 }, uTime: { value: 0 }, uBounce: { value: 0.06 } };
 }
 
-/* ---------- 암반 셰이더 ---------- */
+/* ---------- 바위 셰이더 ---------- */
 const TERRAIN_VS = `
-attribute float aMat; attribute float aAO;
-varying vec3 vW; varying vec3 vN; varying float vMat; varying float vAO; varying float vDist;
-void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; vN = normal; vMat = aMat; vAO = aAO;
+attribute float aMat; attribute float aAO; attribute vec2 aVar;
+varying vec3 vW; varying vec3 vN; varying float vMat; varying float vAO; varying float vDist; varying vec2 vVar;
+void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; vN = normal; vMat = aMat; vAO = aAO; vVar = aVar;
   vec4 mv = viewMatrix * w; vDist = -mv.z; gl_Position = projectionMatrix * mv; }`;
 const TERRAIN_FS = `
-uniform sampler2D tA; uniform sampler2D nA; uniform sampler2D tB; uniform sampler2D nB;
-uniform float uScaleA; uniform float uScaleB; uniform vec3 uAmb; uniform vec3 uFog; uniform float uFogD; uniform float uTime;
-uniform vec3 uGlowCol; uniform float uWet; uniform float uNormStr;
+uniform sampler2D tA; uniform sampler2D nA; uniform sampler2D dA; uniform sampler2D tB; uniform sampler2D nB; uniform sampler2D dB;
+uniform float uScaleA; uniform float uScaleB; uniform vec3 uAmb; uniform vec3 uFog; uniform float uFogD; uniform float uTime; uniform float uBounce;
+uniform vec3 uGlowCol; uniform vec2 uGlowA; uniform vec2 uGlowB; uniform vec4 uLava; uniform float uWet; uniform float uNormStr; uniform vec3 uTint;
 uniform vec3 sPos[${MAX_SPOT}]; uniform vec3 sDir[${MAX_SPOT}]; uniform vec3 sCol[${MAX_SPOT}]; uniform vec4 sPar[${MAX_SPOT}];
 uniform vec3 pPos[${MAX_PT}]; uniform vec3 pCol[${MAX_PT}]; uniform float pRange[${MAX_PT}];
-varying vec3 vW; varying vec3 vN; varying float vMat; varying float vAO; varying float vDist;
-vec4 tri(sampler2D t, vec3 p, vec3 w){ return texture2D(t,p.zy)*w.x + texture2D(t,p.xz)*w.y + texture2D(t,p.xy)*w.z; }
-vec3 triN(sampler2D t, vec3 p, vec3 w, vec3 n){
-  vec3 tx = texture2D(t,p.zy).xyz*2.0-1.0, ty = texture2D(t,p.xz).xyz*2.0-1.0, tz = texture2D(t,p.xy).xyz*2.0-1.0;
-  vec3 nx = vec3(0.0, tx.y, tx.x*sign(n.x)), ny = vec3(ty.x*sign(n.y), 0.0, ty.y), nz = vec3(tz.x*sign(n.z), tz.y, 0.0);
-  return (nx*w.x + ny*w.y + nz*w.z);
+varying vec3 vW; varying vec3 vN; varying float vMat; varying float vAO; varying float vDist; varying vec2 vVar;
+#define PI 3.14159265
+float sat(float x){ return clamp(x, 0.0, 1.0); }
+/* 세 방향에서 비춰 붙이기(트라이플래너): 색·자료·법선 (화이트아웃 섞기) */
+void triSample(sampler2D tc, sampler2D tn, sampler2D td, vec3 p, vec3 n0, vec3 w, out vec4 alb, out vec3 dat, out vec3 nrm){
+  alb = vec4(0.0); dat = vec3(0.0); vec3 acc = vec3(0.0);
+  vec3 sg = sign(n0);
+  if (w.x > 0.02) { vec2 uv = vec2(p.z * sg.x, p.y); alb += texture2D(tc, uv) * w.x; dat += texture2D(td, uv).xyz * w.x;
+#ifndef LOWQ
+    vec3 t = texture2D(tn, uv).xyz * 2.0 - 1.0; t.xy *= uNormStr; t.x *= sg.x; t = vec3(t.xy + n0.zy, abs(t.z) * n0.x); acc += t.zyx * w.x;
+#endif
+  }
+  if (w.y > 0.02) { vec2 uv = vec2(p.x * sg.y, p.z); alb += texture2D(tc, uv) * w.y; dat += texture2D(td, uv).xyz * w.y;
+#ifndef LOWQ
+    vec3 t = texture2D(tn, uv).xyz * 2.0 - 1.0; t.xy *= uNormStr; t.x *= sg.y; t = vec3(t.xy + n0.xz, abs(t.z) * n0.y); acc += t.xzy * w.y;
+#endif
+  }
+  if (w.z > 0.02) { vec2 uv = vec2(-p.x * sg.z, p.y); alb += texture2D(tc, uv) * w.z; dat += texture2D(td, uv).xyz * w.z;
+#ifndef LOWQ
+    vec3 t = texture2D(tn, uv).xyz * 2.0 - 1.0; t.xy *= uNormStr; t.x *= sg.z; t = vec3(t.xy + n0.xy, abs(t.z) * n0.z); acc += t.xyz * w.z;
+#endif
+  }
+#ifndef LOWQ
+  nrm = normalize(acc);
+#else
+  nrm = n0;
+#endif
 }
+/* GGX 반사 (three.js 물리 기반과 같은 꼴) */
+vec3 brdf(vec3 N, vec3 V, vec3 L, vec3 diff, float rough, float f0){
+  vec3 H = normalize(L + V); float nl = sat(dot(N, L)), nv = max(dot(N, V), 1e-3), nh = sat(dot(N, H)), vh = sat(dot(V, H));
+  float a = rough * rough, a2 = a * a, dn = nh * nh * (a2 - 1.0) + 1.0, D = a2 / (PI * dn * dn);
+  float k = a * 0.5, vis = 0.25 / ((nl * (1.0 - k) + k) * (nv * (1.0 - k) + k));
+  float F = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
+  return nl * (diff * (1.0 - F) / PI + vec3(D * vis * F));
+}
+float punctual(float d, float range){ float r = d / range; float w = sat(1.0 - r * r * r * r); return w * w / max(d * d, 0.25); }
 void main(){
   vec3 n0 = normalize(vN);
-  vec3 w = pow(abs(n0), vec3(4.0)); w /= (w.x+w.y+w.z);
-  vec3 pa = vW * uScaleA, pb = vW * uScaleB;
-  vec4 c;
-  if (vMat < 0.02) c = tri(tA, pa, w); else if (vMat > 0.98) c = tri(tB, pb, w); else c = mix(tri(tA, pa, w), tri(tB, pb, w), vMat);
-  vec3 alb = pow(c.rgb, vec3(2.2));
-  float glow = 1.0 - c.a;
-#ifdef LOWQ
-  vec3 N = n0;
-#else
-  vec3 dn = vMat < 0.5 ? triN(nA, pa, w, n0) : triN(nB, pb, w, n0);
-  vec3 N = normalize(n0 + dn * uNormStr);
-#endif
+  vec3 w = pow(abs(n0), vec3(5.0)); w /= (w.x + w.y + w.z);
+  vec4 aA; vec3 dA_; vec3 nAw; triSample(tA, nA, dA, vW * uScaleA, n0, w, aA, dA_, nAw);
+  vec4 alb = aA; vec3 dat = dA_; vec3 N = nAw; float glow = mix(aA.a, 1.0 - aA.a, uGlowA.y) * uGlowA.x;
+  if (vMat > 0.02) {
+    vec4 aB; vec3 dB_; vec3 nBw; triSample(tB, nB, dB, vW * uScaleB, n0, w, aB, dB_, nBw);
+    float t = vMat > 0.98 ? 1.0 : sat((vMat - 0.5) * 3.0 + (dB_.z - dA_.z) * 2.5 + 0.5);
+    alb = mix(aA, aB, t); dat = mix(dA_, dB_, t); N = normalize(mix(nAw, nBw, t));
+    glow = mix(glow, mix(aB.a, 1.0 - aB.a, uGlowB.y) * uGlowB.x, t);
+  }
+  vec3 base = pow(alb.rgb, vec3(2.2)) * uTint;
+  // 큰 얼룩(정점 값)으로 반복 무늬 감추기
+  base *= 0.78 + 0.44 * vVar.x;
+  float ao = dat.x * vAO, rough = dat.y, hgt = dat.z;
+  // 물기: 오목한 곳·아래쪽이 더 젖음. 위를 보는 낮은 곳엔 물웅덩이
+  float wet = sat(uWet * vVar.y * (1.25 - hgt * 0.6));
+  base *= mix(1.0, 0.55, wet);
+  rough = mix(rough, 0.22, wet);
+  float pud = sat((wet - 0.8) * 6.0) * sat((n0.y - 0.9) * 12.0) * sat((0.4 - hgt) * 6.0);
+  N = normalize(mix(N, n0, pud)); rough = mix(rough, 0.06, pud);
+  rough = max(rough, smoothstep(4.0, 30.0, vDist) * 0.5);   // 멀리서 반짝임 줄이기
   vec3 V = normalize(cameraPosition - vW);
-  vec3 dif = uAmb * vAO, spe = vec3(0.0);
-  float shin = mix(18.0, 60.0, uWet), sk = mix(0.05, 0.55, uWet);
+  vec3 col = base * uAmb * ao;
   for (int i = 0; i < ${MAX_SPOT}; i++) {
     vec3 L = sPos[i] - vW; float d = length(L); L /= d;
-    float cone = smoothstep(sPar[i].x, sPar[i].y, dot(-L, sDir[i]));
-    float att = pow(clamp(1.0 - d / sPar[i].z, 0.0, 1.0), 2.0) / (0.6 + 0.16*d*d);
-    float nd = max(dot(N, L), 0.0);
-    vec3 li = sCol[i] * cone * att;
-    dif += li * nd * (0.55 + 0.45*vAO);
-    spe += li * nd * pow(max(dot(N, normalize(L+V)), 0.0), shin) * sk;
+    float ca = dot(-L, sDir[i]);
+    float cone = smoothstep(0.55, 0.96, ca) * 0.3 + smoothstep(0.9, 0.995, ca) * 0.7;   // 넓고 흐린 빛 + 가운데 밝은 점
+    cone *= 1.0 + 0.06 * sin(acos(clamp(ca, -1.0, 1.0)) * 70.0);                          // 반사경 무늬
+    vec3 li = sCol[i] * cone * punctual(d, sPar[i].z);
+    col += li * brdf(N, V, L, base, rough, 0.04) * mix(1.0, ao, 0.5);
+    col += li * base * uBounce * ao;
   }
   for (int i = 0; i < ${MAX_PT}; i++) {
     vec3 L = pPos[i] - vW; float d = length(L); L /= d;
-    float att = pow(clamp(1.0 - d / pRange[i], 0.0, 1.0), 2.0) / (1.0 + 0.12*d*d);
-    float nd = max(dot(N, L)*0.85 + 0.15, 0.0);
-    vec3 li = pCol[i] * att;
-    dif += li * nd * (0.45 + 0.55*vAO);
-    spe += li * max(dot(N,L),0.0) * pow(max(dot(N, normalize(L+V)), 0.0), shin) * sk;
+    vec3 li = pCol[i] * punctual(d, pRange[i]);
+    col += li * brdf(N, V, L, base, rough, 0.04) * mix(1.0, ao, 0.4);
+    col += li * base * uBounce * ao;
   }
-  vec3 col = alb * dif + spe;
-  col += glow * uGlowCol * (0.75 + 0.25*sin(uTime*1.7 + vW.x*0.9 + vW.z*0.6)) * (0.6 + 0.4*vAO);
-  float fg = 1.0 - exp(-vDist * uFogD);
-  col = mix(col, uFog, fg);
+  float heat = uLava.w > 0.0 ? smoothstep(uLava.w, uLava.w * 0.35, distance(vW, uLava.xyz)) : 0.0;   // 마그마 가까운 틈만 빛남 (200 ℃ 바위는 안 빛남)
+  col += glow * heat * heat * uGlowCol * (0.75 + 0.25 * sin(uTime * 1.3 + vW.x * 0.9 + vW.z * 0.6));
+#ifndef POSTFX
+  col = mix(col, uFog, 1.0 - exp(-vDist * uFogD));
+#endif
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <encodings_fragment>
 }`;
+/* 층마다 분위기. sig = 공기 속 먼지·물안개 밀도(빛줄기), tint = 바위 색 보정 */
 const LV_LOOK = {
-  1: { scale: [0.3, 0.3], wet: 0.75, glow: [0, 0, 0], norm: 0.9, amb: [0.014, 0.013, 0.012], fog: [0.008, 0.008, 0.007], fogD: 0.045 },
-  2: { scale: [0.55, 0.55], wet: 0.08, glow: [0, 0, 0], norm: 0.75, amb: [0.004, 0.004, 0.004], fog: [0.002, 0.002, 0.002], fogD: 0.06 },
-  3: { scale: [0.55, 0.45], wet: 0.25, glow: [0, 0, 0], norm: 0.75, amb: [0.012, 0.012, 0.009], fog: [0.012, 0.012, 0.006], fogD: 0.055 },
-  4: { scale: [0.32, 0.3], wet: 0.4, glow: [1.4, 0.38, 0.07], norm: 0.85, amb: [0.02, 0.008, 0.004], fog: [0.03, 0.012, 0.006], fogD: 0.05 }
+  1: { scale: [0.5, 0.5], wet: 1.0, glow: [0, 0, 0], norm: 1.0, amb: [0.004, 0.0045, 0.005], fog: [0.01, 0.011, 0.012], fogD: 0.05, sig: 0.028, fogCol: [0.8, 0.86, 0.92], tint: [1, 1, 1], bounce: 0.07, exp: 1.0, bloom: 0.05, gain: [0.97, 1.0, 1.03], sat: 0.95 },
+  2: { scale: [0.5, 0.5], wet: 0.25, glow: [0, 0, 0], norm: 1.0, amb: [0.0025, 0.0025, 0.0025], fog: [0.004, 0.004, 0.004], fogD: 0.06, sig: 0.04, fogCol: [0.92, 0.88, 0.82], tint: [1, 1, 1], bounce: 0.06, exp: 1.25, bloom: 0.05, gain: [1.0, 0.99, 0.97], sat: 0.92 },
+  3: { scale: [0.5, 0.45], wet: 0.6, glow: [0, 0, 0], norm: 1.0, amb: [0.004, 0.004, 0.003], fog: [0.014, 0.013, 0.006], fogD: 0.055, sig: 0.035, fogCol: [0.95, 0.93, 0.75], tint: [1, 1, 1], bounce: 0.07, exp: 1.1, bloom: 0.05, gain: [1.02, 1.0, 0.94], sat: 0.95 },
+  4: { scale: [0.45, 0.45], wet: 0.0, glow: [6.0, 1.3, 0.2], norm: 1.0, amb: [0.012, 0.005, 0.003], fog: [0.04, 0.014, 0.006], fogD: 0.045, sig: 0.03, fogCol: [1.0, 0.8, 0.62], tint: [1, 1, 1], bounce: 0.08, exp: 0.95, bloom: 0.09, gain: [1.04, 0.98, 0.92], sat: 1.0 }
 };
+const ROCK_SETS = {};   // 이름 → { a, n, d, asset }
+function rockSet(name) {
+  if (ROCK_SETS[name]) return ROCK_SETS[name];
+  const T = rockTex(name), S = ROCK_SETS[name] = { a: T.map, n: T.nmap, d: NEUTRAL.d, asset: false, users: [] };
+  loadRockSet(name).then(r => { if (!r) return; S.a = r.a; S.n = r.n; S.d = r.d; S.asset = true; for (const f of S.users) f(); });
+  return S;
+}
 function terrainMaterial(lv) {
   const [A, B] = LV_ROCK[lv], look = LV_LOOK[lv];
-  const u = Object.assign({ tA: { value: null }, nA: { value: null }, tB: { value: null }, nB: { value: null },
+  const u = Object.assign({ tA: { value: null }, nA: { value: null }, dA: { value: null }, tB: { value: null }, nB: { value: null }, dB: { value: null },
     uScaleA: { value: look.scale[0] }, uScaleB: { value: look.scale[1] }, uWet: { value: look.wet }, uNormStr: { value: look.norm },
-    uGlowCol: { value: new THREE.Vector3(...look.glow) } }, R3.common, R3.lightU);
-  texUse(A, 'map', u.tA); texUse(A, 'nmap', u.nA); texUse(B, 'map', u.tB); texUse(B, 'nmap', u.nB);
-  R3.common.uAmb.value.set(...look.amb); R3.common.uFog.value.set(...look.fog); R3.common.uFogD.value = look.fogD;
-  R3.scene.background.setRGB(look.fog[0], look.fog[1], look.fog[2]).convertLinearToSRGB();
-  return new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: u, defines: QUAL.low ? { LOWQ: 1 } : {} });
+    uGlowCol: { value: new THREE.Vector3(...look.glow) }, uLava: { value: new THREE.Vector4(0, 0, 0, 0) }, uGlowA: { value: new THREE.Vector2() }, uGlowB: { value: new THREE.Vector2() }, uTint: { value: new THREE.Vector3(...look.tint) } }, R3.common, R3.lightU);
+  const bind = () => {
+    const SA = rockSet(A), SB = rockSet(B);
+    u.tA.value = SA.a; u.nA.value = SA.n; u.dA.value = SA.d; u.tB.value = SB.a; u.nB.value = SB.n; u.dB.value = SB.d;
+    // 빛나는 틈: 실사 질감은 알파 = 빛남, 잡음 질감은 알파 = 1 - 빛남
+    u.uGlowA.value.set(A === 'hot' ? 1 : 0, SA.asset ? 0 : 1); u.uGlowB.value.set(B === 'hot' ? 1 : 0, SB.asset ? 0 : 1);
+  };
+  rockSet(A).users.push(bind); rockSet(B).users.push(bind); bind();
+  const LL = GEO.LAYOUT[lv].lava; if (LL) u.uLava.value.set(LL.x, LL.y - 1, LL.z, 16);
+  R3.common.uAmb.value.set(...look.amb); R3.common.uFog.value.set(...look.fog); R3.common.uFogD.value = look.fogD; R3.common.uBounce.value = look.bounce;
+  R3.scene.background.setRGB(look.fog[0], look.fog[1], look.fog[2]);
+  if (window.POST) POST.setLook(look);
+  const defines = {}; if (QUAL.low) defines.LOWQ = 1; if (window.POST && POST.on) defines.POSTFX = 1;
+  return new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: u, defines });
 }
 
 /* ---------- 층 메시 관리 ---------- */
@@ -1064,7 +1194,7 @@ function terrainUpdate(budget = 3) {
     if (!g.pos.length) continue;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(g.pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(g.nor, 3));
-    geo.setAttribute('aMat', new THREE.BufferAttribute(g.mat, 1)); geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1));
+    geo.setAttribute('aMat', new THREE.BufferAttribute(g.mat, 1)); geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1)); geo.setAttribute('aVar', new THREE.BufferAttribute(g.vr, 2));
     geo.computeBoundingSphere();
     const m = new THREE.Mesh(geo, TERR.mat); m.matrixAutoUpdate = false; TERR.group.add(m); TERR.meshes.set(q, m);
   }
@@ -1072,25 +1202,29 @@ function terrainUpdate(budget = 3) {
 
 /* ---------- 빛 모음: 헤드램프(스포트) + 가까운 점광원 8개 ---------- */
 const LIGHTS = { statics: [], dyn: [] };   // { x,y,z, col:[r,g,b], range, flick, on }
+const _lc = new THREE.Color();
 function lightsUpdate(heads, t) {
   const U = R3.lightU, cam = R3.cam.position;
   for (let i = 0; i < MAX_SPOT; i++) {
     const h = heads[i], S = R3.spots[i];
     if (h) {
       U.sPos.value[i].set(h.x, h.y, h.z); U.sDir.value[i].set(h.dx, h.dy, h.dz);
-      const k = h.k || 1; U.sCol.value[i].set(2.3 * k, 2.15 * k, 1.9 * k); U.sPar.value[i].set(Math.cos(0.58), Math.cos(0.22), h.range || 20, 0);
-      S.position.set(h.x, h.y, h.z); S.target.position.set(h.x + h.dx, h.y + h.dy, h.z + h.dz); S.intensity = 2.2 * k;
+      const k = (h.k || 1) * LUX * 9; U.sCol.value[i].set(2.3 * k, 2.12 * k, 1.85 * k); U.sPar.value[i].set(Math.cos(0.6), Math.cos(0.2), h.range || 26, 0);
+      S.position.set(h.x, h.y, h.z); S.target.position.set(h.x + h.dx, h.y + h.dy, h.z + h.dz); S.intensity = 2.3 * k; S.distance = h.range || 26;
     } else { U.sCol.value[i].set(0, 0, 0); S.intensity = 0; }
   }
   const all = LIGHTS.statics.concat(LIGHTS.dyn).filter(l => l.on !== false);
   all.forEach(l => { l.d = (l.x - cam.x) ** 2 + (l.y - cam.y) ** 2 + (l.z - cam.z) ** 2 - (l.pri || 0); });
   all.sort((a, b) => a.d - b.d);
+  R3.ptsOn = [];
   for (let i = 0; i < MAX_PT; i++) {
     const l = all[i], P = R3.pts[i];
     if (l) {
-      const fl = l.flick ? 0.82 + 0.18 * Math.sin(t * 11 + l.x * 3) * Math.sin(t * 7.3 + l.z) : 1;
-      U.pPos.value[i].set(l.x, l.y, l.z); U.pCol.value[i].set(l.col[0] * fl, l.col[1] * fl, l.col[2] * fl); U.pRange.value[i] = l.range;
-      P.position.set(l.x, l.y, l.z); P.color.setRGB(Math.min(1, l.col[0] / 3), Math.min(1, l.col[1] / 3), Math.min(1, l.col[2] / 3)); P.intensity = 1.6 * fl * Math.max(...l.col) / 3; P.distance = l.range;
+      const fl = l.flick ? 0.82 + 0.18 * Math.sin(t * 11 + l.x * 3) * Math.sin(t * 7.3 + l.z) : 1, k = fl * LUX;
+      U.pPos.value[i].set(l.x, l.y, l.z); U.pCol.value[i].set(l.col[0] * k, l.col[1] * k, l.col[2] * k); U.pRange.value[i] = l.range;
+      const m = Math.max(...l.col);
+      P.position.set(l.x, l.y, l.z); P.color.setRGB(l.col[0] / m, l.col[1] / m, l.col[2] / m); P.intensity = m * k; P.distance = l.range;
+      R3.ptsOn.push(l);
     } else { U.pCol.value[i].set(0, 0, 0); U.pRange.value[i] = 1; P.intensity = 0; }
   }
 }
@@ -1166,18 +1300,13 @@ function texMat(name, rock, o) {
   return (MATS[name] = m);
 }
 function initMats() {
-  const steelT = rockTex('steel'), conT = rockTex('concrete');
-  [steelT.map, conT.map].forEach(t => { t.encoding = THREE.sRGBEncoding; });
-  stdMat('steel', { map: steelT.map, normalMap: steelT.nmap, metalness: 0.75, roughness: 0.45, color: 0xb8bcc2 });
-  stdMat('rust', { map: steelT.map, normalMap: steelT.nmap, metalness: 0.5, roughness: 0.7, color: 0x8a6a55 });
-  stdMat('yellow', { color: 0xe8b416, metalness: 0.3, roughness: 0.5 });
-  stdMat('concrete', { map: conT.map, normalMap: conT.nmap, roughness: 0.92, metalness: 0, color: 0xc9c5bd });
+  MATS.steel = pmat('steel'); MATS.rust = pmat('rust'); MATS.yellow = pmat('paint_y'); MATS.concrete = pmat('concrete');
   stdMat('dark', { color: 0x22262b, roughness: 0.6, metalness: 0.4 });
   stdMat('rubber', { color: 0x15171a, roughness: 0.9 });
-  stdMat('orange', { color: 0xe8661a, roughness: 0.55 });
+  MATS.orange = pmat('paint_r', { color: 0xff8a40 }, 'orange');
   stdMat('cable', { color: 0x1d1f22, roughness: 0.7 });
-  stdMat('lampOn', { color: 0xfff3d6, emissive: 0xffe6b8, emissiveIntensity: 2.2 });
-  stdMat('lampRed', { color: 0x551010, emissive: 0xff2a10, emissiveIntensity: 1.6 });
+  stdMat('lampOn', { color: 0xfff3d6, emissive: 0xffe6b8, emissiveIntensity: 9 });
+  stdMat('lampRed', { color: 0x551010, emissive: 0xff2a10, emissiveIntensity: 6 });
   stdMat('lampOff', { color: 0x777066, roughness: 0.4 });
   stdMat('crust', { color: 0xe9e4d4, roughness: 1, metalness: 0 });
   stdMat('glass', { color: 0x9fb8c8, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.45 });
@@ -1185,8 +1314,8 @@ function initMats() {
   stdMat('sulfur', { color: 0xe6c628, roughness: 0.35, emissive: 0x3a2c00, emissiveIntensity: 0.4 });
   stdMat('obsidian', { color: 0x0b0b0e, roughness: 0.05, metalness: 0.6 });
 }
-const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MATS[m] || m);
-const cyl = (r1, r2, h, m, seg = 16) => new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg), MATS[m] || m);
+const box = (w, h, d, m) => new THREE.Mesh(uvBox(new THREE.BoxGeometry(w, h, d), w, h, d, 1), MATS[m] || m);
+const cyl = (r1, r2, h, m, seg = 16) => new THREE.Mesh(uvScale(new THREE.CylinderGeometry(r1, r2, h, seg), Math.PI * 2 * Math.max(r1, r2), h), MATS[m] || m);
 
 /* 화면 위 글자판 (이름표·패널 화면) */
 function textSprite(text, col = '#fff', bg = 'rgba(0,0,0,.55)', px = 30) {
@@ -1203,21 +1332,34 @@ function makeWorker(role) {
   const R = GEO.ROLES.find(r => r.id === role) || GEO.ROLES[0], g = new THREE.Group();
   const suit = new THREE.MeshStandardMaterial({ color: 0xd9601c, roughness: 0.75 }), refl = new THREE.MeshStandardMaterial({ color: 0xd6d6d0, roughness: 0.3, metalness: 0.4, emissive: 0x303030 });
   const roleM = new THREE.MeshStandardMaterial({ color: new THREE.Color(R.col), roughness: 0.4 });
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.62, 12), suit); torso.position.y = 1.16; g.add(torso);
-  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 12), refl); stripe.position.y = 1.08; g.add(stripe);
-  const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.225, 0.3, 12, 1, true), roleM); vest.position.y = 1.28; g.add(vest);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshStandardMaterial({ color: 0xc89878, roughness: 0.6 })); head.position.y = 1.6; g.add(head);
-  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), roleM); helm.position.y = 1.62; g.add(helm);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.02, 16), roleM); brim.position.y = 1.62; g.add(brim);
-  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.05, 10), MATS.lampOn); lamp.rotation.x = Math.PI / 2; lamp.position.set(0, 1.7, -0.15); g.add(lamp);
+  suit.roughness = 0.88;
+  const M = (geo, m, cast = true) => { const o = new THREE.Mesh(geo, m); o.castShadow = cast; return o; };
+  // 몸통: 허리→가슴→어깨로 넓어지는 회전체, 앞뒤로 납작하게
+  const prof = [[0.0, 0.92], [0.165, 0.94], [0.175, 1.0], [0.16, 1.12], [0.185, 1.28], [0.205, 1.4], [0.19, 1.48], [0.09, 1.53], [0.0, 1.535]].map(([r, y]) => new THREE.Vector2(r, y));
+  const torsoG = new THREE.LatheGeometry(prof, 16); torsoG.scale(1, 1, 0.72); g.add(M(torsoG, suit));
+  const vestG = new THREE.LatheGeometry([[0.172, 1.12], [0.195, 1.28], [0.214, 1.4], [0.2, 1.47]].map(([r, y]) => new THREE.Vector2(r, y)), 16); vestG.scale(1, 1, 0.76); g.add(M(vestG, roleM));
+  for (const y of [1.2, 1.36]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.2 + (y - 1.12) * 0.12, 0.2 + (y - 1.12) * 0.12, 0.035, 16, 1, true), refl); b.scale.z = 0.77; b.position.y = y; g.add(b); }
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.172, 0.172, 0.05, 16), MATS.rubber); belt.scale.z = 0.74; belt.position.y = 1.0; g.add(belt);
+  const pack = M(new THREE.BoxGeometry(0.28, 0.36, 0.12), MATS.dark); pack.position.set(0, 1.27, 0.18); g.add(pack);   // 배터리·호흡기 가방
+  const neck = M(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 10), new THREE.MeshStandardMaterial({ color: 0xb98a6a, roughness: 0.6 })); neck.position.y = 1.56; g.add(neck);
+  const head = M(new THREE.SphereGeometry(0.105, 18, 14), new THREE.MeshStandardMaterial({ color: 0xc89878, roughness: 0.55 })); head.scale.set(1, 1.18, 1.08); head.position.y = 1.67; g.add(head);
+  const helm = M(new THREE.SphereGeometry(0.135, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), roleM); helm.scale.set(1, 0.95, 1.15); helm.position.y = 1.7; g.add(helm);
+  const ridge = M(new THREE.BoxGeometry(0.03, 0.03, 0.3), roleM); ridge.position.set(0, 1.83, 0); g.add(ridge);
+  const brim = M(new THREE.CylinderGeometry(0.17, 0.17, 0.015, 20), roleM); brim.scale.z = 1.2; brim.position.set(0, 1.7, -0.02); g.add(brim);
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.05, 10), MATS.lampOn); lamp.rotation.x = Math.PI / 2; lamp.position.set(0, 1.76, -0.16); g.add(lamp);
   const legs = [], arms = [];
   for (const s of [-1, 1]) {
-    const leg = new THREE.Group(), l = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.82, 8), suit); l.position.y = -0.41; leg.add(l);
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.24), MATS.rubber); boot.position.set(0, -0.82, -0.04); leg.add(boot);
-    leg.position.set(s * 0.1, 0.86, 0); g.add(leg); legs.push(leg);
-    const arm = new THREE.Group(), a = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.6, 8), suit); a.position.y = -0.3; arm.add(a);
-    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), MATS.rubber); glove.position.y = -0.62; arm.add(glove);
-    arm.position.set(s * 0.28, 1.42, 0); g.add(arm); arms.push(arm);
+    const leg = new THREE.Group();
+    leg.add(M(limb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.44, -0.01), 0.085, 0.065, 10), suit));
+    leg.add(M(limb(new THREE.Vector3(0, -0.44, -0.01), new THREE.Vector3(0, -0.8, 0.01), 0.062, 0.05, 10), suit));
+    const boot = M(new THREE.BoxGeometry(0.12, 0.15, 0.27), MATS.rubber); boot.position.set(0, -0.85, -0.04); leg.add(boot);
+    const toe = M(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 10, 1, false, 0, Math.PI), MATS.rubber); toe.rotation.z = Math.PI / 2; toe.rotation.y = Math.PI / 2; toe.position.set(0, -0.86, -0.17); leg.add(toe);
+    leg.position.set(s * 0.09, 0.93, 0); g.add(leg); legs.push(leg);
+    const arm = new THREE.Group();
+    arm.add(M(limb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(s * 0.02, -0.3, 0), 0.062, 0.052, 10), suit));
+    arm.add(M(limb(new THREE.Vector3(s * 0.02, -0.3, 0), new THREE.Vector3(s * 0.02, -0.56, -0.05), 0.05, 0.042, 10), suit));
+    const glove = M(new THREE.SphereGeometry(0.052, 10, 8), MATS.rubber); glove.scale.set(0.9, 1.3, 0.8); glove.position.set(s * 0.02, -0.62, -0.06); arm.add(glove);
+    arm.position.set(s * 0.24, 1.45, 0); g.add(arm); arms.push(arm);
   }
   // 헤드램프 빛줄기 (어둠 속에서 친구 위치가 보이게)
   const beamM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -1230,6 +1372,433 @@ function makeWorker(role) {
   return g;
 }
 function setWorkerName(g, text, col) { const old = g.userData.label; g.remove(old); old.material.map.dispose(); const s = textSprite(text, col || '#fff'); s.position.y = 2.1; g.add(s); g.userData.label = s; }
+
+/* ===== post.js — 영화 같은 마무리 효과 =====
+   장면을 HDR(밝기 1 넘는 값도 저장)로 그린 뒤:
+   ① 먼지 속 빛줄기(볼류메트릭): 깊이 그림을 보고 카메라~벽 사이 공기를 걸으며 빛을 모음 (반/사분의 일 해상도)
+   ② 빛 번짐(블룸): 아주 밝은 곳(용암·전등)이 번져 보이게
+   ③ 마무리: 노출 → ACES 필름 톤 → 색감·주변 어둡게·필름 입자·열 아지랑이 → 화면
+   가볍게(low) 모드나 실수 그림판을 못 만드는 기기에서는 꺼지고, 셰이더 안에서 간단한 안개로 대신함. */
+const POST = {
+  on: false, w: 0, h: 0, look: null, frame: 0, haze: 0, exposure: 1, mode: 'dive',
+  init(r) {
+    this.r = r;
+    const gl = r.getContext(), ext = r.extensions;
+    const half = r.capabilities.isWebGL2 ? ext.get('EXT_color_buffer_float') || ext.get('EXT_color_buffer_half_float') : ext.get('OES_texture_half_float') && ext.get('EXT_color_buffer_half_float');
+    this.ok = !!half && !!(r.capabilities.isWebGL2 || ext.get('WEBGL_depth_texture'));
+    this.type = THREE.HalfFloatType;
+    this.quad = new THREE.Mesh(new THREE.BufferGeometry(), null);
+    this.quad.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+    this.quad.geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 2, 0, 0, 2]), 2));
+    this.quad.frustumCulled = false;
+    this.qs = new THREE.Scene(); this.qs.add(this.quad); this.qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.noise = this.makeNoise();
+    this.mats();
+    this.setEnabled(this.ok && QUAL.tier !== 'low');
+  },
+  makeNoise() {   // 64×64: R = 잡음, G = (37,17)만큼 밀린 잡음 → 3D 잡음 흉내
+    const N = 64, d = new Uint8Array(N * N * 4), h = (x, y) => { x = ((x % N) + N) % N; y = ((y % N) + N) % N; return hash3(x, y, 0, 99); };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const q = (x + y * N) * 4; d[q] = h(x, y) * 255; d[q + 1] = h(x + 37, y + 17) * 255; d[q + 2] = hash3(x, y, 1, 7) * 255; d[q + 3] = 255; }
+    const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+  },
+  rt(w, h, depth) {
+    const t = new THREE.WebGLRenderTarget(w, h, { type: this.type, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: !!depth, stencilBuffer: false });
+    if (depth) { t.depthTexture = new THREE.DepthTexture(w, h); t.depthTexture.type = THREE.UnsignedIntType; }
+    return t;
+  },
+  setEnabled(v) {
+    v = !!(v && this.ok); const was = this.on; this.on = v;
+    const r = this.r;
+    r.toneMapping = v ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+    if (v) this.resize();
+    if (was !== v) { R3.scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); }); if (window.SURF && SURF.scene) SURF.scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); }); if (TERR.F) { const F = TERR.F; terrainLoad(F); } }
+  },
+  resize() {
+    if (!this.on) return;
+    const r = this.r, pr = r.getPixelRatio(), w = Math.max(2, Math.floor(innerWidth * pr)), h = Math.max(2, Math.floor(innerHeight * pr));
+    if (w === this.w && h === this.h && this.scene) return;
+    this.w = w; this.h = h;
+    [this.scene, this.vol, ...(this.bl || [])].forEach(t => t && t.dispose());
+    this.scene = this.rt(w, h, true);
+    const vd = QUAL.tier === 'high' ? 2 : 4;
+    this.vol = this.rt(Math.ceil(w / vd), Math.ceil(h / vd));
+    const n = QUAL.tier === 'high' ? 5 : 4; this.bl = [];
+    for (let i = 0; i < n; i++) this.bl.push(this.rt(Math.max(1, w >> (i + 1)), Math.max(1, h >> (i + 1))));
+  },
+  setLook(look) {
+    this.look = look; const U = this.M.vol.uniforms;
+    U.uSigma.value = look.sig || 0.06; U.uFogCol.value.set(...(look.fogCol || [1, 1, 1]));
+    U.uAmbFog.value.set(look.amb[0] * 0.6, look.amb[1] * 0.6, look.amb[2] * 0.6);
+  },
+  mats() {
+    const VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+    const NOISE3 = `float n3(vec3 x){ vec3 p = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); vec2 uv = (p.xy + vec2(37.0, 17.0) * p.z) + f.xy; vec2 rg = texture2D(tNoise, (uv + 0.5) / 64.0).xy; return mix(rg.x, rg.y, f.z); }`;
+    const NL = 6;
+    this.M = {};
+    this.M.vol = new THREE.ShaderMaterial({
+      defines: { STEPS: QUAL.tier === 'high' ? 18 : 11, NL },
+      uniforms: { tDepth: { value: null }, tNoise: { value: this.noise }, uInvProj: { value: new THREE.Matrix4() }, uCamW: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
+        uSigma: { value: 0.06 }, uFogCol: { value: new THREE.Vector3(1, 1, 1) }, uAmbFog: { value: new THREE.Vector3() }, uTime: { value: 0 }, uFrame: { value: 0 }, uMaxD: { value: 40 }, uN: { value: 0 },
+        lPos: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lDir: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lCol: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lPar: { value: Array.from({ length: NL }, () => new THREE.Vector4()) } },
+      vertexShader: VS,
+      fragmentShader: `uniform sampler2D tDepth; uniform sampler2D tNoise; uniform mat4 uInvProj; uniform mat4 uCamW; uniform vec3 uCamPos; uniform float uSigma; uniform vec3 uFogCol; uniform vec3 uAmbFog; uniform float uTime; uniform float uFrame; uniform float uMaxD; uniform int uN;
+        uniform vec3 lPos[NL]; uniform vec3 lDir[NL]; uniform vec3 lCol[NL]; uniform vec4 lPar[NL];
+        varying vec2 vUv;
+        ${NOISE3}
+        void main(){
+          float d = texture2D(tDepth, vUv).x;
+          vec4 v = uInvProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); v /= v.w;
+          vec3 wp = (uCamW * vec4(v.xyz, 1.0)).xyz; vec3 rd = wp - uCamPos; float tMax = min(length(rd), uMaxD); rd /= max(length(rd), 1e-4);
+          float dith = fract(52.9829189 * fract(dot(gl_FragCoord.xy + uFrame * 5.588238, vec2(0.06711056, 0.00583715))));
+          float dt = tMax / float(STEPS); vec3 acc = vec3(0.0);
+          for (int i = 0; i < STEPS; i++) {
+            float t = (float(i) + dith) * dt; vec3 p = uCamPos + rd * t;
+            float dens = uSigma * (0.45 + 1.1 * n3(p * vec3(0.9, 0.7, 0.9) + vec3(uTime * 0.07, uTime * 0.03, -uTime * 0.05)) * n3(p * 0.23 + 3.1));
+            vec3 ls = uAmbFog;
+            for (int j = 0; j < NL; j++) {
+              if (j >= uN) break;
+              vec3 L = lPos[j] - p; float dd = max(dot(L, L), 0.36); float dist = sqrt(dd); L /= dist;
+              float rr = dist / lPar[j].z; float win = clamp(1.0 - rr * rr * rr * rr, 0.0, 1.0);
+              float ca = dot(-L, lDir[j]); float cone = lPar[j].w > 0.5 ? smoothstep(0.55, 0.96, ca) * 0.3 + smoothstep(0.9, 0.995, ca) * 0.7 : 1.0;
+              float ph = 0.035 + 0.0555 / pow(1.3025 - 1.1 * dot(L, rd), 1.5) * 0.45;
+              ls += lCol[j] * (win * win / dd) * cone * ph;
+            }
+            acc += ls * uFogCol * dens * dt * exp(-uSigma * 0.7 * t);
+          }
+          gl_FragColor = vec4(acc, exp(-uSigma * 0.7 * tMax));
+        }`,
+      depthTest: false, depthWrite: false
+    });
+    this.M.down = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uThr: { value: 0 }, uFirst: { value: 0 } },
+      vertexShader: VS,
+      fragmentShader: `uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uThr; uniform float uFirst; varying vec2 vUv;
+        vec3 s(vec2 o){ return texture2D(tSrc, vUv + o * uTexel).rgb; }
+        void main(){
+          vec3 a = s(vec2(-2,-2)), b = s(vec2(0,-2)), c = s(vec2(2,-2)), d = s(vec2(-1,-1)), e = s(vec2(1,-1)), f = s(vec2(-2,0)), g = s(vec2(0,0)), h = s(vec2(2,0)), i = s(vec2(-1,1)), j = s(vec2(1,1)), k = s(vec2(-2,2)), l = s(vec2(0,2)), m = s(vec2(2,2));
+          vec3 o = (d + e + i + j) * 0.125 + (a + b + f + g) * 0.03125 + (b + c + g + h) * 0.03125 + (f + g + k + l) * 0.03125 + (g + h + l + m) * 0.03125;
+          if (uFirst > 0.5) { float br = max(o.r, max(o.g, o.b)); float soft = clamp(br - uThr + 0.5, 0.0, 1.0); soft = soft * soft * 0.5; o *= max(soft, br - uThr) / max(br, 1e-4); o = min(o, vec3(60.0)); }
+          gl_FragColor = vec4(o, 1.0); }`,
+      depthTest: false, depthWrite: false
+    });
+    this.M.up = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uK: { value: 1 } },
+      vertexShader: VS,
+      fragmentShader: `uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uK; varying vec2 vUv;
+        vec3 s(vec2 o){ return texture2D(tSrc, vUv + o * uTexel).rgb; }
+        void main(){ vec3 o = s(vec2(0,0)) * 4.0 + (s(vec2(-1,0)) + s(vec2(1,0)) + s(vec2(0,-1)) + s(vec2(0,1))) * 2.0 + s(vec2(-1,-1)) + s(vec2(1,-1)) + s(vec2(-1,1)) + s(vec2(1,1));
+          gl_FragColor = vec4(o / 16.0 * uK, 1.0); }`,
+      blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true
+    });
+    this.M.fin = new THREE.ShaderMaterial({
+      uniforms: { tScene: { value: null }, tVol: { value: null }, tBloom: { value: null }, tNoise: { value: this.noise }, uVolTexel: { value: new THREE.Vector2() }, uUseVol: { value: 1 },
+        uExposure: { value: 1 }, uBloom: { value: 0.06 }, uHaze: { value: 0 }, uTime: { value: 0 }, uGrain: { value: 0.035 }, uVig: { value: 0.32 }, uSat: { value: 1.0 },
+        uLift: { value: new THREE.Vector3(0, 0, 0) }, uGain: { value: new THREE.Vector3(1, 1, 1) }, uCA: { value: 0.0015 }, uRes: { value: new THREE.Vector2(1, 1) } },
+      vertexShader: VS,
+      fragmentShader: `uniform sampler2D tScene; uniform sampler2D tVol; uniform sampler2D tBloom; uniform sampler2D tNoise; uniform vec2 uVolTexel; uniform float uUseVol;
+        uniform float uExposure; uniform float uBloom; uniform float uHaze; uniform float uTime; uniform float uGrain; uniform float uVig; uniform float uSat; uniform vec3 uLift; uniform vec3 uGain; uniform float uCA; uniform vec2 uRes;
+        varying vec2 vUv;
+        vec3 RRTAndODTFit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+        vec3 aces(vec3 c){ const mat3 I = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
+          const mat3 O = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
+          c = I * (c / 0.6); c = RRTAndODTFit(c); return clamp(O * c, 0.0, 1.0); }
+        vec3 toSRGB(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+        void main(){
+          vec2 uv = vUv;
+          if (uHaze > 0.0) { vec2 n = texture2D(tNoise, uv * vec2(5.0, 3.0) + vec2(0.0, -uTime * 0.35)).rg + texture2D(tNoise, uv * vec2(9.0, 6.0) + vec2(uTime * 0.05, -uTime * 0.6)).rg - 1.0; uv += n * uHaze * 0.006; }
+          vec2 dc = (uv - 0.5); float r2 = dot(dc, dc);
+          vec3 c;
+          c.r = texture2D(tScene, uv + dc * uCA * r2 * 4.0).r; c.g = texture2D(tScene, uv).g; c.b = texture2D(tScene, uv - dc * uCA * r2 * 4.0).b;
+          if (uUseVol > 0.5) {
+            vec4 v = texture2D(tVol, uv + uVolTexel * vec2(-0.75, -0.75)) + texture2D(tVol, uv + uVolTexel * vec2(0.75, -0.75)) + texture2D(tVol, uv + uVolTexel * vec2(-0.75, 0.75)) + texture2D(tVol, uv + uVolTexel * vec2(0.75, 0.75));
+            v *= 0.25; c = c * v.a + v.rgb;
+          }
+          c += texture2D(tBloom, uv).rgb * uBloom;
+          c *= uExposure;
+          c = aces(c);
+          float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat);
+          c = c * uGain + uLift * (1.0 - c);
+          c *= 1.0 - uVig * smoothstep(0.15, 0.85, r2 * 2.2);
+          c = toSRGB(clamp(c, 0.0, 1.0));
+          float g = texture2D(tNoise, gl_FragCoord.xy / 64.0 + vec2(fract(uTime * 7.13), fract(uTime * 3.71))).b - 0.5;
+          c += g * uGrain * (1.0 - l * 0.6);
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+      depthTest: false, depthWrite: false
+    });
+  },
+  pass(mat, target, clear = true) { this.quad.material = mat; const r = this.r; r.setRenderTarget(target); if (clear) r.clear(); r.render(this.qs, this.qc); },
+  /* 볼류메트릭에 넣을 빛 고르기: 내 헤드램프 + 보이는 빛들 */
+  volLights(cam) {
+    const U = this.M.vol.uniforms, L = [];
+    const LU = R3.lightU;
+    for (let i = 0; i < MAX_SPOT; i++) { const c = LU.sCol.value[i]; if (c.x + c.y + c.z < 1e-3) continue; L.push({ p: LU.sPos.value[i], d: LU.sDir.value[i], c, par: [LU.sPar.value[i].x, LU.sPar.value[i].y, LU.sPar.value[i].z, 1], pri: i === 0 ? 1e9 : 50 }); }
+    for (let i = 0; i < MAX_PT; i++) { const c = LU.pCol.value[i]; if (c.x + c.y + c.z < 1e-3) continue; const p = LU.pPos.value[i]; L.push({ p, d: null, c, par: [0, 0, LU.pRange.value[i], 0], pri: -p.distanceToSquared(cam.position) }); }
+    L.sort((a, b) => b.pri - a.pri);
+    let n = 0;
+    for (const l of L) {
+      if (n >= 6) break;
+      if (l.pri < 1e9 && TERR.F) { const c = cam.position, dx = l.p.x - c.x, dy = l.p.y - c.y, dz = l.p.z - c.z, dl = Math.hypot(dx, dy, dz); if (dl > 0.8) { const hit = TERR.F.ray(c.x, c.y, c.z, dx / dl, dy / dl, dz / dl, dl - 0.4); if (hit) continue; } }
+      U.lPos.value[n].copy(l.p); if (l.d) U.lDir.value[n].copy(l.d); U.lCol.value[n].copy(l.c); U.lPar.value[n].set(...l.par); n++;
+    }
+    U.uN.value = n;
+  },
+  render(scene, cam, o = {}) {
+    const r = this.r;
+    if (!this.on) { r.setRenderTarget(null); r.render(scene, cam); return; }
+    this.resize(); this.frame++;
+    const t = performance.now() / 1000;
+    r.setRenderTarget(this.scene); r.clear(); r.render(scene, cam);
+    const useVol = o.vol !== false && this.look;
+    if (useVol) {
+      const U = this.M.vol.uniforms; U.tDepth.value = this.scene.depthTexture; U.uInvProj.value.copy(cam.projectionMatrixInverse); U.uCamW.value.copy(cam.matrixWorld); U.uCamPos.value.copy(cam.position);
+      U.uTime.value = t; U.uFrame.value = this.frame % 64; this.volLights(cam);
+      this.pass(this.M.vol, this.vol);
+    }
+    // 빛 번짐
+    const D = this.M.down.uniforms, Up = this.M.up.uniforms;
+    let src = this.scene.texture, sw = this.w, sh = this.h;
+    for (let i = 0; i < this.bl.length; i++) { D.tSrc.value = src; D.uTexel.value.set(1 / sw, 1 / sh); D.uFirst.value = i === 0 ? 1 : 0; D.uThr.value = o.thr != null ? o.thr : 1.6; this.pass(this.M.down, this.bl[i]); src = this.bl[i].texture; sw = this.bl[i].width; sh = this.bl[i].height; }
+    for (let i = this.bl.length - 1; i > 0; i--) { const s = this.bl[i]; Up.tSrc.value = s.texture; Up.uTexel.value.set(1 / s.width, 1 / s.height); Up.uK.value = 1; this.pass(this.M.up, this.bl[i - 1], false); }
+    const F = this.M.fin.uniforms;
+    F.tScene.value = this.scene.texture; F.tVol.value = this.vol.texture; F.uVolTexel.value.set(1 / this.vol.width, 1 / this.vol.height); F.uUseVol.value = useVol ? 1 : 0;
+    F.tBloom.value = this.bl[0].texture; F.uTime.value = t; F.uHaze.value = o.haze || 0; F.uExposure.value = o.exposure || this.exposure;
+    F.uBloom.value = o.bloom != null ? o.bloom : 0.06; F.uSat.value = o.sat != null ? o.sat : 1.0; F.uVig.value = o.vig != null ? o.vig : 0.32;
+    if (o.lift) F.uLift.value.set(...o.lift); else F.uLift.value.set(0, 0, 0);
+    if (o.gain) F.uGain.value.set(...o.gain); else F.uGain.value.set(1, 1, 1);
+    F.uGrain.value = QUAL.tier === 'high' ? 0.03 : 0.022; F.uCA.value = o.ca != null ? o.ca : 0.0015;
+    this.pass(this.M.fin, null);
+  }
+};
+
+/* ===== props.js — 실사풍 장비·구조물: 재질(실사 질감 + 대체 색), 모양 도우미, 승강장 꾸미기 ===== */
+const PROP_DEF = {   // 질감 못 받을 때 쓰는 색·거칠기·금속성
+  paint_y: [0xd8a316, 0.5, 0.1], paint_g: [0x3f6b4a, 0.5, 0.1], paint_r: [0xa8261c, 0.5, 0.1], paint_w: [0xd9d6cc, 0.55, 0.05],
+  steel: [0x8d9296, 0.4, 0.9], rust: [0x6e3a1c, 0.85, 0.2], alum: [0xb8bcbf, 0.32, 0.95], concrete: [0x8f8b84, 0.88, 0],
+  hazard: [0xd6a312, 0.6, 0], mesh: [0x707478, 0.45, 0.8], grating: [0x55585a, 0.5, 0.7], duct: [0xd27a1c, 0.7, 0]
+};
+const PMAT = {};
+function loadPropSet(name) {
+  const sf = /_p$/.test(name), d = (sf ? 'surf/' : 'prop/') + (QUAL.tier === 'low' ? 'low/' : ''); name = name.replace(/_p$/, '');   // 이름 끝 _p = 지상(surf) 질감
+  return Promise.all([loadAssetTex(d + name + '_a.webp', { srgb: true }), loadAssetTex(d + name + '_n.webp'), loadAssetTex(d + name + '_m.webp')])
+    .then(([a, n, m]) => (a && n && m) ? { a, n, m } : null);
+}
+/* 재질 하나: name = PROP_DEF 이름. o = MeshStandardMaterial 추가 설정 */
+function pmat(name, o = {}, tag = '') {
+  const key = name + '|' + tag; if (PMAT[key]) return PMAT[key];
+  const [col, r, m] = PROP_DEF[name];
+  const alpha = name === 'mesh' || name === 'grating';
+  const mat = new THREE.MeshStandardMaterial(Object.assign({ color: col, roughness: r, metalness: m, envMapIntensity: 0.7 }, alpha ? { alphaTest: 0.5, side: THREE.DoubleSide } : {}, o));
+  if (alpha) mat.transparent = false;
+  loadPropSet(name).then(s => {
+    if (!s) return;
+    mat.map = s.a; mat.normalMap = s.n; mat.roughnessMap = s.m; mat.metalnessMap = s.m;
+    mat.color.set(o.color != null ? o.color : 0xffffff); mat.roughness = o.roughness != null ? o.roughness : 1; mat.metalness = o.metalness != null ? o.metalness : 1;
+    mat.needsUpdate = true;
+  });
+  return (PMAT[key] = mat);
+}
+/* ---------- UV을 실제 크기(미터)에 맞추기: 질감 한 장 = tile 미터 ---------- */
+function uvBox(geo, w, h, d, tile = 1) {
+  const uv = geo.attributes.uv, n = uv.count / 6;   // 면 6개
+  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < n; i++) { const k = f * n + i; uv.setXY(k, uv.getX(k) * dims[f][0] / tile, uv.getY(k) * dims[f][1] / tile); }
+  uv.needsUpdate = true; return geo;
+}
+function uvScale(geo, su, sv) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); uv.needsUpdate = true; return geo; }
+const pbox = (w, h, d, m, tile = 1) => new THREE.Mesh(uvBox(new THREE.BoxGeometry(w, h, d), w, h, d, tile), typeof m === 'string' ? pmat(m) : m);
+const pcyl = (r1, r2, h, m, seg = 20, tile = 1, open = false) => new THREE.Mesh(uvScale(new THREE.CylinderGeometry(r1, r2, h, seg, 1, open), Math.PI * 2 * Math.max(r1, r2) / tile, h / tile), typeof m === 'string' ? pmat(m) : m);
+function ptube(pts, r, m, tile = 1, seg = 48, rseg = 10, closed = false) {
+  const c = new THREE.CatmullRomCurve3(pts, closed); const g = new THREE.TubeGeometry(c, seg, r, rseg, closed);
+  uvScale(g, c.getLength() / tile, Math.PI * 2 * r / tile); return new THREE.Mesh(g, typeof m === 'string' ? pmat(m) : m);
+}
+/* I자 강철 보를 곡선 따라 */
+function iBeam(curve, s = 0.16, m = 'rust') {
+  if (typeof m !== 'string') { const mm = m; m = null; return iBeamM(curve, s, mm); }
+  return iBeamM(curve, s, pmat(m));
+}
+function iBeamM(curve, s, mat) {
+  const f = 0.014, w = 0.009, sh = new THREE.Shape();
+  sh.moveTo(-s / 2, -s / 2); sh.lineTo(s / 2, -s / 2); sh.lineTo(s / 2, -s / 2 + f); sh.lineTo(w / 2, -s / 2 + f); sh.lineTo(w / 2, s / 2 - f); sh.lineTo(s / 2, s / 2 - f); sh.lineTo(s / 2, s / 2);
+  sh.lineTo(-s / 2, s / 2); sh.lineTo(-s / 2, s / 2 - f); sh.lineTo(-w / 2, s / 2 - f); sh.lineTo(-w / 2, -s / 2 + f); sh.lineTo(-s / 2, -s / 2 + f); sh.lineTo(-s / 2, -s / 2);
+  const g = new THREE.ExtrudeGeometry(sh, { steps: 40, bevelEnabled: false, extrudePath: curve });
+  uvScale(g, 1, 1); return new THREE.Mesh(g, mat);
+}
+/* ---------- 지하 반사 환경 (쇠붙이가 주변을 비춰 보이게) ---------- */
+function mineEnv(warm = 0) {
+  const W = 64, H = 32, d = new Float32Array(W * H * 4);
+  const spots = [[0.25, 0.3, 0.35], [0.75, 0.32, 0.28], [0.5, 0.15, 0.18]];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = x / W, v = y / H, q = (x + y * W) * 4;
+    let r = 0.004 + 0.003 * (1 - v), g = 0.0035 + 0.0025 * (1 - v), b = 0.003 + 0.002 * (1 - v);
+    for (const [su, sv, k] of spots) { const dd = ((u - su) ** 2) * 4 + (v - sv) ** 2; const e = k * Math.exp(-dd * 200); r += e; g += e * (0.85 - warm * 0.3); b += e * (0.7 - warm * 0.5); }
+    if (warm) { const e = warm * 0.35 * Math.exp(-((v - 0.9) ** 2) * 60); r += e; g += e * 0.35; b += e * 0.08; }
+    d[q] = r; d[q + 1] = g; d[q + 2] = b; d[q + 3] = 1;
+  }
+  const t = new THREE.DataTexture(d, W, H, THREE.RGBAFormat, THREE.FloatType); t.mapping = THREE.EquirectangularReflectionMapping; t.needsUpdate = true;
+  const pm = new THREE.PMREMGenerator(R3.r); const env = pm.fromEquirectangular(t).texture; pm.dispose(); t.dispose(); return env;
+}
+/* ---------- 승강장 ---------- */
+function buildStation(lv, F, L) {
+  const g = LVS.g, LF = GEO.LIFT, Y = GEO.LAND_Y;
+  const rr = (a, b) => a + Math.random() * (b - a);
+  /* 콘크리트 바닥(가장자리가 울퉁불퉁) + 통로 구멍 */
+  const sh = new THREE.Shape(), N = 48;
+  for (let i = 0; i <= N; i++) { const a = i / N * Math.PI * 2, r = 4.6 + 0.35 * Math.sin(a * 3 + 1) + 0.2 * Math.sin(a * 7 + 2) + (i % N ? rr(-0.12, 0.12) : 0); const x = LF.x + Math.cos(a) * r, z = LF.z + Math.sin(a) * r; i ? sh.lineTo(x, z) : sh.moveTo(x, z); }
+  const hole = new THREE.Path(); hole.absarc(LF.x, LF.z, LF.r + 0.2, 0, Math.PI * 2, true); sh.holes.push(hole);
+  const slabG = new THREE.ExtrudeGeometry(sh, { depth: 0.35, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.05, bevelSegments: 1, curveSegments: 36 });
+  uvScale(slabG, 0.4, 0.4);
+  const slab = new THREE.Mesh(slabG, pmat('concrete')); slab.rotation.x = Math.PI / 2; slab.position.y = Y + 0.02; g.add(slab);
+  /* 통로 둘레: 노랑·검정 띠 + 쇠 테두리 */
+  const ringG = new THREE.RingGeometry(LF.r + 0.22, LF.r + 0.62, 48, 1); uvScale(ringG, 2.2, 2.2);
+  const ring = new THREE.Mesh(ringG, pmat('hazard')); ring.rotation.x = -Math.PI / 2; ring.position.set(LF.x, Y + 0.028, LF.z); g.add(ring);
+  const collar = pcyl(LF.r + 0.22, LF.r + 0.22, 0.42, 'steel', 40, 1, true); collar.position.set(LF.x, Y - 0.19, LF.z); collar.material.side = THREE.DoubleSide; g.add(collar);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(LF.r + 0.22, 0.035, 6, 48), pmat('steel')); lip.rotation.x = Math.PI / 2; lip.position.set(LF.x, Y + 0.03, LF.z); g.add(lip);
+  /* 난간 (기둥 + 위·가운데 손잡이 + 발막이) — 입구 쪽은 열림 */
+  const a0 = Math.PI * 0.72, span = Math.PI * 1.55, R = LF.r + 0.5;
+  const arc = (y, n = 28) => Array.from({ length: n + 1 }, (_, i) => { const a = a0 + span * i / n; return new THREE.Vector3(LF.x + Math.cos(a) * R, y, LF.z + Math.sin(a) * R); });
+  g.add(ptube(arc(Y + 1.08), 0.024, 'paint_y', 1, 60, 8));
+  g.add(ptube(arc(Y + 0.56), 0.02, 'paint_y', 1, 60, 8));
+  const toe = ptube(arc(Y + 0.08), 0.012, 'paint_y', 1, 60, 6); toe.scale.y = 1; g.add(toe);
+  for (let i = 0; i <= 7; i++) { const a = a0 + span * i / 7, p = pbox(0.045, 1.08, 0.045, 'paint_y'); p.position.set(LF.x + Math.cos(a) * R, Y + 0.54, LF.z + Math.sin(a) * R); p.rotation.y = -a; g.add(p); const base = pbox(0.11, 0.012, 0.11, 'steel'); base.position.set(p.position.x, Y + 0.035, p.position.z); g.add(base); }
+  /* 안내 레일 (H형 강) + 승강기 줄 */
+  for (const s of [-1, 1]) { const rail = pbox(0.12, 34, 0.08, pmat('steel', { color: 0x606366 }, 'rail'), 1.5); rail.position.set(LF.x + s * (LF.r - 0.12), 16, LF.z - LF.r + 0.22); g.add(rail); const web = pbox(0.02, 34, 0.12, pmat('steel', { color: 0x606366 }, 'rail'), 1.5); web.position.set(rail.position.x, 16, LF.z - LF.r + 0.32); g.add(web); }
+  for (const s of [-0.35, 0.35]) { const c = pcyl(0.018, 0.018, 28, pmat('steel', { color: 0x9a9a9a, roughness: 0.35 }, 'rope'), 6); c.position.set(LF.x + s, Y + 3.7 + 14, LF.z); g.add(c); }
+  /* 세워 둔 승강기 칸 (통로 위쪽) */
+  const cage = new THREE.Group(), cw = 2.0, ch = 2.4;
+  const tube = (w, h, d, x, y, z, m = 'paint_g') => { const b = pbox(w, h, d, m, 0.8); b.position.set(x, y, z); cage.add(b); return b; };
+  for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) tube(0.07, ch, 0.07, x * cw / 2, ch / 2, z * cw / 2);
+  for (const y of [0.03, ch]) { tube(cw, 0.08, 0.07, 0, y, -cw / 2); tube(cw, 0.08, 0.07, 0, y, cw / 2); tube(0.07, 0.08, cw, -cw / 2, y, 0); tube(0.07, 0.08, cw, cw / 2, y, 0); }
+  const fl = new THREE.Mesh(uvBox(new THREE.BoxGeometry(cw, 0.03, cw), cw, 0.03, cw, 0.6), pmat('grating')); fl.position.y = 0.06; cage.add(fl);
+  const roof = pbox(cw + 0.06, 0.04, cw + 0.06, 'steel'); roof.position.y = ch + 0.06; cage.add(roof);
+  for (const [x, z, ry] of [[0, -cw / 2, 0], [0, cw / 2, 0], [-cw / 2, 0, Math.PI / 2]]) { const pg = new THREE.PlaneGeometry(cw - 0.08, ch - 0.12); uvScale(pg, (cw - 0.08) / 0.5, (ch - 0.12) / 0.5); const wm = new THREE.Mesh(pg, pmat('mesh')); wm.position.set(x, ch / 2, z); wm.rotation.y = ry; cage.add(wm); }
+  const hook = pcyl(0.06, 0.08, 0.3, 'steel', 10); hook.position.y = ch + 0.25; cage.add(hook);
+  cage.position.set(LF.x, Y + 3.7, LF.z); g.add(cage); LVS.objs.cage = cage;
+  if (lv !== 2) addLight(LF.x, Y + 3.6, LF.z, [1.4, 1.25, 1.0], 7, { pri: 4 });
+  /* 승강기 호출함 */
+  const post = pbox(0.1, 2.25, 0.1, 'paint_y'); post.position.set(LF.x + 2.6, Y + 1.12, LF.z - 2.3); g.add(post);
+  const boxB = pbox(0.34, 0.46, 0.16, 'paint_g'); boxB.position.set(LF.x + 2.6, Y + 1.35, LF.z - 2.22); g.add(boxB);
+  const callLamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), MATS.lampRed); callLamp.position.set(LF.x + 2.6, Y + 1.48, LF.z - 2.13); g.add(callLamp); LVS.objs.callLamp = callLamp;
+  const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 12), pmat('paint_r')); btn.rotation.x = Math.PI / 2; btn.position.set(LF.x + 2.6, Y + 1.3, LF.z - 2.135); g.add(btn);
+  /* 강철 아치 지보 3개 */
+  for (const z of [16.4, 20, 23.6]) {
+    const pts = []; for (let i = 0; i <= 20; i++) { const a = Math.PI * i / 20; pts.push(new THREE.Vector3(20 - Math.cos(a) * 4.9, Y + Math.sin(a) * 3.05 - 0.05, z)); }
+    g.add(iBeam(new THREE.CatmullRomCurve3(pts), 0.17, pmat('steel', { color: 0x5a5856 }, 'archsteel')));
+    for (const s of [-1, 1]) { const foot = pbox(0.32, 0.04, 0.32, 'steel'); foot.position.set(20 + s * 4.9, Y + 0.02, z); g.add(foot); }
+  }
+  /* 바위벽 고정 볼트(판 + 너트): 안쪽에서 벽·천장을 향해 쏘아 맞은 곳에 붙임 */
+  const plateG = uvBox(new THREE.BoxGeometry(0.16, 0.16, 0.012), 0.16, 0.16, 0.012, 0.5), nutG = new THREE.CylinderGeometry(0.022, 0.022, 0.05, 6);
+  const plates = new THREE.InstancedMesh(plateG, pmat('rust'), 60), nuts = new THREE.InstancedMesh(nutG, pmat('steel'), 60);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 0, 1), nv = new THREE.Vector3(), n0 = { x: 0, y: 0, z: 0 };
+  let nb = 0;
+  for (let k = 0; k < 160 && nb < 60; k++) {
+    const a = Math.random() * Math.PI * 2, el = rr(0.15, 1.35), dx = Math.cos(a) * Math.cos(el), dy = Math.sin(el), dz = Math.sin(a) * Math.cos(el);
+    const ox = LF.x + Math.cos(a) * 2.6, oz = LF.z + Math.sin(a) * 2.6, oy = Y + 1.6;
+    const hit = F.ray(ox, oy, oz, dx, dy, dz, 6); if (!hit || hit.t < 0.8 || hit.y < Y + 1.4) continue;
+    F.airNormal(hit.x, hit.y, hit.z, n0); nv.set(n0.x, n0.y, n0.z);
+    q.setFromUnitVectors(up, nv); q.multiply(new THREE.Quaternion().setFromAxisAngle(up, Math.random() * 6.28));
+    m4.compose(new THREE.Vector3(hit.x + n0.x * 0.01, hit.y + n0.y * 0.01, hit.z + n0.z * 0.01), q, new THREE.Vector3(1, 1, 1)); plates.setMatrixAt(nb, m4);
+    const qn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), nv);
+    m4.compose(new THREE.Vector3(hit.x + n0.x * 0.035, hit.y + n0.y * 0.035, hit.z + n0.z * 0.035), qn, new THREE.Vector3(1, 1, 1)); nuts.setMatrixAt(nb, m4); nb++;
+  }
+  plates.count = nuts.count = nb; g.add(plates, nuts);
+  /* 천장 따라 환기 덕트 + 벽 따라 전선 받침 */
+  const ductPts = [];
+  for (let i = 0; i <= 14; i++) {
+    const a = -0.6 + i / 14 * 2.9, x = LF.x + Math.cos(a) * 3.9, z = LF.z + Math.sin(a) * 3.9, hit = F.ray(x, Y + 1.5, z, 0, 1, 0, 6);
+    const yTop = hit ? hit.y : Y + 3.3; ductPts.push(new THREE.Vector3(x, Math.max(Y + 2.3, yTop - 0.48), z));
+  }
+  const duct = ptube(ductPts, 0.3, 'duct', 1, 90, 14); { const uv = duct.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, v, u * 0.6); } } g.add(duct);
+  for (let i = 1; i < ductPts.length; i += 3) { const p = ductPts[i], hang = pcyl(0.006, 0.006, 0.5, 'steel', 4); hang.position.set(p.x, p.y + 0.5, p.z); g.add(hang); }
+  const trayPts = [], cab = [[], [], []];
+  for (let i = 0; i <= 18; i++) {
+    const a = 1.9 + i / 18 * 2.6, dx = Math.cos(a), dz = Math.sin(a), hit = F.ray(LF.x + dx * 2.4, Y + 2.15, LF.z + dz * 2.4, dx, 0, dz, 6);
+    const d = hit ? hit.t + 2.4 - 0.3 : 5.0; const p = new THREE.Vector3(LF.x + dx * d, Y + 2.15, LF.z + dz * d); trayPts.push(p);
+    cab.forEach((c, j) => c.push(new THREE.Vector3(p.x - dx * (0.02 + j * 0.05), p.y + 0.06 + (j % 2) * 0.03, p.z - dz * (0.02 + j * 0.05))));
+  }
+  g.add(ptube(trayPts, 0.035, 'steel', 1, 80, 4));
+  cab.forEach((c, j) => g.add(ptube(c, 0.018 + j * 0.004, pmat('steel', { color: [0x1a1a1a, 0x7a1a12, 0x1f2a44][j], roughness: 0.6, metalness: 0 }, 'cable' + j), 1, 80, 6)));
+  /* 비상등: 철망 씌운 벽등 (2층은 고장) */
+  const lamps = [[20, Y + 2.92, 16.4], [20, Y + 2.92, 23.6], [16.2, Y + 2.15, 20]];
+  lamps.forEach(([x, y, z], i) => {
+    const on = lv !== 2, lg = new THREE.Group();
+    const body = pbox(0.42, 0.1, 0.2, 'paint_w'); lg.add(body);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.34, 16, 1, false, 0, Math.PI), on ? MATS.lampOn : MATS.lampOff); glass.rotation.z = Math.PI / 2; glass.rotation.x = Math.PI; glass.position.y = -0.05; lg.add(glass);
+    for (let k = -1; k <= 1; k++) { const w = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.006, 4, 12, Math.PI), pmat('steel')); w.position.set(k * 0.14, -0.05, 0); w.rotation.y = Math.PI / 2; w.rotation.z = Math.PI; lg.add(w); }
+    lg.position.set(x, y, z); if (i === 2) lg.rotation.y = Math.PI / 2; g.add(lg);
+    if (on) addLight(x, y - 0.3, z, lv === 4 ? [2.4, 1.15, 0.6] : [1.7, 1.5, 1.2], 11, { flick: i === 2 && lv === 3 });
+  });
+  /* 표지판 */
+  const signTex = (lines, bg, fg, w = 512, h = 256) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, w, h); x.strokeStyle = fg; x.lineWidth = 10; x.strokeRect(12, 12, w - 24, h - 24); x.fillStyle = fg; x.textAlign = 'center'; lines.forEach(([t, s, yy]) => { x.font = `800 ${s}px "IBM Plex Sans KR", sans-serif`; x.fillText(t, w / 2, yy); }); for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(60,45,30,${Math.random() * 0.12})`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2); } const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+  const d = GEO.DEPTH[lv];
+  const s1 = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.55), new THREE.MeshStandardMaterial({ map: signTex([['지하 ' + d.toLocaleString() + ' m', 92, 130], ['LEVEL ' + d + ' · 승강장', 34, 200]], '#e8e2d2', '#1a2a3a'), roughness: 0.6, metalness: 0.1 }));
+  s1.position.set(LF.x + 2.6, Y + 1.95, LF.z - 2.17); g.add(s1);
+  const s2 = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62), new THREE.MeshStandardMaterial({ map: signTex([['⚠', 150, 160], ['낙석 주의', 64, 230]], '#e9b31a', '#161616', 256, 256), roughness: 0.55 }));
+  s2.position.set(LF.x - 2.5, Y + 1.7, LF.z - 2.6); s2.rotation.y = 0.5; g.add(s2);
+  const sp = pbox(0.05, 1.7, 0.05, 'steel'); sp.position.set(LF.x - 2.52, Y + 0.85, LF.z - 2.64); g.add(sp);
+}
+
+/* ---------- 1인칭 손에 든 도구 (실제 크기, 앞쪽 = -z) ---------- */
+function glove(g, x, y, z, rx = 0, rz = 0) {
+  const m = pmat('paint_r', { color: 0xff9a55, roughness: 0.85, metalness: 0 }, 'glove'), h = new THREE.Group();
+  const palm = pbox(0.085, 0.03, 0.095, m); h.add(palm);
+  for (let i = 0; i < 4; i++) { const f = pcyl(0.011, 0.012, 0.07, m, 8); f.rotation.x = Math.PI / 2 - 0.9; f.position.set(-0.03 + i * 0.02, 0.022, -0.06); h.add(f); }
+  const th = pcyl(0.012, 0.013, 0.06, m, 8); th.rotation.z = 1.1; th.position.set(0.05, 0.01, -0.02); h.add(th);
+  const cuff = pcyl(0.045, 0.05, 0.08, pmat('paint_r', { color: 0x2a2a2a, roughness: 0.9, metalness: 0 }, 'cuff'), 12); cuff.rotation.x = Math.PI / 2; cuff.position.z = 0.08; h.add(cuff);
+  h.position.set(x, y, z); h.rotation.set(rx, 0, rz); g.add(h); return h;
+}
+function makeTool(id) {
+  const g = new THREE.Group(), rub = pmat('paint_r', { color: 0x1c1c1e, roughness: 0.75, metalness: 0 }, 'rubber');
+  if (id === 'drill') {
+    const body = pcyl(0.042, 0.046, 0.2, 'paint_y', 20); body.rotation.x = Math.PI / 2; body.position.z = 0.02; g.add(body);
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.046, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), pmat('paint_y')); back.rotation.x = Math.PI / 2; back.position.z = 0.12; g.add(back);
+    const gear = pcyl(0.036, 0.042, 0.09, pmat('steel', { color: 0x55585c }, 'gear'), 16); gear.rotation.x = Math.PI / 2; gear.position.z = -0.125; g.add(gear);
+    const chuck = pcyl(0.022, 0.03, 0.06, rub, 14); chuck.rotation.x = Math.PI / 2; chuck.position.z = -0.2; g.add(chuck);
+    const bit = new THREE.Group(); const sh = pcyl(0.007, 0.007, 0.26, 'steel', 8); sh.rotation.x = Math.PI / 2; bit.add(sh);
+    const fl = []; for (let i = 0; i <= 40; i++) { const t = i / 40, a = t * Math.PI * 10; fl.push(new THREE.Vector3(Math.cos(a) * 0.0085, Math.sin(a) * 0.0085, -0.02 - t * 0.2)); }
+    bit.add(ptube(fl, 0.0028, 'steel', 1, 120, 4)); const tip = new THREE.Mesh(new THREE.ConeGeometry(0.011, 0.025, 8), pmat('steel')); tip.rotation.x = -Math.PI / 2; tip.position.z = -0.235; bit.add(tip);
+    bit.position.z = -0.36; bit.children.forEach(c => { c.position.z += 0.13; }); g.add(bit); g.userData.bit = bit;
+    const dh = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; dh.push(new THREE.Vector3(0, -0.035 - Math.sin(a) * 0.1, 0.13 - (1 - Math.cos(a)) * 0.04)); }
+    g.add(ptube(dh, 0.016, rub, 1, 30, 10));
+    const side = pcyl(0.016, 0.018, 0.13, rub, 10); side.rotation.z = 1.2; side.position.set(-0.09, -0.04, -0.12); g.add(side);
+    const vent = pbox(0.05, 0.004, 0.06, rub); vent.position.set(0, 0.045, 0.03); g.add(vent);
+    glove(g, 0.0, -0.14, 0.13, 0.2, 0);
+  } else if (id === 'pick') {
+    const h = pcyl(0.015, 0.018, 0.6, pmat('paint_r', { color: 0x7a5434, roughness: 0.7, metalness: 0 }, 'wood'), 10); h.position.y = -0.05; g.add(h);
+    const head = new THREE.Group(); const c = pbox(0.05, 0.05, 0.05, 'steel'); head.add(c);
+    for (const s of [-1, 1]) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.2, 4), pmat('steel')); sp.rotation.z = s * Math.PI / 2 * 1.05; sp.position.x = s * 0.12; sp.position.y = -0.01; head.add(sp); }
+    head.position.y = 0.26; g.add(head); g.rotation.x = 0.35; glove(g, 0, -0.22, 0.0, -Math.PI / 2 + 0.3, 0);
+  } else if (id === 'scan') {
+    const pad = new THREE.Group();
+    const b = pbox(0.25, 0.17, 0.028, pmat('paint_r', { color: 0x2d3034, roughness: 0.55, metalness: 0.1 }, 'case'), 1); pad.add(b);
+    for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const c = pbox(0.04, 0.04, 0.04, rub); c.position.set(x * 0.12, y * 0.08, 0); pad.add(c); }
+    const ant = pcyl(0.006, 0.006, 0.09, rub, 6); ant.position.set(0.1, 0.12, 0); pad.add(ant);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 170; g.userData.scanC = c; g.userData.scanT = new THREE.CanvasTexture(c);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.14), new THREE.MeshBasicMaterial({ map: g.userData.scanT, toneMapped: false })); scr.position.z = 0.0145; pad.add(scr);
+    pad.rotation.x = -0.75; g.add(pad); glove(pad, -0.13, -0.02, -0.02, 0, -0.4); glove(pad, 0.13, -0.02, -0.02, 0, 0.4);
+  } else if (id === 'wrench') {
+    const hd = pbox(0.035, 0.32, 0.022, pmat('paint_r', { color: 0xb02a1c }, 'wr'), 1); g.add(hd);
+    const jaw1 = pbox(0.09, 0.03, 0.03, 'steel'); jaw1.position.set(-0.03, 0.17, 0); g.add(jaw1);
+    const jaw2 = pbox(0.08, 0.03, 0.03, 'steel'); jaw2.position.set(-0.03, 0.22, 0); g.add(jaw2);
+    const nut = pcyl(0.02, 0.02, 0.05, 'steel', 12); nut.position.set(0.0, 0.195, 0); g.add(nut);
+    g.rotation.z = 0.45; glove(g, 0, -0.12, 0, -Math.PI / 2, 0);
+  } else if (id === 'cool') {
+    const tank = pcyl(0.055, 0.055, 0.3, 'paint_r', 18); tank.rotation.x = Math.PI / 2; g.add(tank);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), pmat('paint_r')); dome.rotation.x = -Math.PI / 2; dome.position.z = -0.15; g.add(dome);
+    const valve = pbox(0.04, 0.05, 0.05, 'steel'); valve.position.set(0, 0.04, -0.19); g.add(valve);
+    const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.012, 0.12, 14, 1, true), rub); horn.rotation.x = Math.PI / 2; horn.position.set(0, 0.05, -0.29); horn.material.side = THREE.DoubleSide; g.add(horn);
+    const lab = pbox(0.002, 0.06, 0.1, 'paint_w'); lab.position.set(0.056, 0, 0); g.add(lab);
+    glove(g, 0, -0.06, -0.02, 0, 0);
+  } else if (id === 'light') {
+    const b = pbox(0.22, 0.15, 0.08, 'paint_y'); g.add(b); const gl = pbox(0.19, 0.12, 0.01, MATS.lampOn); gl.position.z = -0.042; g.add(gl);
+    const hnd = pcyl(0.012, 0.012, 0.2, rub, 6); hnd.rotation.z = Math.PI / 2; hnd.position.y = 0.11; g.add(hnd); glove(g, 0, 0.12, 0.02, 0, 0);
+  } else if (id === 'fan') {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 8, 24), pmat('paint_y')); g.add(r);
+    for (let i = 0; i < 6; i++) { const s = pbox(0.26, 0.005, 0.005, 'steel'); s.rotation.z = i / 6 * Math.PI; g.add(s); }
+    glove(g, 0, -0.16, 0.02, 0, 0);
+  }
+  return g;
+}
 
 /* ===== scene.js — 층마다 놓이는 소품·빛·효과 ===== */
 const LVS = { lv: 0, g: null, upd: [], placed: new Map(), objs: {} };
@@ -1246,50 +1815,18 @@ function at(o, x, y, z) { o.position.set(x, y, z); LVS.g.add(o); return o; }
 function buildLevelScene(lv, F) {
   clearLevelScene(); LVS.lv = lv; LVS.F = F; LVS.g = new THREE.Group(); R3.scene.add(LVS.g);
   const L = GEO.LAYOUT[lv];
-  /* 승강장 콘크리트 판 (가운데 통로 구멍) */
-  const sh = new THREE.Shape(); sh.moveTo(15.6, 15.6); sh.lineTo(24.4, 15.6); sh.lineTo(24.4, 24.4); sh.lineTo(15.6, 24.4); sh.lineTo(15.6, 15.6);
-  const hole = new THREE.Path(); hole.absarc(LF.x, LF.z, LF.r + 0.2, 0, Math.PI * 2, true); sh.holes.push(hole);
-  const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: false, curveSegments: 28 }), MATS.concrete);
-  slab.rotation.x = Math.PI / 2; slab.position.y = LY + 0.001; LVS.g.add(slab);
-  slab.geometry.attributes.uv.array.forEach((v, i, a) => { a[i] = v * 0.35; });
-  // 통로 둘레 노란 난간 (한쪽은 열림)
-  const rail = new THREE.Mesh(new THREE.TorusGeometry(LF.r + 0.45, 0.035, 6, 40, Math.PI * 1.55), MATS.yellow); rail.rotation.x = Math.PI / 2; rail.rotation.z = Math.PI * 0.72; rail.position.set(LF.x, LY + 1.05, LF.z); LVS.g.add(rail);
-  for (let a = 0; a < 6; a++) { const t = Math.PI * 0.72 + a / 5 * Math.PI * 1.55, post = cyl(0.03, 0.03, 1.05, 'yellow', 6); at(post, LF.x + Math.cos(t) * (LF.r + 0.45), LY + 0.52, LF.z + Math.sin(t) * (LF.r + 0.45)); }
-  /* 승강기 안내 레일·줄·주차된 승강기 칸 */
-  for (const s of [-1, 1]) { const r = box(0.16, 32, 0.16, 'steel'); at(r, LF.x + s * (LF.r - 0.15), 16, LF.z - LF.r + 0.3); }
-  for (const s of [-0.4, 0.4]) { const c = cyl(0.02, 0.02, 30, 'cable', 5); at(c, LF.x + s, 32 - 15 + 7, LF.z); }
-  const cage = new THREE.Group();
-  const fr = (w, h, d, x, y, z) => { const b = box(w, h, d, 'steel'); b.position.set(x, y, z); cage.add(b); };
-  for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) fr(0.08, 2.5, 0.08, x * 1.05, 1.25, z * 1.05);
-  fr(2.2, 0.08, 2.2, 0, 0, 0); fr(2.2, 0.12, 2.2, 0, 2.5, 0); fr(2.2, 0.06, 0.06, 0, 1.1, -1.05); fr(0.06, 0.06, 2.2, 1.05, 1.1, 0);
-  const floorG = box(2.1, 0.04, 2.1, 'dark'); floorG.position.y = 0.06; cage.add(floorG);
-  cage.position.set(LF.x, LY + 3.7, LF.z); LVS.g.add(cage); LVS.objs.cage = cage;
-  if (lv !== 2) addLight(LF.x, LY + 3.6, LF.z, [1.4, 1.2, 0.9], 7, { pri: 4 });
-  // 승강기 호출판
-  const post = box(0.12, 1.4, 0.12, 'steel'); at(post, LF.x + 2.6, LY + 0.7, LF.z - 2.3);
-  const callPanel = box(0.36, 0.5, 0.12, 'yellow'); at(callPanel, LF.x + 2.6, LY + 1.35, LF.z - 2.24);
-  const callLamp = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), MATS.lampRed); at(callLamp, LF.x + 2.6, LY + 1.45, LF.z - 2.16); LVS.objs.callLamp = callLamp;
-  /* 지지 아치 3개 + 케이블 받침 */
-  for (const z of [16.4, 20, 23.6]) {
-    const pts = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; pts.push(new THREE.Vector3(20 - Math.cos(a) * 5.0, LY + Math.sin(a) * 3.15, z)); }
-    const arch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.09, 6, false), MATS.rust); LVS.g.add(arch);
-  }
-  const tray = box(0.08, 0.06, 9, 'steel'); at(tray, 15.4, LY + 2.2, 20);
-  const cab = cyl(0.03, 0.03, 9, 'orange', 6); cab.rotation.x = Math.PI / 2; at(cab, 15.45, LY + 2.25, 20);
-  /* 비상등 (2층은 고장) */
-  const lamps = [[20, LY + 3.05, 16.4], [20, LY + 3.05, 23.6], [16.2, LY + 2.2, 20]];
-  lamps.forEach(([x, y, z], i) => {
-    const on = lv !== 2, m = box(0.5, 0.1, 0.18, on ? 'lampOn' : 'lampOff'); at(m, x, y, z);
-    if (on) addLight(x, y - 0.25, z, lv === 4 ? [2.2, 1.0, 0.5] : [1.6, 1.45, 1.15], 11, { flick: i === 2 && lv === 3 });
-  });
+  if (!R3.envs) R3.envs = {};
+  const wk = lv === 4 ? 1 : 0; R3.scene.environment = R3.envs[wk] || (R3.envs[wk] = mineEnv(wk));
+  buildStation(lv, F, L);
   if (lv === 2) {   // 고장 난 등에서 가끔 튀는 불꽃
-    const spark = addLight(16.2, LY + 2.1, 20, [2.5, 2.2, 1.6], 6, { on: false });
-    LVS.upd.push((dt, t) => { const on = Math.sin(t * 2.3) > 0.97 || (Math.sin(t * 13.7) > 0.995); spark.on = on; if (on && Math.random() < 0.5) for (let i = 0; i < 4; i++) R3.glow.emit(16.2, LY + 2.1, 20, (Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3, 1, 0.8, 0.4, 1, 0.04, 0.5, 9.8); });
+    const spark = addLight(16.2, LY + 2.0, 20, [2.5, 2.2, 1.6], 6, { on: false });
+    LVS.upd.push((dt, t) => { const on = Math.sin(t * 2.3) > 0.97 || (Math.sin(t * 13.7) > 0.995); spark.on = on; if (on && Math.random() < 0.5) for (let i = 0; i < 4; i++) R3.glow.emit(16.2, LY + 2.0, 20, (Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3, 3, 2.2, 1.2, 1, 0.04, 0.5, 9.8); });
   }
   /* 생산정 관 (1·3층): 바위 속에 묻혀 있음 */
   if (L.casing) {
-    const pipe = cyl(0.32, 0.32, 32, 'rust', 20); at(pipe, L.casing.x, 16, L.casing.z);
-    for (let y = 1; y < 32; y += 3) { const fl = cyl(0.4, 0.4, 0.1, 'steel', 20); at(fl, L.casing.x, y, L.casing.z); }
+    const pipe = pcyl(0.32, 0.32, 32, 'rust', 24, 1.2); at(pipe, L.casing.x, 16, L.casing.z);
+    for (let y = 1; y < 32; y += 3) { const fl = pcyl(0.42, 0.42, 0.06, 'steel', 24); at(fl, L.casing.x, y, L.casing.z); const fl2 = pcyl(0.42, 0.42, 0.06, 'steel', 24); at(fl2, L.casing.x, y + 0.07, L.casing.z);
+      for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2, b = pcyl(0.018, 0.018, 0.2, 'steel', 6); at(b, L.casing.x + Math.cos(a) * 0.38, y + 0.035, L.casing.z + Math.sin(a) * 0.38); } }
   }
   if (lv === 1) buildLeaks(F, L);
   if (lv === 2) { LVS.objs.quartz = crystals(L.quartz, 'quartz', 7, 0.5); }
@@ -1398,9 +1935,25 @@ const LAVA_FS = `uniform float uT; varying vec2 vUv;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float n(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),u.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),u.x), u.y); }
 float fb(vec2 p){ float t=0.0, a=0.5; for(int i=0;i<5;i++){ t+=a*n(p); p*=2.03; a*=0.5; } return t; }
-void main(){ vec2 p = vUv * 7.0; float f = fb(p + vec2(uT*0.06, uT*0.035)); float cr = smoothstep(0.48, 0.62, fb(p*1.6 - vec2(uT*0.03, -uT*0.02) + f));
-  vec3 hot = vec3(5.0, 1.5, 0.28) * (0.55 + f), crust = vec3(0.06, 0.025, 0.018); vec3 c = mix(hot, crust, cr*0.9);
-  gl_FragColor = vec4(c, 1.0);
+vec2 h2(vec2 p){ return vec2(h(p), h(p + 17.31)); }
+/* 식은 껍질 조각(보로노이) 사이로 뜨거운 틈이 빛남. 온도 → 흑체 색 */
+vec3 bb(float t){ t = clamp(t, 0.0, 1.0); vec3 c = mix(vec3(0.55, 0.05, 0.01), vec3(1.0, 0.32, 0.04), smoothstep(0.15, 0.55, t)); c = mix(c, vec3(1.0, 0.7, 0.25), smoothstep(0.6, 0.85, t)); c = mix(c, vec3(1.0, 0.95, 0.8), smoothstep(0.9, 1.0, t)); return c * pow(t, 2.2) * 9.0; }
+void main(){ vec2 c0 = vUv - 0.5; float rr = length(c0) * 2.0;
+  vec2 flow = vec2(fb(vUv * 3.0 + uT * 0.02), fb(vUv * 3.0 + 9.1 - uT * 0.02)) - 0.5;
+  vec2 p = vUv * 13.0 + flow * 2.0 + vec2(uT * 0.05, uT * 0.03);
+  vec2 ip = floor(p), fp = fract(p); float d1 = 9.0, d2 = 9.0; vec2 cid = vec2(0.0);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 g = vec2(float(i), float(j)); vec2 o = 0.5 + 0.42 * sin(uT * 0.15 + 6.2831 * h2(ip + g)); float d = length(g + o - fp); if (d < d1) { d2 = d1; d1 = d; cid = ip + g; } else if (d < d2) d2 = d; }
+  float edge = d2 - d1;
+  float crack = 1.0 - smoothstep(0.0, 0.05 + 0.1 * fb(p * 2.0), edge);
+  float plate = h(cid);
+  float pulse = 0.5 + 0.5 * sin(uT * 0.7 + plate * 6.28);
+  float temp = crack * (0.7 + 0.3 * pulse) + (1.0 - crack) * (0.02 + 0.1 * smoothstep(0.55, 0.9, fb(p * 3.0 + uT * 0.1))) * (plate > 0.85 ? 4.0 : 1.0);
+  temp = max(temp, smoothstep(0.75, 1.0, rr) * 0.0);
+  float hotSpot = smoothstep(0.62, 0.8, fb(vUv * 4.0 + vec2(-uT * 0.04, uT * 0.03)));
+  temp = mix(temp, 0.9, hotSpot * 0.6);
+  vec3 crustCol = vec3(0.035, 0.028, 0.025) * (0.6 + 0.8 * fb(p * 5.0)) + vec3(0.2, 0.05, 0.01) * smoothstep(0.25, 0.0, edge) * 0.5;
+  vec3 col = crustCol * (1.0 - crack) + bb(temp);
+  gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <encodings_fragment>
 }`;
@@ -1817,35 +2370,18 @@ function viewModel(dt, t) {
   const id = MODE.v === 'dive' && curTool() ? curTool().id : '';
   if (id !== VM.cur) {
     if (VM.g) R3.cam.remove(VM.g); VM.cur = id; VM.g = new THREE.Group(); VM.bit = null; if (!id) return;
-    const g = VM.g;
-    if (id === 'drill') {
-      const body = cyl(0.07, 0.08, 0.34, 'yellow', 12); body.rotation.x = Math.PI / 2; g.add(body);
-      const grip = box(0.06, 0.16, 0.07, 'rubber'); grip.position.set(0, -0.11, 0.08); g.add(grip);
-      const chuck = cyl(0.035, 0.045, 0.08, 'dark', 10); chuck.rotation.x = Math.PI / 2; chuck.position.z = -0.21; g.add(chuck);
-      const bit = new THREE.Group(); const bt = cyl(0.012, 0.02, 0.26, 'steel', 8); bt.rotation.x = Math.PI / 2; bit.add(bt); const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 8), MATS.steel); tip.rotation.x = -Math.PI / 2; tip.position.z = -0.15; bit.add(tip); bit.position.z = -0.36; g.add(bit); VM.bit = bit;
-    } else if (id === 'pick') {
-      const h = cyl(0.016, 0.016, 0.5, 'rust', 6); h.rotation.x = 0.4; g.add(h); const head = box(0.34, 0.04, 0.04, 'steel'); head.position.set(0, 0.24, -0.1); head.rotation.x = 0.4; g.add(head);
-    } else if (id === 'scan') {
-      const pad = box(0.24, 0.16, 0.025, 'dark'); pad.rotation.x = -0.9; g.add(pad);
-      const c = document.createElement('canvas'); c.width = 128; c.height = 86; VM.scanC = c; VM.scanT = new THREE.CanvasTexture(c);
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.135), new THREE.MeshBasicMaterial({ map: VM.scanT, toneMapped: false })); scr.position.set(0, 0.0, 0.0); scr.rotation.x = -0.9; scr.translateZ(0.014); g.add(scr);
-    } else if (id === 'wrench') {
-      const w = box(0.04, 0.34, 0.025, 'steel'); w.rotation.z = 0.5; g.add(w); const jaw = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.016, 6, 10, 4.6), MATS.steel); jaw.position.set(-0.085, 0.15, 0); g.add(jaw);
-    } else if (id === 'cool') {
-      const tank = cyl(0.06, 0.06, 0.26, 'glass', 12); tank.rotation.x = Math.PI / 2; g.add(tank); const nz = cyl(0.015, 0.025, 0.14, 'steel', 8); nz.rotation.x = Math.PI / 2; nz.position.z = -0.19; g.add(nz);
-      const blue = cyl(0.05, 0.05, 0.2, new THREE.MeshStandardMaterial({ color: 0x3aa0ff, emissive: 0x0a3a66 }), 12); blue.rotation.x = Math.PI / 2; g.add(blue);
-    } else if (id === 'light') { const b = box(0.2, 0.13, 0.06, 'yellow'); g.add(b); const gl = box(0.17, 0.1, 0.01, 'lampOn'); gl.position.z = -0.035; g.add(gl); }
-    else if (id === 'fan') { const r = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.02, 6, 18), MATS.yellow); g.add(r); }
-    g.scale.setScalar(0.4); g.rotation.y = 0.35; g.position.set(0.25, -0.2, -0.42); R3.cam.add(g);
+    const g = VM.g, tl = makeTool(id); g.add(tl);
+    VM.bit = tl.userData.bit || null; VM.scanC = tl.userData.scanC || null; VM.scanT = tl.userData.scanT || null;
+    g.rotation.y = 0.1; g.scale.setScalar(0.62); g.position.set(0.21, -0.2, -0.4); R3.cam.add(g);
   }
   if (!VM.g) return;
   const moving = Math.hypot(ME.vel.x, ME.vel.z) > 0.5 && ME.ground, sw = moving ? Math.sin(t * 9) * 0.012 : 0;
   VM.kick = Math.max(0, VM.kick - dt * 8);
-  VM.g.position.set(0.25 + sw, -0.2 + Math.abs(sw) * 0.6 - (IN.primary ? 0.008 : 0), -0.42 + VM.kick * 0.02);
+  VM.g.position.set(0.21 + sw, -0.2 + Math.abs(sw) * 0.6 - (IN.primary ? 0.008 : 0), -0.4 + VM.kick * 0.02);
   VM.g.rotation.x = VM.cur === 'pick' && IN.primary ? Math.sin(t * 14) * 0.5 : 0;
   if (VM.bit && IN.primary) { VM.bit.rotation.z += dt * 40; VM.g.position.x += (Math.random() - 0.5) * 0.006; VM.g.position.y += (Math.random() - 0.5) * 0.006; }
   if (VM.scanC && (t * 10 | 0) % 2 === 0) {   // 스캐너 화면: 바위 온도·깊이
-    const g = VM.scanC.getContext('2d'), a = ME.aim; g.fillStyle = '#031a14'; g.fillRect(0, 0, 128, 86); g.fillStyle = ME.scanning ? '#6cf5c0' : '#3a8a6c'; g.font = '700 13px monospace';
+    const g = VM.scanC.getContext('2d'), a = ME.aim; g.setTransform(2, 0, 0, 2, 0, 0); g.fillStyle = '#031a14'; g.fillRect(0, 0, 128, 86); g.fillStyle = ME.scanning ? '#6cf5c0' : '#3a8a6c'; g.font = '700 13px monospace';
     g.fillText('DEPTH ' + GEO.depthAt(ME.lv, ME.pos.y) + 'm', 6, 18);
     if (a) { g.fillText(Math.round(GEO.tempAt(GEO.depthAt(ME.lv, a.y))) + ' C', 6, 38); g.font = '600 11px sans-serif'; g.fillText(ROCK[rockAt(ME.lv, a.x, a.y, a.z)].name, 6, 58); }
     g.fillText(ME.scanning ? 'SCANNING…' : 'HOLD TO SCAN', 6, 78); VM.scanT.needsUpdate = true;
@@ -2029,14 +2565,645 @@ const CARD_FIG = {
   4: () => `<svg viewBox="0 0 320 150" class="fig"><rect x="0" y="0" width="320" height="40" fill="#203040"/><rect x="0" y="40" width="320" height="110" fill="#4a3a2e"/><path d="M0 110 Q80 95 160 112 T320 105 L320 150 L0 150Z" fill="#7a3a20"/>${[30, 70, 120, 200, 260].map(x => `<path d="M${x} 118 l8 10 l-6 8" stroke="#3ab0ff" fill="none" opacity=".7"/>`).join('')}<rect x="90" y="10" width="10" height="110" fill="#c0603a"/><rect x="220" y="10" width="10" height="110" fill="#3a8ad0"/><text x="58" y="34" fill="#ffd" font-size="11">생산정 ↑ 뜨거운 물</text><text x="196" y="34" fill="#dff" font-size="11">주입정 ↓ 식은 물</text><text x="110" y="142" fill="#ffd8b0" font-size="12">저류층 (뜨거운 물이 스민 암반)</text></svg>`
 };
 
-/* ===== surface.js — 지상: 실제 현장 360° 사진 + 찾기 · 마지막 연결도·보고 ===== */
+/* ===== surf3d.js — 지상 3D 현장: 케냐 올카리아·헬스게이트 분위기 (가상의 생산정 W-7) =====
+   하늘·햇빛 = 실제 사진 하늘(Poly Haven CC0). 땅·풀·나무·배관·발전소·김·동물 = 직접 만든 3D.
+   단위 m, 카메라는 생산정 콘크리트 패드 위에 서서 둘러봄. */
+const S3 = { ok: false, t: 0, anim: [], upd: [], spots: {}, herd: null };
+const SUN = (() => { const u = 0.5996, v = 0.4414, el = (0.5 - v) * Math.PI, az = (u - 0.5) * Math.PI * 2; return new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); })();
+const LIGHT = (() => { const d = SUN.clone(); d.y = 0; d.normalize(); const e = 30 * Math.PI / 180; return d.multiplyScalar(Math.cos(e)).setY(Math.sin(e)); })();   // 그림자를 짧게: 빛은 하늘 사진의 해보다 조금 높게
+const PAD = { x: 4, z: -4, r: 17 };
+/* ---------- 땅 높이 ---------- */
+function n2(x, z, s) { return vnoise(x, 0.5, z, s); }
+function f2(x, z, o, s) { let t = 0, a = 0.5, f = 1, n = 0; for (let i = 0; i < o; i++) { t += a * n2(x * f, z * f, s + i * 13); n += a; a *= 0.5; f *= 2.03; } return t / n; }
+function cliffX(z) { return -360 + (f2(z * 0.003, 3, 3, 41) - 0.5) * 160 + (f2(z * 0.015, 7, 2, 43) - 0.5) * 24; }
+function cliffTop(z) { return 80 + f2(z * 0.006, 1, 3, 23) * 50; }
+function hAt(x, z) {
+  let h = (f2(x * 0.004, z * 0.004, 4, 11) - 0.5) * 22 + (f2(x * 0.03, z * 0.03, 3, 17) - 0.5) * 2.2;
+  // 서쪽 절벽(헬스게이트 협곡 벽): 붉은 절벽이 올라섬
+  const cx = cliffX(z), dx = cx - x;
+  if (dx > 40) { const k = clamp((dx - 40) / 20, 0, 1); h += k * k * (3 - 2 * k) * (cliffTop(z) - 12); }   // 절벽 벽(cliffWall) 뒤쪽에서만 솟게
+  // 북동쪽 완만한 언덕
+  h += Math.max(0, (Math.hypot(x - 700, z + 900) < 900 ? (900 - Math.hypot(x - 700, z + 900)) / 900 : 0)) * 40;
+  // 생산정 패드는 평평하게
+  const dp = Math.hypot(x - PAD.x, z - PAD.z), k = clamp((dp - PAD.r) / 18, 0, 1), k2 = k * k * (3 - 2 * k);
+  return lerp(0, h, k2);
+}
+const _hN = new THREE.Vector3();
+function nAt(x, z) { const e = 0.8; _hN.set(hAt(x - e, z) - hAt(x + e, z), 2 * e, hAt(x, z - e) - hAt(x, z + e)).normalize(); return _hN; }
+/* 흙 드러난 곳 (길·패드 둘레·맨땅 얼룩) 0~1 */
+function soilAt(x, z) {
+  const dp = Math.hypot(x - PAD.x, z - PAD.z); let s = clamp(1 - (dp - PAD.r + 1) / 5, 0, 1);
+  const road = Math.abs(x - (PAD.x - 40) - Math.sin(z * 0.01) * 30) < 3.2 + f2(x * 0.2, z * 0.2, 2, 5) * 1.5 ? 1 : 0;   // 패드로 오는 흙길
+  s = Math.max(s, road * (z < PAD.z + 10 ? 1 : 0));
+  s = Math.max(s, smooth01((f2(x * 0.02, z * 0.02, 3, 31) - 0.62) * 6));
+  return s;
+}
+function smooth01(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+
+/* ---------- 재질 도우미 ---------- */
+function surfSet(name) {
+  const d = QUAL.tier === 'low' ? 'surf/low/' : 'surf/';
+  return Promise.all([loadAssetTex(d + name + '_a.webp', { srgb: true }), loadAssetTex(d + name + '_n.webp'), loadAssetTex(d + name + '_d.webp')]).then(([a, n, dd]) => (a && n && dd) ? { a, n, d: dd } : null);
+}
+function surfTex(name, srgb = true) { return loadAssetTex((QUAL.tier === 'low' ? 'surf/low/' : 'surf/') + name, { srgb }); }
+
+/* 땅 재질: 마른 풀 깔린 땅 / 붉은 흙 / 절벽을 섞음 (MeshStandardMaterial에 끼워 넣음) */
+function groundMaterial() {
+  const U = { tG: { value: NEUTRAL.white }, nG: { value: NEUTRAL.n }, dG: { value: NEUTRAL.d }, tS: { value: NEUTRAL.white }, nS: { value: NEUTRAL.n }, dS: { value: NEUTRAL.d },
+    tC: { value: NEUTRAL.white }, nC: { value: NEUTRAL.n }, dC: { value: NEUTRAL.d }, uHas: { value: 0 } };
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, vertexColors: false });
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aMix; varying vec3 vWP; varying vec3 vWN; varying vec2 vMix;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal); vMix = aMix;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform sampler2D tG; uniform sampler2D nG; uniform sampler2D dG; uniform sampler2D tS; uniform sampler2D nS; uniform sampler2D dS; uniform sampler2D tC; uniform sampler2D nC; uniform sampler2D dC; uniform float uHas;
+varying vec3 vWP; varying vec3 vWN; varying vec2 vMix;
+vec3 gN; float gR; float gAO;`)
+      .replace('#include <map_fragment>', `
+  float dist = length(vWP - cameraPosition);
+  vec2 p1 = vWP.xz * 0.28, p2 = vWP.xz * 0.045;
+  float far = smoothstep(18.0, 70.0, dist);
+  vec3 cg = mix(texture2D(tG, p1).rgb, texture2D(tG, p2).rgb, far * 0.85);
+  vec3 cs = mix(texture2D(tS, p1 * 1.1).rgb, texture2D(tS, p2).rgb, far * 0.85);
+  vec3 dg = mix(texture2D(dG, p1).rgb, texture2D(dG, p2).rgb, far * 0.85);
+  vec3 ds = mix(texture2D(dS, p1 * 1.1).rgb, texture2D(dS, p2).rgb, far * 0.85);
+  vec3 nn = normalize(vWN);
+  float cl = vMix.x < -0.5 ? 1.0 : smoothstep(0.82, 0.62, nn.y);
+  vec3 w = pow(abs(nn), vec3(4.0)); w /= w.x + w.y + w.z;
+  vec3 pc = vWP * mix(0.07, 0.016, far);
+  vec3 cc = texture2D(tC, pc.zy).rgb * w.x + texture2D(tC, pc.xz).rgb * w.y + texture2D(tC, pc.xy).rgb * w.z;
+  vec3 dc = texture2D(dC, pc.zy).rgb * w.x + texture2D(dC, pc.xz).rgb * w.y + texture2D(dC, pc.xy).rgb * w.z;
+  float sm = clamp(vMix.x + (ds.b - dg.b) * 0.8 - 0.4 + vMix.x * 0.4, 0.0, 1.0);
+  vec3 col = mix(cg, cs, sm); vec3 dd = mix(dg, ds, sm);
+  col = mix(col, cc, cl); dd = mix(dd, dc, cl);
+  col = pow(col, vec3(2.2)) * (0.85 + 0.3 * vMix.y); col = mix(vec3(dot(col, vec3(0.3, 0.55, 0.15))), col, 0.72) * 0.92;
+  if (uHas < 0.5) { col = mix(mix(vec3(0.36, 0.27, 0.14), vec3(0.32, 0.17, 0.09), sm), vec3(0.38, 0.18, 0.1), cl); dd = vec3(1.0, 0.9, 0.5); }
+  diffuseColor.rgb *= col; gR = dd.g; gAO = dd.r;
+  vec3 tn = mix(mix(texture2D(nG, p1).xyz, texture2D(nS, p1 * 1.1).xyz, sm), texture2D(nC, pc.xz).xyz, cl) * 2.0 - 1.0;
+  tn.xy *= (1.0 - far) * 0.9;
+  gN = normalize(nn + vec3(tn.x, 0.0, -tn.y) * (1.0 - cl) + vec3(tn.x, tn.y, 0.0) * cl * 0.6);
+`)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = roughness * gR;')
+      .replace('#include <normal_fragment_maps>', 'normal = normalize((viewMatrix * vec4(gN, 0.0)).xyz);')
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= gAO; reflectedLight.indirectSpecular *= gAO;');
+  };
+  const set = (k, s) => { if (!s) return; U['t' + k].value = s.a; U['n' + k].value = s.n; U['d' + k].value = s.d; U.uHas.value = 1; };
+  surfSet('dryground').then(s => set('G', s)); surfSet('soil').then(s => set('S', s)); surfSet('cliff').then(s => set('C', s));
+  return m;
+}
+
+/* ---------- 하늘 (RGBM 사진) ---------- */
+function skyDome() {
+  const U = { tSky: { value: NEUTRAL.black }, uHas: { value: 0 }, uExp: { value: 1.0 } };
+  const m = new THREE.ShaderMaterial({ uniforms: U, side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
+    fragmentShader: `uniform sampler2D tSky; uniform float uHas; uniform float uExp; varying vec3 vD;
+      void main(){ vec3 d = normalize(vD); float u = atan(d.z, d.x) / 6.2831853 + 0.5; float vi = 0.5 - asin(clamp(d.y, -1.0, 1.0)) / 3.14159265;
+        vec4 s = texture2D(tSky, vec2(u, 1.0 - clamp(vi, 0.0, 0.555) / 0.56));
+        vec3 c = s.rgb * s.rgb * (s.a * s.a) * 32.0;
+        if (uHas < 0.5) { float h = clamp(d.y, 0.0, 1.0); c = mix(vec3(2.6, 2.1, 1.6), vec3(0.6, 0.9, 1.5), pow(h, 0.5)); }
+        gl_FragColor = vec4(c * uExp, 1.0);
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }` });
+  loadAssetTex((QUAL.tier === 'low' ? 'surf/low/' : 'surf/') + 'sky.webp', { srgb: false, repeat: false }).then(t => { if (!t) return; t.wrapS = THREE.RepeatWrapping; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; U.tSky.value = t; U.uHas.value = 1; S3.envDirty = true; });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), m); mesh.renderOrder = -10; mesh.frustumCulled = false;
+  return mesh;
+}
+/* 하늘을 빛(IBL)으로: 하늘 + 흙빛 바닥을 작은 장면으로 찍어 PMREM */
+function bakeEnv() {
+  const sc = new THREE.Scene(); sc.add(S3.sky.clone());
+  const gnd = new THREE.Mesh(new THREE.CircleGeometry(3000, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.2, 0.12), side: THREE.DoubleSide })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -40; sc.add(gnd);
+  const tm = R3.r.toneMapping; R3.r.toneMapping = THREE.NoToneMapping;
+  const pm = new THREE.PMREMGenerator(R3.r); const env = pm.fromScene(sc, 0.04, 1, 10000).texture; pm.dispose(); R3.r.toneMapping = tm;
+  if (S3.scene.environment) S3.scene.environment.dispose();
+  S3.scene.environment = env;
+}
+
+/* ---------- 지형 메시: 카메라 둘레는 촘촘, 멀수록 성기게 (동심원 격자) ---------- */
+function terrainMesh() {
+  const rings = [], seg = QUAL.tier === 'low' ? 96 : 160; let r = 0; rings.push(0); let dr = 0.5; while (r < 2200) { r += dr; dr *= 1.055; rings.push(r); }
+  const nv = 1 + (rings.length - 1) * seg, pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), mix = new Float32Array(nv * 2), idx = [];
+  const at = (i, j) => i === 0 ? 0 : 1 + (i - 1) * seg + (j % seg);
+  for (let i = 0; i < rings.length; i++) for (let j = 0; j < (i ? seg : 1); j++) {
+    const a = j / seg * Math.PI * 2 + i * 0.37, x = Math.cos(a) * rings[i], z = Math.sin(a) * rings[i], q = at(i, j), y = hAt(x, z), n = nAt(x, z);
+    pos.set([x, y, z], q * 3); nor.set([n.x, n.y, n.z], q * 3); mix.set([soilAt(x, z), f2(x * 0.05, z * 0.05, 2, 77)], q * 2);
+  }
+  for (let j = 0; j < seg; j++) idx.push(0, at(1, j + 1), at(1, j));
+  for (let i = 1; i < rings.length - 1; i++) for (let j = 0; j < seg; j++) { const a = at(i, j), b = at(i, j + 1), c = at(i + 1, j), d = at(i + 1, j + 1); idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('aMix', new THREE.BufferAttribute(mix, 2)); g.setIndex(idx);
+  g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, groundMaterial()); m.receiveShadow = true; return m;
+}
+/* 헬스게이트 협곡 절벽: 거의 수직인 붉은 벽 (주상절리 세로 골 + 층 띠) — 지형과 따로 촘촘하게 */
+function cliffWall() {
+  const dz = QUAL.tier === 'low' ? 8 : 4, NV = QUAL.tier === 'low' ? 18 : 34, z0 = -1400, z1 = 1400, NZ = Math.round((z1 - z0) / dz) + 1;
+  const pos = new Float32Array(NZ * NV * 3), mix = new Float32Array(NZ * NV * 2), idx = [];
+  for (let i = 0; i < NZ; i++) { const z = z0 + i * dz, cx = cliffX(z), top = cliffTop(z) + 2, base = hAt(cx + 16, z) - 4;
+    for (let j = 0; j < NV; j++) { const v = j / (NV - 1), y = lerp(base, top, v);
+      const col = (f2(z * 0.03, y * 0.03, 3, 53) - 0.5) * 9 + (f2(z * 0.12, y * 0.012, 2, 51) - 0.5) * 3;   // 세로 골 + 울퉁불퉁
+      const band = Math.floor(v * 7 + f2(z * 0.01, 0, 2, 57) * 2) % 2 ? 1.6 : 0;   // 층마다 조금씩 들어감
+      const x = cx + 10 - 12 * Math.pow(v, 0.9) + col + band + (v > 0.94 ? (v - 0.94) * -60 : 0);
+      const q = i * NV + j; pos[q * 3] = x; pos[q * 3 + 1] = y; pos[q * 3 + 2] = z; mix[q * 2] = -1; mix[q * 2 + 1] = f2(z * 0.02, y * 0.03, 2, 59); } }
+  for (let i = 0; i < NZ - 1; i++) for (let j = 0; j < NV - 1; j++) { const a = i * NV + j, b = a + 1, c = a + NV, d = c + 1; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aMix', new THREE.BufferAttribute(mix, 2)); g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, groundMaterial()); m.receiveShadow = true; return m;
+}
+/* 세 방향 투영 질감 (UV 없는 바위용) */
+function triMap(mat, sc) {
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTP; varying vec3 vTN;').replace('#include <project_vertex>', '#include <project_vertex>\nvTP = (modelMatrix * vec4(transformed, 1.0)).xyz; vTN = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTP; varying vec3 vTN;').replace('#include <map_fragment>', `#ifdef USE_MAP
+      { vec3 w = pow(abs(normalize(vTN)), vec3(4.0)); w /= w.x + w.y + w.z; vec3 p = vTP * ${sc.toFixed(3)};
+        vec4 c = texture2D(map, p.zy) * w.x + texture2D(map, p.xz) * w.y + texture2D(map, p.xy) * w.z; diffuseColor *= mapTexelToLinear(c); }
+      #endif`);
+  };
+}
+/* 먼 산: 리프트 밸리 언덕 + 롱고놋 화산 (안개에 묻힘) */
+function farHills() {
+  const seg = 180, rs = [2200, 3200, 5200, 9000], pos = [], idx = [];
+  const H = (a, r) => { let h = (f2(Math.cos(a) * 3 + 10, Math.sin(a) * 3 + 10, 4, 61)) * 260 * (r / 5200); const la = Math.atan2(-0.75, -0.66), da = Math.atan2(Math.sin(a - la), Math.cos(a - la)); if (r >= 5200) h += Math.max(0, 1 - Math.abs(da) / 0.16) ** 1.3 * 900 * (Math.abs(da) < 0.025 ? 0.93 : 1); return h; };
+  for (let i = 0; i < rs.length; i++) for (let j = 0; j <= seg; j++) { const a = j / seg * Math.PI * 2; pos.push(Math.cos(a) * rs[i], i === 0 ? -20 : H(a, rs[i]) - 20, Math.sin(a) * rs[i]); }
+  for (let i = 0; i < rs.length - 1; i++) for (let j = 0; j < seg; j++) { const a = i * (seg + 1) + j, b = a + 1, c = a + seg + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x6e5a48, roughness: 1, metalness: 0 }));
+}
+/* ---------- 풀 다발 (바람에 흔들림) ---------- */
+function grassField(tex) {
+  const N = QUAL.tier === 'high' ? 16000 : QUAL.tier === 'mid' ? 8000 : 2200, R = QUAL.tier === 'low' ? 32 : 60;
+  const g = new THREE.BufferGeometry(), P = [], UV = [], NR = [], I = [];
+  for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI, c = Math.cos(a) * 0.55, s = Math.sin(a) * 0.55, o = P.length / 3;
+    P.push(-c, 0, -s, c, 0, s, c, 0.72, s, -c, 0.72, -s); UV.push(0, 0, 1, 0, 1, 1, 0, 1); for (let q = 0; q < 4; q++) NR.push(0, 1, 0); I.push(o, o + 1, o + 2, o, o + 2, o + 3); }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(NR, 3)); g.setIndex(I);
+  const cell = new Float32Array(N), tint = new Float32Array(N);
+  const m = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, color: tex ? 0xffffff : 0xb59a5a });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uT = R3.common.uTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aCell; attribute float aTint; uniform float uT; varying float vTint;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_UV\nvUv = vec2((uv.x + aCell) * 0.25, uv.y);\n#endif\nvTint = aTint;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec4 ip = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float sw = sin(uT * 1.7 + ip.x * 0.35 + ip.z * 0.21) * 0.6 + sin(uT * 3.1 + ip.x * 0.9) * 0.25;
+        transformed.x += sw * 0.09 * uv.y * uv.y; transformed.z += sw * 0.05 * uv.y * uv.y;`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vTint;').replace('#include <map_fragment>', `#include <map_fragment>
+      diffuseColor.rgb *= mix(vec3(0.55, 0.52, 0.46), vec3(0.8, 0.74, 0.64), vTint);
+      #ifdef USE_UV
+      { vec2 tx = vUv * vec2(1024.0, 512.0); float lod = max(0.0, 0.5 * log2(max(dot(dFdx(tx), dFdx(tx)), dot(dFdy(tx), dFdy(tx))))); diffuseColor.a *= 1.0 + lod * 0.35; }
+      #endif`);
+  };
+  const mesh = new THREE.InstancedMesh(g, m, N); const M = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  let n = 0;
+  for (let k = 0; k < N * 4 && n < N; k++) {
+    const r = Math.pow(Math.random(), 0.8) * R + 0.5, a = Math.random() * Math.PI * 2, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const so = soilAt(x, z); if (Math.random() < so * 1.1) continue;
+    if (f2(x * 0.15, z * 0.15, 2, 91) < 0.38 && Math.random() < 0.7) continue;
+    if (Math.abs(x - PAD.x) < 15 && Math.abs(z - PAD.z) < 13) continue;
+    const sc = (0.6 + Math.random() * 0.8) * (1 + r / R * 0.6); p.set(x, hAt(x, z) - 0.03, z); q.setFromAxisAngle(up, Math.random() * Math.PI * 2); s.set(sc, sc * (0.8 + Math.random() * 0.5), sc);
+    M.compose(p, q, s); mesh.setMatrixAt(n, M); cell[n] = Math.floor(Math.random() * 4); tint[n] = Math.random(); n++;
+  }
+  mesh.count = n; g.setAttribute('aCell', new THREE.InstancedBufferAttribute(cell, 1)); g.setAttribute('aTint', new THREE.InstancedBufferAttribute(tint, 1));
+  mesh.receiveShadow = true; mesh.frustumCulled = false; return mesh;
+}
+/* ---------- 아카시아 나무 (납작한 우산 모양) ---------- */
+function mergeGeos(list) {   // 같은 이름 속성을 모두 이어 붙임 (position·normal·uv·aRest·aPart …)
+  list = list.map(g => g.index ? g : (() => { const n = g.attributes.position.count; g.setIndex(Array.from({ length: n }, (_, i) => i)); return g; })());
+  const names = Object.keys(list[0].attributes).filter(k => list.every(g => g.attributes[k])), out = new THREE.BufferGeometry();
+  let nv = 0, ni = 0; for (const g of list) { nv += g.attributes.position.count; ni += g.index.count; }
+  for (const k of names) { const sz = list[0].attributes[k].itemSize, arr = new Float32Array(nv * sz); let o = 0; for (const g of list) { const a = g.attributes[k]; for (let i = 0; i < a.count; i++) for (let c = 0; c < sz; c++) arr[(o + i) * sz + c] = a.array[i * sz + c] !== undefined && a.itemSize === sz ? a.array[i * sz + c] : 0; o += a.count; } out.setAttribute(k, new THREE.BufferAttribute(arr, sz)); }
+  const I = new Uint32Array(ni); let ov = 0, oi = 0; for (const g of list) { for (let i = 0; i < g.index.count; i++) I[oi + i] = g.index.array[i] + ov; oi += g.index.count; ov += g.attributes.position.count; }
+  out.setIndex(new THREE.BufferAttribute(I, 1)); return out;
+}
+function acaciaGeo(seed) {
+  const rnd = (() => { let s = seed * 9973 + 7; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
+  const wood = [], leaves = [];
+  const H = 3.2 + rnd() * 2.5, crownR = 3.5 + rnd() * 3, crownY = H + 1.2 + rnd() * 1.2;
+  const branch = (p0, p1, r0, r1) => { const c = new THREE.CatmullRomCurve3([p0, p0.clone().lerp(p1, 0.5).add(new THREE.Vector3((rnd() - 0.5) * 0.4, 0.2, (rnd() - 0.5) * 0.4)), p1]); const g = new THREE.TubeGeometry(c, 6, r0, 6, false);
+    const pa = g.attributes.position; for (let i = 0; i < pa.count; i++) { const t = Math.floor(i / 7) / 6, k = lerp(1, r1 / r0, t); const ctr = c.getPoint(t); pa.setXYZ(i, ctr.x + (pa.getX(i) - ctr.x) * k, ctr.y + (pa.getY(i) - ctr.y) * k, ctr.z + (pa.getZ(i) - ctr.z) * k); } g.computeVertexNormals(); uvScale(g, 2, 1); wood.push(g); };
+  const top = new THREE.Vector3((rnd() - 0.5) * 0.6, H, (rnd() - 0.5) * 0.6); branch(new THREE.Vector3(0, 0, 0), top, 0.2 + rnd() * 0.08, 0.13);
+  const nb = 4 + Math.floor(rnd() * 3), tips = [];
+  for (let i = 0; i < nb; i++) { const a = i / nb * Math.PI * 2 + rnd() * 0.6, rr = crownR * (0.55 + rnd() * 0.4), tip = new THREE.Vector3(Math.cos(a) * rr, crownY - 0.4 + rnd() * 0.6, Math.sin(a) * rr); branch(top, tip, 0.11, 0.04); tips.push(tip);
+    for (let k = 0; k < 2; k++) { const a2 = a + (rnd() - 0.5) * 1.2, t2 = new THREE.Vector3(Math.cos(a2) * crownR * (0.8 + rnd() * 0.3), crownY - 0.2 + rnd() * 0.5, Math.sin(a2) * crownR * (0.8 + rnd() * 0.3)); branch(tip.clone().multiplyScalar(0.7).setY(tip.y - 0.3), t2, 0.045, 0.02); tips.push(t2); } }
+  // 잎: 납작한 판 여러 층 (위에서 보면 잎 뭉치 그림)
+  for (const tp of tips) for (let k = 0; k < 2; k++) {
+    const s = 1.6 + rnd() * 1.6, g = new THREE.PlaneGeometry(s * 2, s * 2); g.rotateX(-Math.PI / 2 + (rnd() - 0.5) * 0.35); g.rotateY(rnd() * 6.28);
+    g.translate(tp.x * (0.8 + rnd() * 0.3), tp.y + 0.15 + k * 0.35, tp.z * (0.8 + rnd() * 0.3)); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5); leaves.push(g);
+  }
+  for (let k = 0; k < 4; k++) { const s = crownR * 0.9, g = new THREE.PlaneGeometry(s * 2, s * 2); g.rotateX(-Math.PI / 2); g.rotateY(rnd() * 6.28); g.translate((rnd() - 0.5) * crownR * 0.5, crownY + 0.1 + k * 0.25, (rnd() - 0.5) * crownR * 0.5); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5); leaves.push(g); }
+  return { wood: mergeGeos(wood), leaves: mergeGeos(leaves), crownY, crownR };
+}
+function leafMat(tex, cell, tint) {
+  const m = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75, metalness: 0, color: tex ? tint : 0x4a5a2a });
+  m.customProgramCacheKey = () => 'leaf' + cell;
+  m.onBeforeCompile = sh => { sh.uniforms.uT = R3.common.uTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uT;').replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_UV\nvUv.x += ${cell.toFixed(1)} * 0.5;\n#endif`)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.x += sin(uT * 1.3 + position.x * 0.8) * 0.03; transformed.y += sin(uT * 1.9 + position.z) * 0.02;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.35));');
+  };
+  return m;
+}
+/* ---------- 바위 ---------- */
+function boulderGeo(seed) {
+  const g = new THREE.IcosahedronGeometry(1, 3), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 1 + (vnoise(x * 1.6, y * 1.6, z * 1.6, seed) - 0.5) * 0.7 + (vnoise(x * 4, y * 4, z * 4, seed + 3) - 0.5) * 0.18; p.setXYZ(i, x * k, Math.max(y * k * 0.7, -0.3), z * k); }
+  g.computeVertexNormals(); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (p.getX(i) + p.getZ(i)) * 0.5, p.getY(i) * 0.5); return g;
+}
+
+/* ---------- 지열 설비 ---------- */
+function pipeRun(pts, r, mat, sup = true) {
+  const g = new THREE.Group(), path = new THREE.CurvePath();
+  for (let i = 0; i < pts.length - 1; i++) path.add(new THREE.LineCurve3(pts[i], pts[i + 1]));
+  // 모서리를 둥글게: 점 사이를 보간한 매끈한 곡선
+  const dense = []; for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], L = a.distanceTo(b), n = Math.max(2, Math.ceil(L / 3)); for (let k = 0; k < n; k++) dense.push(a.clone().lerp(b, k / n)); } dense.push(pts[pts.length - 1]);
+  const curve = new THREE.CatmullRomCurve3(dense, false, 'catmullrom', 0.05), len = curve.getLength();
+  const tg = new THREE.TubeGeometry(curve, Math.ceil(len / 1.5), r, 14, false); uvScale(tg, len / 1.2, Math.PI * 2 * r / 1.2);
+  const tube = new THREE.Mesh(tg, mat); tube.castShadow = true; tube.receiveShadow = true; g.add(tube);
+  if (sup) {
+    const n = Math.floor(len / 6), conc = pmat('concrete'), steel = pmat('steel', { color: 0x777777 }, 'supsteel');
+    const im1 = new THREE.InstancedMesh(uvBox(new THREE.BoxGeometry(0.6, 1, 0.6), 0.6, 1, 0.6, 1), conc, n), im2 = new THREE.InstancedMesh(new THREE.BoxGeometry(r * 2.4, 0.08, 0.3), steel, n);
+    const M = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, p = curve.getPointAt(t), tan = curve.getTangentAt(t), gy = hAt(p.x, p.z), hh = Math.max(0.2, p.y - r - gy);
+      q.setFromAxisAngle(up, Math.atan2(tan.x, tan.z)); M.compose(new THREE.Vector3(p.x, gy + hh / 2 - 0.05, p.z), q, new THREE.Vector3(1, hh + 0.1, 1)); im1.setMatrixAt(i, M);
+      M.compose(new THREE.Vector3(p.x, p.y - r - 0.04, p.z), q, new THREE.Vector3(1, 1, 1)); im2.setMatrixAt(i, M); }
+    im1.castShadow = im2.castShadow = true; im1.receiveShadow = true; g.add(im1, im2);
+  }
+  return g;
+}
+function loopPts(x0, z0, x1, z1, y, loops) {   // 직선 배관에 가끔 신축 고리(ㄷ자) 넣기
+  const pts = [new THREE.Vector3(x0, y(x0, z0), z0)], L = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / L, dz = (z1 - z0) / L, nx = -dz, nz = dx;
+  for (const t of loops) { const cx = x0 + dx * L * t, cz = z0 + dz * L * t, w = 7, d = 9;
+    for (const [a, b] of [[-w, 0], [-w, d], [w, d], [w, 0]]) { const x = cx + dx * a + nx * b, z = cz + dz * a + nz * b; pts.push(new THREE.Vector3(x, y(x, z), z)); } }
+  pts.push(new THREE.Vector3(x1, y(x1, z1), z1)); return pts;
+}
+function wellhead(x, z) {
+  const g = new THREE.Group(), gy = 0.32, valve = pmat('paint_g'), st = pmat('steel'), wh = pmat('paint_w');
+  const cel = pbox(3.2, 0.05, 3.2, 'grating', 0.6); cel.position.set(0, gy - 0.6, 0); g.add(cel);
+  const pit = pbox(3.4, 1.2, 3.4, pmat('concrete', { color: 0x777777 }, 'pit')); pit.position.set(0, gy - 1.2, 0); g.add(pit);
+  let y = gy; const stack = (h, r, m, seg = 20) => { const c = pcyl(r, r, h, m, seg); c.position.y = y + h / 2; c.castShadow = true; g.add(c); y += h; return c; };
+  stack(0.25, 0.42, st); stack(0.12, 0.55, st);
+  const gate = (yy, s = 1) => { const b = pbox(0.7 * s, 0.75 * s, 0.6 * s, valve); b.position.y = yy; b.castShadow = true; g.add(b); const stem = pcyl(0.04, 0.04, 0.5, st, 8); stem.rotation.z = Math.PI / 2; stem.position.set(0.55 * s, yy, 0); g.add(stem); const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.28 * s, 0.025, 6, 20), pmat('paint_r')); wheel.rotation.y = Math.PI / 2; wheel.position.set(0.82 * s, yy, 0); wheel.castShadow = true; g.add(wheel); for (let k = 0; k < 4; k++) { const sp = pbox(0.02, 0.5 * s, 0.02, st); sp.position.copy(wheel.position); sp.rotation.x = k * Math.PI / 4; g.add(sp); } };
+  y += 0.1; gate(y + 0.38); y += 0.8; stack(0.12, 0.5, st); y += 0.05; gate(y + 0.38); y += 0.8; stack(0.12, 0.5, st);
+  const cross = pcyl(0.3, 0.3, 1.6, st, 16); cross.rotation.z = Math.PI / 2; cross.position.y = y + 0.3; cross.castShadow = true; g.add(cross); const ctr = y + 0.3; y += 0.6;
+  stack(0.4, 0.3, st); gate(y + 0.3, 0.8); y += 0.62; stack(0.12, 0.4, st); stack(0.25, 0.28, wh);
+  const gauge = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), pmat('paint_w')); gauge.rotation.x = Math.PI / 2; gauge.position.set(0, y - 0.3, 0.33); g.add(gauge);
+  g.position.set(x, 0, z); g.userData.side = new THREE.Vector3(x + 0.8, ctr, z); return g;
+}
+function silencer(x, z) {
+  const g = new THREE.Group(), conc = pmat('concrete', { color: 0xe6e2d8 }, 'sil');
+  for (const s of [-1, 1]) { const c = pcyl(2.0, 2.2, 9, conc, 28, 2); c.position.set(s * 2.6, 4.5, 0); c.castShadow = c.receiveShadow = true; g.add(c);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.08, 6, 32), pmat('rust')); rim.rotation.x = Math.PI / 2; rim.position.set(s * 2.6, 9.0, 0); g.add(rim);
+    const inlet = pcyl(0.35, 0.35, 3, pmat('alum'), 14); inlet.rotation.z = Math.PI / 2; inlet.position.set(s * 2.6 - s * 2.2, 1.2, 0); g.add(inlet); }
+  { const lm = pmat('steel', { color: 0x777777 }, 'lad'); for (const s of [-0.22, 0.22]) { const r = pcyl(0.025, 0.025, 9, lm, 6); r.position.set(-2.6 + s, 4.5, 2.25); g.add(r); } for (let y = 0.4; y < 9; y += 0.3) { const r = pbox(0.44, 0.03, 0.03, lm); r.position.set(-2.6, y, 2.25); g.add(r); } }
+  g.position.set(x, 0, z); g.userData.tops = [new THREE.Vector3(x - 2.6, 9.2, z), new THREE.Vector3(x + 2.6, 9.2, z)]; return g;
+}
+function headframe(x, z) {   // 가상의 지하 정비용 수직갱 탑 (승강기 입구)
+  const g = new THREE.Group(), red = pmat('paint_r'), st = pmat('steel', { color: 0x777777 }, 'hf');
+  const leg = (x0, z0, x1, z1, h) => { const a = new THREE.Vector3(x0, 0, z0), b = new THREE.Vector3(x1, h, z1), d = b.clone().sub(a), L = d.length(), m = pbox(0.25, L, 0.25, red); m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); m.castShadow = true; g.add(m); };
+  const H = 15; for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) leg(sx * 2.4, sz * 2.4, sx * 0.9, sz * 0.9, H);
+  for (let y = 2.5; y < H; y += 3) { const w = lerp(2.4, 0.9, y / H) * 2; for (const [rx, rz, ry] of [[0, -w / 2, 0], [0, w / 2, 0], [-w / 2, 0, Math.PI / 2], [w / 2, 0, Math.PI / 2]]) { const b = pbox(w, 0.14, 0.14, st); b.position.set(rx, y, rz); b.rotation.y = ry; g.add(b); } }
+  const plat = pbox(2.6, 0.12, 2.6, 'grating'); plat.position.y = H; g.add(plat);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.08, 8, 32), pmat('paint_y')); wheel.position.set(0, H + 1.3, 0); wheel.castShadow = true; g.add(wheel); S3.wheel = wheel;
+  for (let k = 0; k < 6; k++) { const sp = pbox(2.4, 0.05, 0.05, st); sp.rotation.z = k * Math.PI / 6; sp.position.copy(wheel.position); wheel.add(sp); sp.position.set(0, 0, 0); }
+  const house = pbox(4, 3, 5, pmat('cladding_p', {}, '')); house.position.set(6, 1.5, 0); house.castShadow = house.receiveShadow = true; g.add(house);
+  const collar = pbox(3.2, 0.5, 3.2, pmat('concrete')); collar.position.y = 0.25; g.add(collar);
+  const gate = new THREE.Mesh(uvBox(new THREE.BoxGeometry(2.2, 2.2, 0.05), 2.2, 2.2, 0.05, 0.5), pmat('mesh')); gate.position.set(0, 1.6, 1.6); g.add(gate);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), new THREE.MeshStandardMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#f2efe6'; x.fillRect(0, 0, 512, 256); x.fillStyle = '#b3261e'; x.fillRect(0, 0, 512, 64); x.fillStyle = '#fff'; x.font = '800 40px "IBM Plex Sans KR",sans-serif'; x.textAlign = 'center'; x.fillText('정비용 수직갱', 256, 46); x.fillStyle = '#1b2733'; x.font = '800 54px "IBM Plex Sans KR",sans-serif'; x.fillText('W-7 · 승강기', 256, 140); x.font = '600 30px "IBM Plex Sans KR",sans-serif'; x.fillText('안전모·헤드램프 착용', 256, 205); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; })(), roughness: 0.6 }));
+  sign.position.set(1.7, 1.6, 1.65); g.add(sign);
+  g.position.set(x, 0.32, z); return g;
+}
+function plant(x, z) {   // 멀리 보이는 발전소 (터빈 건물 + 냉각탑 + 송전탑)
+  const g = new THREE.Group(), clad = pmat('cladding_p', {}, ''), conc = pmat('concrete');
+  const hall = pbox(46, 20, 26, clad, 4); hall.position.set(0, 10, 0); g.add(hall);
+  const roof = pbox(47, 0.6, 27, pmat('steel', { color: 0x8a8f94 }, 'roof'), 4); roof.position.y = 20.3; g.add(roof);
+  const annex = pbox(20, 12, 14, pmat('paint_w'), 4); annex.position.set(-32, 6, 4); g.add(annex);
+  const towers = [];
+  for (let i = 0; i < 4; i++) { const t = pbox(13, 11, 13, conc, 3); t.position.set(40 + i * 14, 5.5, -6); g.add(t); const sh = pcyl(5, 5, 4, pmat('paint_w'), 24, 3, true); sh.position.set(40 + i * 14, 13, -6); sh.material.side = THREE.DoubleSide; g.add(sh); towers.push(new THREE.Vector3(x + 40 + i * 14, 15, z - 6)); }
+  const sep = pcyl(2.5, 2.5, 14, pmat('alum'), 20, 2); sep.position.set(-18, 7, -22); g.add(sep);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+  g.position.set(x, hAt(x, z), z); g.userData.towers = towers; return g;
+}
+function pylon(x, z, rotY) {
+  const g = new THREE.Group(), st = pmat('steel', { color: 0x8a8a8a }, 'py'), H = 28;
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const a = new THREE.Vector3(sx * 3, 0, sz * 3), b = new THREE.Vector3(sx * 0.8, H, sz * 0.8), d = b.clone().sub(a), m = pbox(0.25, d.length(), 0.25, st); m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); }
+  for (const y of [18, 24]) { const arm = pbox(14, 0.4, 0.4, st); arm.position.y = y; g.add(arm); }
+  g.position.set(x, hAt(x, z), z); g.rotation.y = rotY; return g;
+}
+
+/* ---------- 김(수증기) 기둥: 빛을 받는 뭉게구름 입자 ---------- */
+function plumeSystem(tex) {
+  const MAX = QUAL.tier === 'high' ? 700 : QUAL.tier === 'mid' ? 380 : 150;
+  const geo = new THREE.InstancedBufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2)); geo.setIndex([0, 1, 2, 0, 2, 3]);
+  const aP = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 4), 4), aD = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 4), 4); aP.setUsage(THREE.DynamicDrawUsage); aD.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('aP', aP); geo.setAttribute('aD', aD); geo.instanceCount = 0;
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false,
+    uniforms: { tPuff: { value: tex || NEUTRAL.white }, uHas: { value: tex ? 1 : 0 }, uSun: { value: SUN.clone() }, uSunCol: { value: new THREE.Color(9.0, 6.4, 4.2) }, uAmb: { value: new THREE.Color(1.1, 1.15, 1.3) } },
+    vertexShader: `attribute vec4 aP; attribute vec4 aD; varying vec2 vUv; varying float vA; varying vec3 vL; varying float vCell; varying float vFwd;
+      uniform vec3 uSun;
+      void main(){ vec3 c = aP.xyz; float s = aP.w; vec3 r = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), u = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        float rot = aD.y; vec2 q = vec2(cos(rot) * position.x - sin(rot) * position.y, sin(rot) * position.x + cos(rot) * position.y);
+        vec3 w = c + (r * q.x + u * q.y) * s; vUv = uv; vA = aD.x; vCell = aD.z;
+        vec3 vd = normalize(c - cameraPosition); vFwd = pow(max(dot(vd, uSun), 0.0), 6.0);
+        vL = vec3(dot(uSun, r), dot(uSun, u), dot(uSun, -vd));
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0); }`,
+    fragmentShader: `uniform sampler2D tPuff; uniform float uHas; uniform vec3 uSunCol; uniform vec3 uAmb; varying vec2 vUv; varying float vA; varying vec3 vL; varying float vCell; varying float vFwd;
+      void main(){ vec2 cuv = (vUv + vec2(mod(vCell, 4.0), floor(vCell / 4.0))) * 0.25; vec4 t = uHas > 0.5 ? texture2D(tPuff, cuv) : vec4(0.5, 0.5, 1.0 - length(vUv - 0.5) * 2.0, clamp(1.0 - length(vUv - 0.5) * 2.0, 0.0, 1.0));
+        vec3 n = vec3(t.xy * 2.0 - 1.0, 0.6); n = normalize(n);
+        float lit = clamp(dot(n, normalize(vL)) * 0.6 + 0.45, 0.0, 1.0);
+        float thick = t.b;
+        vec3 c = uAmb * (0.6 + 0.4 * thick) + uSunCol * lit * (0.55 - 0.3 * thick) + uSunCol * vFwd * (1.0 - thick) * 1.4;
+        float a = t.a * vA; if (a < 0.004) discard;
+        gl_FragColor = vec4(c, a);
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }` });
+  const mesh = new THREE.Mesh(geo, m); mesh.frustumCulled = false; mesh.renderOrder = 5;
+  const P = []; const src = [];
+  const sys = {
+    mesh, src,
+    add(pos, o) { src.push(Object.assign({ pos, rate: 6, size: 2, rise: 3, life: 14, grow: 3.5, acc: 0 }, o)); },
+    update(dt) {
+      const wind = new THREE.Vector3(-1.6, 0, 0.9);
+      for (const s of src) { s.acc += dt * s.rate; while (s.acc > 1 && P.length < MAX) { s.acc -= 1; P.push({ x: s.pos.x + (Math.random() - 0.5) * s.size * 0.6, y: s.pos.y, z: s.pos.z + (Math.random() - 0.5) * s.size * 0.6, vy: s.rise * (0.8 + Math.random() * 0.4), age: 0, life: s.life * (0.7 + Math.random() * 0.6), s0: s.size, grow: s.grow, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.2, cell: Math.floor(Math.random() * 16), op: s.op || 0.55 }); } }
+      for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.age += dt; if (p.age > p.life) { P.splice(i, 1); continue; } const k = p.age / p.life; p.y += p.vy * dt * (1 - k * 0.6); p.x += wind.x * dt * k * 1.5; p.z += wind.z * dt * k * 1.5; p.rot += p.vr * dt; }
+      const cam = S3.cam.position; P.sort((a, b) => ((b.x - cam.x) ** 2 + (b.y - cam.y) ** 2 + (b.z - cam.z) ** 2) - ((a.x - cam.x) ** 2 + (a.y - cam.y) ** 2 + (a.z - cam.z) ** 2));
+      const A = aP.array, D = aD.array;
+      for (let i = 0; i < P.length; i++) { const p = P[i], k = p.age / p.life, a = Math.min(1, k * 6) * (1 - k) * (1 - k) * p.op; A[i * 4] = p.x; A[i * 4 + 1] = p.y; A[i * 4 + 2] = p.z; A[i * 4 + 3] = p.s0 * (1 + p.grow * k); D[i * 4] = a; D[i * 4 + 1] = p.rot; D[i * 4 + 2] = p.cell; }
+      geo.instanceCount = P.length; aP.needsUpdate = aD.needsUpdate = true;
+    }
+  };
+  return sys;
+}
+
+/* ---------- 장면 만들기 ---------- */
+function surfBuild() {
+  if (QUAL.tier !== 'low') { R3.r.shadowMap.enabled = true; R3.r.shadowMap.type = THREE.PCFSoftShadowMap; }
+  const sc = S3.scene = new THREE.Scene(), cam = S3.cam = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 9000);
+  addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+  cam.position.set(0, 1.68, 6);
+  S3.sky = skyDome(); sc.add(S3.sky);
+  sc.fog = new THREE.FogExp2(new THREE.Color(1.15, 0.95, 0.78), 0.00042);
+  // 해: 낮게 뜬 아침 해
+  const sun = S3.sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.9, 0.76), 9.5); sun.position.copy(LIGHT).multiplyScalar(300); sun.position.add(new THREE.Vector3(-25, 0, -20)); sun.target.position.set(-25, 0, -20); sc.add(sun, sun.target);
+  if (QUAL.tier !== 'low') { sun.castShadow = true; const s = sun.shadow; s.mapSize.set(QUAL.tier === 'high' ? 2048 : 1024, QUAL.tier === 'high' ? 2048 : 1024); const c = s.camera; c.left = -95; c.right = 95; c.top = 95; c.bottom = -95; c.near = 50; c.far = 800; s.bias = -0.0004; s.normalBias = 0.04; }
+  sc.add(terrainMesh()); sc.add(farHills()); sc.add(cliffWall());
+  // 생산정 패드: 붉은 자갈(머럼) 바닥 + 가운데 콘크리트 판, 둘레에 낮은 볼라드와 안전 줄
+  const slab = new THREE.Mesh(uvBox(new THREE.BoxGeometry(7, 0.3, 7), 7, 0.3, 7, 2.5), pmat('concrete')); slab.position.set(PAD.x + 5, 0.17, PAD.z - 5); slab.receiveShadow = true; slab.castShadow = true; sc.add(slab);
+  const stain = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), new THREE.MeshStandardMaterial({ color: 0x2a1d14, roughness: 0.6, transparent: true, opacity: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); stain.rotation.x = -Math.PI / 2; stain.position.set(PAD.x + 6, 0.33, PAD.z - 3.5); sc.add(stain);
+  { const post = pmat('paint_y'), rope = new THREE.MeshStandardMaterial({ color: 0xb02a1c, roughness: 0.7 }), ring = [];
+    for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2, x = PAD.x + 5 + Math.cos(a) * 6.2, z = PAD.z - 5 + Math.sin(a) * 6.2; const p = pcyl(0.05, 0.05, 1.0, post, 8); p.position.set(x, hAt(x, z) + 0.5, z); p.castShadow = true; sc.add(p); ring.push(new THREE.Vector3(x, hAt(x, z) + 0.92, z)); }
+    for (let k = 0; k < 14; k++) { if (k === 10) continue; const a = ring[k], b = ring[(k + 1) % 14], c = new THREE.QuadraticBezierCurve3(a, a.clone().lerp(b, 0.5).setY(a.y - 0.12), b); const t = new THREE.Mesh(new THREE.TubeGeometry(c, 6, 0.012, 4), rope); sc.add(t); } }
+  // 생산정·소음기·수직갱 탑
+  const wh = wellhead(PAD.x + 5, PAD.z - 5); sc.add(wh); wh.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const sl = silencer(PAD.x + 13, PAD.z - 9); sc.add(sl);
+  const hf = headframe(-16, -12); hf.position.y = hAt(-16, -12) + 0.3; sc.add(hf);
+  const hslab = new THREE.Mesh(uvBox(new THREE.BoxGeometry(14, 0.3, 9), 14, 0.3, 9, 2.5), pmat('concrete')); hslab.position.set(-13, hAt(-13, -12) + 0.15, -12); hslab.receiveShadow = true; sc.add(hslab);
+  // 은빛 배관: 생산정 → 소음기 → 패드 밖 → 북쪽 발전소
+  const Y = (x, z) => Math.max(hAt(x, z), 0) + 1.4;
+  const alu = pmat('alum');
+  sc.add(pipeRun([new THREE.Vector3(PAD.x + 5.9, 2.6, PAD.z - 5), new THREE.Vector3(PAD.x + 8.5, 2.6, PAD.z - 5), new THREE.Vector3(PAD.x + 8.5, 1.2, PAD.z - 9), new THREE.Vector3(PAD.x + 10.4, 1.2, PAD.z - 9)], 0.22, alu, false));
+  sc.add(pipeRun([new THREE.Vector3(PAD.x + 6, 2.2, PAD.z - 5.6), new THREE.Vector3(PAD.x + 6, 1.6, PAD.z - 14), new THREE.Vector3(PAD.x + 6, 1.6, PAD.z - 22)], 0.35, alu, false));
+  sc.add(pipeRun(loopPts(PAD.x + 6, PAD.z - 22, 140, -430, Y, [0.25, 0.6]), 0.42, alu));
+  sc.add(pipeRun(loopPts(-160, 60, 120, -380, Y, [0.3, 0.7]), 0.5, alu));
+  sc.add(pipeRun(loopPts(320, -120, 170, -400, Y, [0.4]), 0.45, alu));
+  // 먼 곳의 다른 생산정 소음기들 (김이 피어오름)
+  const farWells = [[-150, 70], [330, -110], [-60, -260], [260, 160]];
+  for (const [x, z] of farWells) { const s = silencer(x, z); s.position.y = hAt(x, z); sc.add(s); S3.farSil = (S3.farSil || []).concat(s.userData.tops.map(v => v.setY(v.y + hAt(x, z)))); }
+  const pl = plant(150, -430); sc.add(pl);
+  for (const [x, z] of [[230, -470], [330, -520], [430, -575]]) sc.add(pylon(x, z, 0.5));
+  // 나무·덤불·바위
+  const leafT = surfTex('leaf.webp'), barkS = loadPropSetPath('surf', 'bark');
+  const barkM = new THREE.MeshStandardMaterial({ color: 0x6b5f52, roughness: 0.9, metalness: 0 }); barkS.then(s => { if (s) { barkM.map = s.a; barkM.normalMap = s.n; barkM.roughnessMap = s.m; barkM.color.set(0xffffff); barkM.needsUpdate = true; } });
+  const leafM = leafMat(null, 0, 0xffffff), bushM = leafMat(null, 1, 0xffffff);
+  leafT.then(t => { if (!t) return; leafM.color.setRGB(0.62, 0.66, 0.48); bushM.color.setRGB(0.7, 0.66, 0.5); for (const m of [leafM, bushM]) { m.map = t; m.needsUpdate = true; } });
+  const variants = Array.from({ length: 5 }, (_, i) => acaciaGeo(i + 1));
+  const treeSpots = [[-24, -30], [32, 18], [-48, 22], [60, -60], [-90, -55], [110, 40], [-30, 70], [150, -150], [-140, -120], [90, -240], [-200, 30], [200, 80], [-70, 160], [250, -280], [-180, -260], [30, -110], [-120, 120], [75, 120]];
+  treeSpots.forEach(([x, z], i) => { const v = variants[i % 5], s = 0.85 + (i * 37 % 10) / 20, y = hAt(x, z) - 0.1;
+    const w = new THREE.Mesh(v.wood, barkM), l = new THREE.Mesh(v.leaves, leafM); for (const o of [w, l]) { o.position.set(x, y, z); o.scale.setScalar(s); o.rotation.y = i * 1.7; o.castShadow = true; o.receiveShadow = true; sc.add(o); } });
+  // 덤불 (회녹색 레레시와 비슷한 키 작은 나무)
+  { const parts = []; for (let k = 0; k < 6; k++) { const g = new THREE.PlaneGeometry(1.6, 1.6); g.rotateY(k / 6 * Math.PI); g.rotateX((k % 2 ? 0.3 : -0.3)); g.translate(0, 0.75, 0); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5); parts.push(g); } const bg = mergeGeos(parts);
+    const N = QUAL.tier === 'low' ? 60 : 180, im = new THREE.InstancedMesh(bg, bushM, N), M = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0); let n = 0;
+    for (let k = 0; k < N * 3 && n < N; k++) { const r = 18 + Math.random() * 180, a = Math.random() * 6.28, x = Math.cos(a) * r, z = Math.sin(a) * r; if (soilAt(x, z) > 0.4 || x < cliffX(z) + 10) continue; const s = 0.7 + Math.random() * 1.1; q.setFromAxisAngle(up, Math.random() * 6.28); M.compose(new THREE.Vector3(x, hAt(x, z) - 0.1, z), q, new THREE.Vector3(s, s * (0.8 + Math.random() * 0.4), s)); im.setMatrixAt(n++, M); }
+    im.count = n; im.castShadow = true; im.receiveShadow = true; sc.add(im); }
+  // 바위
+  { const rockM = new THREE.MeshStandardMaterial({ color: 0x7a5a45, roughness: 0.9, metalness: 0 }); triMap(rockM, 0.35); surfSet('cliff').then(s => { if (s) { rockM.map = s.a; rockM.color.set(0xffffff); rockM.needsUpdate = true; } });
+    const geos = [boulderGeo(3), boulderGeo(7), boulderGeo(11)];
+    for (let k = 0; k < 46; k++) { const r = 14 + Math.random() * 160, a = Math.random() * 6.28, x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.abs(x - PAD.x) < 17 && Math.abs(z - PAD.z) < 15) continue; const s = 0.3 + Math.random() ** 2 * 2.2, m = new THREE.Mesh(geos[k % 3], rockM); m.position.set(x, hAt(x, z) - s * 0.15, z); m.scale.set(s * (0.8 + Math.random() * 0.5), s, s * (0.8 + Math.random() * 0.5)); m.rotation.y = Math.random() * 6.28; m.castShadow = true; m.receiveShadow = true; sc.add(m); }
+    // 피셔스 타워 같은 화산 바위 기둥
+    const tg = new THREE.CylinderGeometry(4.5, 7, 32, 24, 16), tp = tg.attributes.position;
+    for (let i = 0; i < tp.count; i++) { const x = tp.getX(i), y = tp.getY(i), z = tp.getZ(i), a = Math.atan2(z, x), k = 1 + (vnoise(Math.cos(a) * 2, y * 0.15, Math.sin(a) * 2, 5) - 0.5) * 0.6 + (y > 12 ? -0.15 : 0); tp.setXYZ(i, x * k, y, z * k); }
+    tg.computeVertexNormals(); uvScale(tg, 4, 3);
+    const tower = new THREE.Mesh(tg, rockM); tower.position.set(-120, hAt(-120, -150) + 15, -150); tower.castShadow = true; sc.add(tower); }
+  // 김
+  const puffT = surfTex('puff.webp', false);
+  S3.plumes = plumeSystem(null); sc.add(S3.plumes.mesh); puffT.then(t => { if (t) { S3.plumes.mesh.material.uniforms.tPuff.value = t; S3.plumes.mesh.material.uniforms.uHas.value = 1; } });
+  for (const p of sl.userData.tops) S3.plumes.add(p, { rate: 5, size: 3.2, rise: 4.5, life: 13, grow: 4.5, op: 0.6 });
+  for (const p of S3.farSil || []) S3.plumes.add(p, { rate: 1.6, size: 4.5, rise: 4, life: 16, grow: 4, op: 0.5 });
+  for (const p of pl.userData.towers) S3.plumes.add(p, { rate: 1.4, size: 8, rise: 5, life: 18, grow: 3, op: 0.45 });
+  S3.plumes.add(new THREE.Vector3(PAD.x + 5.5, 0.4, PAD.z - 3.5), { rate: 2.5, size: 0.6, rise: 0.6, life: 5, grow: 3, op: 0.25 });   // 생산정 바닥 김 조금
+  // 동물
+  // 풀
+  { const gf = grassField(null); sc.add(gf); surfTex('grass.webp').then(t => { if (t) { gf.material.map = t; gf.material.color.set(0xffffff); gf.material.needsUpdate = true; } }); }
+  S3.animals = makeWildlife(sc);
+  // 새
+  S3.birds = makeBirds(sc);
+  // 찾을 곳
+  S3.spots = { well: () => wh.userData.side.clone().setY(2.4), steam: () => new THREE.Vector3(PAD.x + 13, 13, PAD.z - 9), life: () => S3.herdCenter ? S3.herdCenter.clone() : new THREE.Vector3(-60, 2, -90) };
+  S3.ok = true;
+  S3.envDirty = true;
+  for (let i = 0; i < 180; i++) S3.plumes.update(0.1);   // 처음부터 김이 피어 있게
+}
+function loadPropSetPath(dir, name) {
+  const d = (QUAL.tier === 'low' ? dir + '/low/' : dir + '/');
+  return Promise.all([loadAssetTex(d + name + '_a.webp', { srgb: true }), loadAssetTex(d + name + '_n.webp'), loadAssetTex(d + name + '_m.webp')]).then(([a, n, m]) => (a && n && m) ? { a, n, m } : null);
+}
+/* 발전소 외벽 재질 (surf 폴더) */
+PROP_DEF.cladding_p = [0xa9b0b4, 0.5, 0.6];
+function surfUpdate(dt) {
+  if (!S3.ok) return;
+  S3.t += dt;
+  if (S3.envDirty) { S3.envDirty = false; bakeEnv(); }
+  S3.plumes.update(dt);
+  if (S3.wheel) S3.wheel.rotation.z += dt * 0.2;
+  if (!window.__freeze) for (const a of S3.animals) a.update(dt, S3.t);
+  if (S3.birds) S3.birds.update(dt, S3.t);
+}
+
+/* ===== wildlife.js — 헬스게이트 국립공원 동물: 얼룩말 무리·기린·하늘의 독수리 (직접 만든 3D, 무늬는 셰이더로 그림) ===== */
+/* 각 부위를 '쉬는 자세 좌표(aRest)'로 만들어 두고, 무늬는 그 좌표로 그려서 다리가 움직여도 무늬가 따라감 */
+function animalMat(kind) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0 });
+  m.customProgramCacheKey = () => 'animal-' + kind;
+  m.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRest; attribute float aPart; varying vec3 vRest; varying float vPart;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = aRest; vPart = aPart;');
+    const zebra = `
+      float ph;
+      if (vPart < 0.5) { float rump = smoothstep(-0.35, -0.85, p.z); ph = mix(p.z * 7.0 + sin(p.y * 4.0 + p.z * 2.0) * 0.5, p.y * 9.0 - p.z * 4.0, rump); }
+      else if (vPart < 1.5) ph = p.y * 13.0 + sin(p.x * 20.0) * 0.1;
+      else if (vPart < 2.5) ph = p.y * 7.5 + p.z * 3.5;
+      else ph = p.z * 18.0;
+      ph += (hash3(floor(p * 3.0)) - 0.5) * 0.35;
+      float w = sin(ph * 3.14159);
+      float st = smoothstep(-0.12, 0.12, w - (vPart < 0.5 ? 0.15 * smoothstep(1.0, 0.7, p.y) : 0.0));
+      vec3 col = mix(vec3(0.70, 0.69, 0.65), vec3(0.025, 0.022, 0.02), st);
+      if (vPart > 3.5) col = vec3(0.03, 0.028, 0.026);
+      if (vPart < 0.5 && p.y < 0.82) col = mix(col, vec3(0.8, 0.78, 0.72), smoothstep(0.82, 0.74, p.y) * 0.85);`;
+    const giraffe = `
+      vec3 q = p * 3.2; vec3 iq = floor(q); float d1 = 9.0, d2 = 9.0;
+      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) for (int k = -1; k <= 1; k++) { vec3 c = iq + vec3(float(i), float(j), float(k)); vec3 o = c + vec3(hash3(c), hash3(c + 7.1), hash3(c + 3.3)) * 0.8 + 0.1; float d = length(q - o); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+      float edge = smoothstep(0.035, 0.075, d2 - d1);
+      vec3 patchC = mix(vec3(0.11, 0.045, 0.018), vec3(0.2, 0.085, 0.03), hash3(iq));
+      vec3 col = mix(vec3(0.5, 0.41, 0.28), patchC, edge);
+      if (vPart > 0.5 && vPart < 1.5) col = mix(col, vec3(0.46, 0.39, 0.29), smoothstep(0.9, 0.35, p.y) * 0.85);
+      if (vPart > 2.5 && vPart < 3.5) col = vec3(0.32, 0.18, 0.08);
+      if (vPart > 3.5) col = vec3(0.06, 0.05, 0.04);`;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vRest; varying float vPart;\nfloat hash3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }')
+      .replace('#include <map_fragment>', `vec3 p = vRest;${kind === 'zebra' ? zebra : giraffe}\ndiffuseColor.rgb *= col;`);
+  };
+  return m;
+}
+/* 부위 하나: 쉬는 자세 좌표에서 만든 뒤 회전 중심(pivot) 기준으로 옮김 */
+function apart(geo, part, pivot) {
+  const p = geo.attributes.position, n = p.count, rest = new Float32Array(n * 3), pa = new Float32Array(n).fill(part);
+  for (let i = 0; i < n; i++) { rest[i * 3] = p.getX(i); rest[i * 3 + 1] = p.getY(i); rest[i * 3 + 2] = p.getZ(i); }
+  geo.setAttribute('aRest', new THREE.BufferAttribute(rest, 3)); geo.setAttribute('aPart', new THREE.BufferAttribute(pa, 1));
+  if (pivot) geo.translate(-pivot.x, -pivot.y, -pivot.z);
+  return geo;
+}
+function limb(a, b, r0, r1, seg = 8) {   // a→b 사이 둥근 원뿔대 (양 끝 반구)
+  const d = b.clone().sub(a), L = d.length(), g = new THREE.CylinderGeometry(r1, r0, L, seg, 3);
+  g.translate(0, L / 2, 0); g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()))); g.translate(a.x, a.y, a.z);
+  const s0 = new THREE.SphereGeometry(r0, seg, 6); s0.translate(a.x, a.y, a.z); const s1 = new THREE.SphereGeometry(r1, seg, 6); s1.translate(b.x, b.y, b.z);
+  return mergeGeos([g, s0, s1]);
+}
+function blob(cx, cy, cz, rx, ry, rz, seg = 16) { const g = new THREE.SphereGeometry(1, seg, Math.max(8, seg >> 1)); g.scale(rx, ry, rz); g.translate(cx, cy, cz); return g; }
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+
+/* 네 발 동물 틀: 몸통 + 목·머리(숙일 수 있음) + 다리 4개(앞뒤로 흔듦) + 꼬리 */
+function quadruped(spec, mat) {
+  const g = new THREE.Group(), legs = [];
+  const body = mergeGeos(spec.body.map(b => apart(blob(...b), 0)).concat(spec.extraBody ? spec.extraBody() : []));
+  const bm = new THREE.Mesh(body, mat); bm.castShadow = true; g.add(bm);
+  const neckPivot = spec.neckPivot, neck = new THREE.Group(); neck.position.copy(neckPivot); g.add(neck);
+  const ng = mergeGeos(spec.neck().map(([geo, part]) => apart(geo, part, neckPivot)));
+  const nm = new THREE.Mesh(ng, mat); nm.castShadow = true; neck.add(nm);
+  for (const L of spec.legs) {
+    const hip = L.hip, grp = new THREE.Group(); grp.position.copy(hip); g.add(grp);
+    const knee = V3(hip.x, L.knee, hip.z + (L.front ? 0.02 : -0.08)), foot = V3(hip.x, 0.05, hip.z + (L.front ? 0 : 0.03));
+    const up = apart(limb(hip, knee, L.r0, L.r1), 1, hip), lo = apart(limb(knee, foot, L.r1, L.r2), 1, hip);
+    const hoof = apart(blob(foot.x, 0.05, foot.z + 0.02, L.r2 * 1.25, 0.06, L.r2 * 1.5, 8), 4, hip);
+    const m = new THREE.Mesh(mergeGeos([up, lo, hoof]), mat); m.castShadow = true; grp.add(m);
+    legs.push({ grp, front: L.front, side: hip.x > 0 ? 1 : -1 });
+  }
+  const tp = spec.tailPivot, tail = new THREE.Group(); tail.position.copy(tp); g.add(tail);
+  const tm = new THREE.Mesh(mergeGeos(spec.tail().map(([geo, part]) => apart(geo, part, tp))), mat); tm.castShadow = true; tail.add(tm);
+  return { g, legs, neck, tail };
+}
+const ZEBRA = {
+  body: [[0, 1.02, 0.05, 0.36, 0.42, 0.78], [0, 1.08, 0.48, 0.34, 0.42, 0.42], [0, 1.08, -0.5, 0.36, 0.41, 0.42]],
+  neckPivot: V3(0, 1.18, 0.72),
+  neck: () => [[limb(V3(0, 1.18, 0.72), V3(0, 1.62, 1.06), 0.22, 0.14), 2], [blob(0, 1.5, 0.88, 0.06, 0.22, 0.28, 10), 3],
+    [limb(V3(0, 1.66, 1.08), V3(0, 1.32, 1.42), 0.13, 0.085), 2], [blob(0, 1.32, 1.44, 0.085, 0.08, 0.09, 10), 4],
+    [limb(V3(0.07, 1.74, 1.06), V3(0.1, 1.9, 1.02), 0.04, 0.012, 6), 2], [limb(V3(-0.07, 1.74, 1.06), V3(-0.1, 1.9, 1.02), 0.04, 0.012, 6), 2]],
+  legs: [{ hip: V3(0.17, 0.98, 0.55), knee: 0.5, r0: 0.11, r1: 0.055, r2: 0.045, front: true }, { hip: V3(-0.17, 0.98, 0.55), knee: 0.5, r0: 0.11, r1: 0.055, r2: 0.045, front: true },
+    { hip: V3(0.18, 1.0, -0.55), knee: 0.48, r0: 0.15, r1: 0.06, r2: 0.045 }, { hip: V3(-0.18, 1.0, -0.55), knee: 0.48, r0: 0.15, r1: 0.06, r2: 0.045 }],
+  tailPivot: V3(0, 1.22, -0.88),
+  tail: () => [[limb(V3(0, 1.22, -0.88), V3(0, 0.62, -0.98), 0.035, 0.02, 6), 2], [blob(0, 0.55, -0.99, 0.05, 0.12, 0.05, 8), 4]]
+};
+const GIRAFFE = {
+  body: [[0, 2.25, 0.0, 0.42, 0.5, 0.95], [0, 2.4, 0.5, 0.42, 0.55, 0.5], [0, 2.18, -0.55, 0.38, 0.45, 0.45]],
+  neckPivot: V3(0, 2.6, 0.75),
+  neck: () => [[limb(V3(0, 2.55, 0.7), V3(0, 4.35, 1.45), 0.33, 0.13), 2], [blob(0, 3.5, 1.02, 0.04, 0.85, 0.12, 8), 3],
+    [limb(V3(0, 4.45, 1.45), V3(0, 4.3, 1.95), 0.13, 0.08), 2], [blob(0, 4.28, 1.97, 0.08, 0.08, 0.08, 8), 4],
+    [limb(V3(0.06, 4.55, 1.42), V3(0.07, 4.75, 1.4), 0.03, 0.04, 6), 2], [limb(V3(-0.06, 4.55, 1.42), V3(-0.07, 4.75, 1.4), 0.03, 0.04, 6), 2],
+    [limb(V3(0.12, 4.5, 1.38), V3(0.28, 4.55, 1.3), 0.04, 0.015, 6), 2], [limb(V3(-0.12, 4.5, 1.38), V3(-0.28, 4.55, 1.3), 0.04, 0.015, 6), 2]],
+  legs: [{ hip: V3(0.2, 2.1, 0.6), knee: 1.05, r0: 0.17, r1: 0.085, r2: 0.07, front: true }, { hip: V3(-0.2, 2.1, 0.6), knee: 1.05, r0: 0.17, r1: 0.085, r2: 0.07, front: true },
+    { hip: V3(0.2, 2.0, -0.6), knee: 1.0, r0: 0.2, r1: 0.085, r2: 0.07 }, { hip: V3(-0.2, 2.0, -0.6), knee: 1.0, r0: 0.2, r1: 0.085, r2: 0.07 }],
+  tailPivot: V3(0, 2.35, -0.95),
+  tail: () => [[limb(V3(0, 2.35, -0.95), V3(0, 1.55, -1.02), 0.035, 0.02, 6), 2], [blob(0, 1.45, -1.03, 0.06, 0.13, 0.06, 8), 4]]
+};
+
+/* 발밑 그림자 얼룩 (먼 곳은 그림자 지도가 안 닿으니까) */
+let _blobTex = null;
+function blobShadow(r) {
+  if (!_blobTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); _blobTex = new THREE.CanvasTexture(c); }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 3.2), new THREE.MeshBasicMaterial({ map: _blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  m.rotation.x = -Math.PI / 2; m.renderOrder = 1; return m;
+}
+
+/* 동물 한 마리: 걷기·풀 뜯기·두리번거리기 */
+function makeAnimal(kind, sc, x, z, scale) {
+  const spec = kind === 'zebra' ? ZEBRA : GIRAFFE, mat = makeAnimal.mats[kind] || (makeAnimal.mats[kind] = animalMat(kind));
+  const a = quadruped(spec, mat); a.g.scale.setScalar(scale); sc.add(a.g);
+  const sh = blobShadow(kind === 'zebra' ? 0.55 * scale : 0.8 * scale); sc.add(sh);
+  const st = { x, z, h: Math.random() * 6.28, mode: 'graze', t: Math.random() * 6, phase: Math.random() * 6.28, speed: 0, look: 0, tx: x, tz: z };
+  const isZ = kind === 'zebra', stride = isZ ? 1.3 : 1.0, maxV = isZ ? 1.1 : 0.8;
+  return {
+    st, g: a.g,
+    update(dt, T, herd) {
+      st.t -= dt;
+      if (st.t < 0) {   // 다음 행동 고르기
+        const r = Math.random();
+        if (r < 0.45) { st.mode = 'graze'; st.t = 4 + Math.random() * 8; }
+        else if (r < 0.65) { st.mode = 'look'; st.t = 2 + Math.random() * 3; st.look = (Math.random() - 0.5) * 1.2; }
+        else { st.mode = 'walk'; st.t = 3 + Math.random() * 5; const ang = Math.random() * 6.28, rr = Math.random() * herd.r; st.tx = herd.c.x + Math.cos(ang) * rr; st.tz = herd.c.z + Math.sin(ang) * rr; }
+      }
+      const want = st.mode === 'walk' ? maxV : 0; st.speed += (want - st.speed) * Math.min(1, dt * 1.5);
+      if (st.mode === 'walk') { const th = Math.atan2(st.tx - st.x, st.tz - st.z); let d = th - st.h; d = Math.atan2(Math.sin(d), Math.cos(d)); st.h += clamp(d, -dt * 0.9, dt * 0.9); if (Math.hypot(st.tx - st.x, st.tz - st.z) < 1.5) st.t = 0; }
+      st.x += Math.sin(st.h) * st.speed * dt; st.z += Math.cos(st.h) * st.speed * dt;
+      const y = hAt(st.x, st.z), n = nAt(st.x, st.z);
+      a.g.position.set(st.x, y, st.z); a.g.rotation.set(0, st.h, 0);
+      a.g.rotation.x = -Math.atan2(n.z * Math.cos(st.h) + n.x * Math.sin(st.h), n.y) * 0.8;
+      sh.position.set(st.x, y + 0.04, st.z); sh.rotation.z = -st.h;
+      // 다리
+      st.phase += dt * st.speed / (stride * scale) * Math.PI * 2;
+      const amp = Math.min(1, st.speed / maxV) * 0.42;
+      for (const L of a.legs) { const off = (L.front ? 0 : Math.PI * 0.5) + (L.side > 0 ? Math.PI : 0); L.grp.rotation.x = Math.sin(st.phase + off) * amp; }
+      a.g.position.y += Math.abs(Math.sin(st.phase)) * 0.03 * amp * scale;
+      // 목: 풀 뜯을 때 숙임, 걸을 때 끄덕임
+      const goal = st.mode === 'graze' ? (isZ ? 1.15 : 0.15) : st.mode === 'look' ? -0.12 : 0.05;
+      a.neck.rotation.x += (goal + Math.sin(st.phase * 2) * 0.04 * amp + (st.mode === 'graze' ? Math.sin(T * 2.3 + st.phase) * 0.05 : 0) - a.neck.rotation.x) * Math.min(1, dt * 2);
+      a.neck.rotation.y += ((st.mode === 'look' ? st.look : 0) - a.neck.rotation.y) * Math.min(1, dt * 2);
+      a.tail.rotation.z = Math.sin(T * 3 + st.phase) * 0.22; a.tail.rotation.x = -0.05 + Math.sin(T * 1.7) * 0.06;
+    }
+  };
+}
+makeAnimal.mats = {};
+function makeWildlife(sc) {
+  const list = [], herds = [{ c: new THREE.Vector3(-36, 0, -46), r: 13, kind: 'zebra', n: QUAL.tier === 'low' ? 5 : 9 }, { c: new THREE.Vector3(-82, 0, -38), r: 16, kind: 'giraffe', n: 3 }, { c: new THREE.Vector3(58, 0, 34), r: 10, kind: 'zebra', n: QUAL.tier === 'low' ? 0 : 4 }];
+  for (const h of herds) for (let i = 0; i < h.n; i++) {
+    const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * h.r, an = makeAnimal(h.kind, sc, h.c.x + Math.cos(a) * r, h.c.z + Math.sin(a) * r, h.kind === 'zebra' ? 0.95 + Math.random() * 0.12 : 0.9 + Math.random() * 0.15);
+    an.herd = h; list.push(an);
+  }
+  // 무리 중심이 천천히 이동 (얼룩말은 기린 근처를 오락가락)
+  const z0 = herds[0], base = z0.c.clone();
+  S3.herdCenter = new THREE.Vector3(); S3.animalsRaw = list;
+  return list.map(an => ({ update(dt, T) {
+    if (an === list[0]) { z0.c.set(base.x + Math.sin(T * 0.012) * 10, 0, base.z + Math.cos(T * 0.009) * 8); let sx = 0, sz = 0, n = 0; for (const b of list) if (b.herd === z0) { sx += b.st.x; sz += b.st.z; n++; } S3.herdCenter.set(sx / n, hAt(sx / n, sz / n) + 1.6, sz / n); }
+    an.update(dt, T, an.herd);
+  } }));
+}
+/* 하늘을 도는 독수리 */
+function makeBirds(sc) {
+  const N = 7, mat = new THREE.MeshStandardMaterial({ color: 0x1d1814, roughness: 0.9, side: THREE.DoubleSide }), birds = [];
+  for (let i = 0; i < N; i++) {
+    const g = new THREE.Group(), body = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.9, 6), mat); body.rotation.x = Math.PI / 2; g.add(body);
+    const wing = s => { const w = new THREE.Group(), sh = new THREE.Shape(); sh.moveTo(0, -0.2); sh.lineTo(1.0, -0.28); sh.lineTo(1.25, -0.05); sh.lineTo(1.0, 0.22); sh.lineTo(0, 0.28); const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), mat); m.rotation.x = -Math.PI / 2; m.scale.x = s; w.add(m); g.add(w); return w; };
+    const L = wing(-1), R = wing(1); g.scale.setScalar(1.4);
+    sc.add(g); birds.push({ g, L, R, r: 25 + Math.random() * 35, y: 55 + Math.random() * 40, w: (0.1 + Math.random() * 0.06) * (Math.random() < 0.5 ? 1 : -1), a: Math.random() * 6.28, c: new THREE.Vector3(-30 + Math.random() * 80, 0, -140 + Math.random() * 60), f: Math.random() * 6 });
+  }
+  return { update(dt, T) { for (const b of birds) { b.a += b.w * dt; const x = b.c.x + Math.cos(b.a) * b.r, z = b.c.z + Math.sin(b.a) * b.r; b.g.position.set(x, b.y + Math.sin(T * 0.3 + b.f) * 3, z); b.g.rotation.set(0, -b.a + (b.w > 0 ? Math.PI : 0), (b.w > 0 ? 1 : -1) * 0.25);
+    const flap = (Math.sin(T * 0.4 + b.f) > 0.7) ? Math.sin(T * 9 + b.f) * 0.5 : 0.08; b.L.rotation.z = flap; b.R.rotation.z = -flap; } } };
+}
+
+/* ===== surface.js — 지상: 3D 현장(surf3d.js) 또는 실제 360° 사진 + 찾기 · 마지막 연결도·보고 ===== */
 /* 사진 설정: url이 있으면 진짜 사진(위키미디어 공용 등, 출처 표기), 없으면 임시로 그린 풍경.
    u,v = 사진 안 위치(0~1, 왼쪽 위 기준). kind 'equi' = 360° 사진, 'pano' = 일부만 보이는 넓은 사진(hfov, vfov 도) */
 const PHOTOS = {
   olkaria: { kind: 'equi', url: null, credit: '', place: '케냐 · 올카리아 지열 발전 단지 (헬스게이트 국립공원)',
     spots: { well: { u: 0.585, v: 0.55, t: '생산정 배관', d: '땅속 뜨거운 물과 증기를 끌어 올리는 관이에요. 은빛 배관이 발전소까지 이어져요.' },
       steam: { u: 0.32, v: 0.4, t: '하얀 수증기', d: '땅속에서 올라온 뜨거운 물·증기 일부가 하얀 김으로 피어올라요.' },
-      life: { u: 0.83, v: 0.56, t: '얼룩말', d: '발전소가 국립공원 안에 있어서 야생 동물이 배관 옆을 지나다녀요.' } } }
+      life: { u: 0.83, v: 0.56, t: '얼룩말 무리', d: '발전소가 헬스게이트 국립공원 안에 있어서 얼룩말·기린이 배관 옆을 지나다녀요. 그래서 배관을 높이 띄우거나 ㄷ자로 굽혀 길을 내 줘요.' } } }
 };
 const SURF = {
   scene: null, cam: null, sphere: null, yaw: 0, pitch: 0, photo: null, spots: [], drag: null,
@@ -2050,7 +3217,12 @@ const SURF = {
     $('#touchLayer').addEventListener('touchstart', e => { const t = e.touches[0]; down(t.clientX, t.clientY); }, { passive: true });
     $('#touchLayer').addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
     $('#touchLayer').addEventListener('touchend', () => { this.drag = null; });
-    this.load('olkaria');
+    if (PHOTOS.olkaria.url) { this.load('olkaria'); return; }
+    // 진짜 사진이 없으면 직접 만든 3D 현장
+    this.photo = PHOTOS.olkaria; this.is3d = true;
+    surfBuild(); this.scene = S3.scene; this.cam = S3.cam;
+    $('#credit').innerHTML = '하늘 사진: Poly Haven (CC0) · 땅·설비·동물: 직접 만든 3D (가상의 생산정 W-7)';
+    const d = S3.spots.well().sub(this.cam.position); this.yaw = Math.atan2(-d.x, -d.z) + 0.25; this.pitch = 0.04;
   },
   load(key) {
     const P = PHOTOS[key]; this.photo = P;
@@ -2073,16 +3245,18 @@ const SURF = {
   enter() { MODE.v = 'surface'; $('#app').dataset.mode = 'surface'; this.ui(); SND.ambient(0); if (document.pointerLockElement) document.exitPointerLock(); },
   update(dt) {
     this.cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
-    if (!this.drag && !MODE.modal) this.yaw += dt * 0.006;
+    if (!this.drag && !MODE.modal) this.yaw += dt * (this.is3d ? 0.004 : 0.006);
+    if (this.is3d) { surfUpdate(dt); this.cam.position.y = (this.camY || 1.68) + Math.sin(S3.t * 0.9) * 0.008; }
     // 찾을 곳 표시
     const st = ST.st, W = innerWidth, H = innerHeight, v = new THREE.Vector3();
     $$('.spot').forEach(b => {
-      const s = this.photo.spots[b.dataset.k]; v.copy(this.dirOf(s.u, s.v)).multiplyScalar(40).project(this.cam);
+      const s = this.photo.spots[b.dataset.k]; if (this.is3d) v.copy(S3.spots[b.dataset.k]()).project(this.cam); else v.copy(this.dirOf(s.u, s.v)).multiplyScalar(40).project(this.cam);
       const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1; b.hidden = !vis;
       b.style.transform = `translate(${(v.x * 0.5 + 0.5) * W}px,${(-v.y * 0.5 + 0.5) * H}px)`;
       b.classList.toggle('found', !!(st && st.done['hs_' + b.dataset.k]));
     });
-    R3.r.render(this.scene, this.cam);
+    if (this.is3d) POST.render(this.scene, this.cam, { vol: false, bloom: 0.035, thr: 3.5, exposure: S3.exposure || 1, ca: 0.0003, sat: 1.04, vig: 0.22, gain: [1.02, 1.0, 0.97] });
+    else POST.render(this.scene, this.cam, { vol: false, bloom: 0.05, thr: 2.5, exposure: 1 });
   },
   /* 지상 화면 위 내용 (단계에 따라) */
   ui() {
@@ -2091,7 +3265,7 @@ const SURF = {
     const P = this.photo, found = k => st.done['hs_' + k];
     let h = `<div class="place">📍 ${esc(P.place)}</div>`;
     if (st.stage === 0) {
-      h += `<div class="sbox"><h3>현장 둘러보기</h3><p>사진을 끌어서 둘러보고 아래 세 곳을 찾아 눌러요. (팀원 누구든 찾으면 돼요)</p><ul class="chk">${Object.entries(P.spots).map(([k, s]) => `<li class="${found(k) ? 'done' : ''}">${found(k) ? '✔' : '○'} ${esc(s.t)}</li>`).join('')}</ul></div>`;
+      h += `<div class="sbox"><h3>현장 둘러보기</h3><p>${this.is3d ? '화면' : '사진'}을 끌어서 둘러보고 아래 세 곳을 찾아 눌러요. (팀원 누구든 찾으면 돼요)</p><ul class="chk">${Object.entries(P.spots).map(([k, s]) => `<li class="${found(k) ? 'done' : ''}">${found(k) ? '✔' : '○'} ${esc(s.t)}</li>`).join('')}</ul></div>`;
     } else if (st.stage < 5) {
       h += `<div class="sbox"><h3>지하 작업 중</h3><p>승강기를 타고 ${fmt(GEO.DEPTH[Math.max(1, st.unlocked)])} m 작업장으로 내려가요.</p><button class="btn pri big" id="goDown">승강기 타기 ↓</button></div>`;
     } else if (st.stage === 5 && !st.done.reach0) {
@@ -2192,8 +3366,8 @@ function showTitle(msg) {
   $('#fName').value = PREF.name || ''; $('#fCode').value = PREF.code || '';
   if (!ONLINE_OK) { $('#bJoin').hidden = true; $('#codeWrap').hidden = true; $('#fTeam').closest('.field').hidden = true; $('#joinMsg').textContent = msg || ''; $('#joinMsg').style.color = 'var(--ink2)'; if (!msg) $('#joinMsg').textContent = '이 주소에서는 혼자 연습만 할 수 있어요. 모둠 협동은 선생님이 알려 준 Render 주소(…/geo)에서 해요.'; }
   else $('#joinMsg').textContent = msg || '';
-  const q = () => { $('#bQual').textContent = '그래픽: ' + (QUAL.low ? '가볍게' : '선명하게'); $('#bSound').textContent = '소리: ' + (SND.on ? '켬' : '끔'); }; q();
-  $('#bQual').onclick = () => { QUAL.low = !QUAL.low; PREF.low = QUAL.low; savePref(); R3.r.setPixelRatio(Math.min(devicePixelRatio || 1, QUAL.low ? 0.9 : 1.35)); q(); };
+  const q = () => { $('#bQual').textContent = '그래픽: ' + ({ high: '고화질', mid: '보통', low: '가볍게' })[QUAL.tier]; $('#bSound').textContent = '소리: ' + (SND.on ? '켬' : '끔'); }; q();
+  $('#bQual').onclick = () => { setTier(({ high: 'mid', mid: 'low', low: 'high' })[QUAL.tier]); PREF.tier = QUAL.tier; delete PREF.low; savePref(); q(); };
   $('#bSound').onclick = () => { SND.toggle(); q(); };
   $('#joinForm').onsubmit = e => {
     e.preventDefault(); SND.init();
@@ -2311,7 +3485,7 @@ function frame(ts) {
   HUD.tick(dt);
   if (MODE.v === 'dive' && F) {
     playUpdate(dt, t);
-    const heads = [{ x: _eye.x + _dir.x * 0.2 + 0.08, y: _eye.y + 0.12, z: _eye.z + _dir.z * 0.2, dx: _dir.x, dy: _dir.y, dz: _dir.z, k: 1.05 }];
+    const heads = [{ x: _eye.x + _dir.x * 0.1, y: _eye.y + 0.16, z: _eye.z + _dir.z * 0.1, dx: _dir.x, dy: _dir.y, dz: _dir.z, k: 1.05 }];
     matesUpdate(dt, t, heads);
     lightsUpdate(heads, t);
     updateLevelScene(dt, t, ST.st);
@@ -2321,7 +3495,9 @@ function frame(ts) {
     viewModel(dt, t);
     HUD.markersUpdate(dt);
     if ((t * 4 | 0) !== (HUD._gt || 0)) { HUD._gt = t * 4 | 0; HUD.gauge(); if ((t | 0) !== HUD._mt) { HUD._mt = t | 0; HUD.mission(); } }
-    R3.r.render(R3.scene, R3.cam);
+    const lk = LV_LOOK[ME.lv] || {};
+    autoExposure(dt, lk);
+    POST.render(R3.scene, R3.cam, { haze: ME.lv === 4 ? lavaHaze() : 0, exposure: AE.v, bloom: lk.bloom, gain: lk.gain, lift: lk.lift, sat: lk.sat });
   } else if (MODE.v === 'surface') {
     SURF.update(dt); viewModel(dt, t);
     if ((t | 0) !== HUD._mt) { HUD._mt = t | 0; HUD.mission(); HUD.gauge(); }
@@ -2330,14 +3506,34 @@ function frame(ts) {
   }
   // 느리면 자동으로 가볍게
   fpsAcc += dt; fpsN++;
-  if (fpsAcc > 2) { const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; if (MODE.v === 'dive' && fps < 24 && !QUAL.low) { fpsLowT++; if (fpsLowT >= 3) { QUAL.low = true; R3.r.setPixelRatio(Math.min(devicePixelRatio || 1, 0.9)); toast('화면이 느려서 그래픽을 가볍게 바꿨어요.', 2500); } } else fpsLowT = 0; }
+  if (fpsAcc > 2) { const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; if ((MODE.v === 'dive' || MODE.v === 'surface') && fps < 24 && !QUAL.low && !PREF.tier && !QA) { fpsLowT++; if (fpsLowT >= 3) { fpsLowT = 0; const to = QUAL.tier === 'high' ? 'mid' : 'low'; setTier(to); toast('화면이 느려서 그래픽을 ' + (to === 'mid' ? '보통' : '가볍게') + '으로 바꿨어요. (처음 화면에서 바꿀 수 있어요)', 3000); } } else fpsLowT = 0; }
 }
 
 /* ---------- 시작 ---------- */
+/* 그래픽 단계 바꾸기 */
+function setTier(t) {
+  if (QUAL.tier === t) return; QUAL.tier = t;
+  R3.r.setPixelRatio(pixelRatioFor(t)); R3.r.setSize(innerWidth, innerHeight);
+  POST.mats(); if (POST.look) POST.setLook(POST.look); POST.w = 0; POST.setEnabled(t !== 'low');
+  if (TERR.F) terrainLoad(TERR.F);
+}
+/* 자동 노출: 눈앞 벽까지 거리(헤드램프 밝기)와 가까운 전등을 보고 화면 밝기를 천천히 맞춤 */
+const AE = { v: 1, t: 0 };
+function autoExposure(dt, lk) {
+  AE.t -= dt;
+  if (AE.t <= 0 && F) {
+    AE.t = 0.12; const c = R3.cam.position, hit = F.ray(c.x, c.y, c.z, _dir.x, _dir.y, _dir.z, 14), d = hit ? Math.max(hit.t, 0.35) : 14;
+    let S = 0; for (const l of (R3.ptsOn || [])) { const dd = (l.x - c.x) ** 2 + (l.y - c.y) ** 2 + (l.z - c.z) ** 2; S += Math.max(...l.col) / Math.max(dd, 1); }
+    const H = 1 / (d * d), lum = H * 1.0 + S * 0.25 + 0.02;
+    AE.goal = clamp((lk.exp || 1) * Math.pow(0.13 / Math.max(lum, 0.13), 0.55), 0.22, 1.6);
+  }
+  if (AE.goal != null) AE.v += (AE.goal - AE.v) * Math.min(1, dt * (AE.goal < AE.v ? 3.0 : 1.2));
+}
+function lavaHaze() { const L = LVS.lava; if (!L) return 0.25; const d = Math.hypot(ME.pos.x - L.x, ME.pos.z - L.z); return clamp(1.4 - d / 12, 0.25, 1.2); }
 function boot() {
-  initRenderer($('#cv')); initMats(); initParticles(); initMotes();
+  initRenderer($('#cv')); POST.init(R3.r); initMats(); initParticles(); initMotes();
   HUD.init(); SURF.init(); initInput();
-  if (QA) window.__geo = { ME, ST, GEO, LVS, R3, SURF, HUD, NET, LOCAL, send, loadLevel, rideLift, applyRemoteDig, getF: () => F, setMode, enterGame, showCert, PHOTOS, rockTex, photoTex, IN };
+  if (QA) window.__geo = { ME, ST, GEO, LVS, R3, SURF, HUD, NET, LOCAL, send, loadLevel, rideLift, applyRemoteDig, getF: () => F, setMode, enterGame, showCert, PHOTOS, rockTex, photoTex, IN, POST, QUAL, ASSET, setTier, LV_LOOK, S3 };
   showTitle();
   requestAnimationFrame(frame);
 }
