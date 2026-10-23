@@ -68,6 +68,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 #mission ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 #mission li{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:start;line-height:1.35}
 #mission li i{font-style:normal;text-align:center} #mission li.done{color:var(--mute)} #mission li.done i{color:var(--ok)} #mission li.mine:not(.done){color:var(--hi2);font-weight:700}
+#mission li .who{display:inline-block;margin-top:1px;font-size:11px;font-weight:700;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);border-radius:999px;padding:0 7px;line-height:1.5} #mission li .who.wait{--c:#b9b0a0;font-weight:500}
 #mission li em{font-style:normal;font-family:var(--f-num);color:var(--hi);font-size:12px} #mission li small{color:var(--ok)}
 #mission .stars{margin-top:8px;font-family:var(--f-num);color:var(--hi2);font-size:12px}
 #teamBox{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px));padding:8px 10px;font-size:13px;min-width:180px;max-width:46vw}
@@ -88,6 +89,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 .bar.warn{color:var(--bad);animation:blink .7s steps(2) infinite}
 @keyframes blink{50%{opacity:.55}}
 .depthread{display:flex;gap:10px;align-items:baseline;font-family:var(--f-num)} .depthread b{font-size:22px;color:var(--ink)} .depthread span{color:var(--hi2)}
+#navBox{position:absolute;right:max(70px,calc(env(safe-area-inset-right,0px) + 70px));top:calc(78px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;align-items:center;gap:4px;z-index:3}
+#navMap{width:150px;height:150px;display:block;pointer-events:none}
+#navTxt{font-size:12px;font-weight:700;color:#F2C14E;background:rgba(0,0,0,.55);padding:2px 8px;border-radius:999px;white-space:nowrap;pointer-events:none}
+#navHome{font-size:11px;padding:4px 9px;min-height:0}
 #hotbar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;align-items:flex-end}
 .rolechip{background:var(--panel2);border:1px solid var(--c);color:var(--ink);border-radius:10px;padding:6px 10px;font-weight:700;font-size:13px;align-self:center}
 .slot{width:74px;height:62px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);display:grid;place-items:center;align-content:center;gap:1px;position:relative}
@@ -186,9 +191,11 @@ button{font:inherit;color:inherit;cursor:pointer}
   .tcard{grid-template-columns:1fr} .rgrid{grid-template-columns:1fr 1fr} .rcard{min-height:0}
   #mission{width:min(250px,56vw);font-size:12px;max-height:38vh} #teamBox{font-size:12px;min-width:0} .slot{width:58px;height:54px} .slot .nm{font-size:10px}
   #bars{width:160px;bottom:calc(170px + env(safe-area-inset-bottom,0px))} #gauge{display:none}
+  #navBox{right:max(10px,env(safe-area-inset-right,0px));top:calc(70px + env(safe-area-inset-top,0px))} #navMap{width:112px;height:112px}
 }
 @media (max-height:620px){
   #mission{max-height:34vh;font-size:11px;padding:8px 10px} #mission h3{font-size:13px} #mission p{display:none}
+  #navMap{width:104px;height:104px} #navBox{top:calc(64px + env(safe-area-inset-top,0px))}
   #bars{bottom:auto;top:calc(36vh + 22px);width:150px} .depthread b{font-size:16px} #teamBox{font-size:11px} .slot{height:48px} .desk{display:none}
 }
 @media (prefers-reduced-motion:reduce){.spot i,.mk.xray i,#liftOv .cage{animation:none}}
@@ -211,7 +218,8 @@ button{font:inherit;color:inherit;cursor:pointer}
     <div id="hint" class="dive-only"></div>
     <div id="lvTitle" class="game-only"></div>
     <div id="hotbar" class="dive-only"></div>
-    <div class="desk dive-only">이동 WASD · 둘러보기 마우스 · 도구 쓰기 왼쪽 클릭(꾹) · 작업 E · 점프/벽 오르기 Space · 도구 1~4 · 신호 Q · 승강기 L · 역할 바꾸기 R</div>
+    <div id="navBox" class="dive-only" hidden><canvas id="navMap" width="150" height="150" aria-label="굴 지도"></canvas><div id="navTxt"></div><button class="btn ghost" id="navHome" type="button">🆘 길을 잃었어요 (H)</button></div>
+    <div class="desk dive-only">이동 WASD · 둘러보기 마우스 · 도구 쓰기 왼쪽 클릭(꾹) · 작업 E · 점프/벽 오르기 Space · 도구 1~4 · 신호 Q · 승강기 L · 역할 바꾸기 R · 길 잃음 H</div>
     <div id="joy" class="touch dive-only"><div id="joyK"></div></div>
     <div class="tbtns touch dive-only">
       <button class="tbtn" id="bPing" aria-label="신호">📍<span class="lbl">신호</span></button>
@@ -2076,6 +2084,7 @@ function initInput() {
     if (e.code === 'KeyQ') doPing();
     if (e.code === 'KeyR') cycleRole();
     if (e.code === 'KeyL') openLift();
+    if (e.code === 'KeyH') askGoHome();
     if (e.code === 'Tab') { e.preventDefault(); HUD.toggleTeam(); }
     if (e.code === 'KeyF') IN.primary = true;
   });
@@ -2479,7 +2488,14 @@ const HUD = {
       let extra = '';
       if (/^plug/.test(t.id)) { const n = +t.id.slice(-1), left = GEO.LAYOUT[n].plug.length - st.plugs[n].length; if (!d) extra = ` <em>남은 덩어리 ${left}</em>`; }
       if (t.id === 'light2' && !d) extra = ` <em>${st.lights2}/3</em>`;
-      return `<li class="${d ? 'done' : ''}${r && ME.has(r.id) ? ' mine' : ''}"><i>${d ? '✔' : r ? r.ic : '·'}</i><span>${esc(t.label)}${extra}${d && st.doneBy[t.id] ? ` <small>${esc(name(st.doneBy[t.id]))}</small>` : ''}</span></li>`;
+      // 누가 할 일인지: 역할 이름 + 그 역할을 맡은 친구 이름 (혼자 연습이면 역할만)
+      let who = '';
+      if (!d) {
+        if (r) { const ns = NET.mode === 'local' ? [] : st.members.filter(m => m.roles.includes(r.id)).map(m => m.name); who = `<b class="who" style="--c:${r.col}">${r.ic} ${esc(r.name)}${ns.length ? ' · ' + esc(ns.join(', ')) : ''}${ME.has(r.id) ? ' (나)' : ''}</b>`; }
+        else who = `<b class="who" style="--c:#c9c2b4">${t.role === 'all' ? '👥 모두 함께' : '🙋 누구나'}</b>`;
+        if (t.need && !st.done[t.need]) { const nr = ROLE((S.tasks.find(x => x.id === t.need) || {}).role); who += ` <b class="who wait">⏳ ${nr ? nr.ic + ' ' + esc(nr.name.replace(' ', '')) + '이 먼저 찾아야 해요' : '앞 일을 먼저'}</b>`; }
+      }
+      return `<li class="${d ? 'done' : ''}${r && ME.has(r.id) ? ' mine' : ''}"><i>${d ? '✔' : r ? r.ic : '·'}</i><span>${esc(t.label)}${extra}${d && st.doneBy[t.id] ? ` <small>${esc(name(st.doneBy[t.id]))}</small>` : ''}${who ? '<br>' + who : ''}</span></li>`;
     }).join('');
     const el = Date.now() - st.t0;
     this.els.mission.innerHTML = `<div class="stg">${st.clear ? 'CLEAR' : '임무 ' + (st.stage + 1) + '/6'}<span class="tm">${st.started ? fmtTime(st.clear ? st.tEnd - st.t0 : el) : ''}</span></div>
@@ -2527,6 +2543,7 @@ const HUD = {
         if (lv === 4 && LVS.lava) list.push({ p: LVS.lava, t: st.bonus.magma ? '마그마' : '🌡 마그마 반응 — 바라보며 측정', c: '#ff7a3a', x: true });
       }
     }
+    if (MODE.v === 'dive' && lv > 0) { const H = { x: GEO.LIFT.x, y: GEO.LAND_Y + 1.3, z: GEO.LIFT.z }, d = Math.hypot(H.x - ME.pos.x, H.z - ME.pos.z, H.y - 1.3 - ME.pos.y); if (d > 7) list.push({ p: H, t: '🛗 승강장', c: '#F2C14E', x: true }); }
     const now = performance.now();
     this.pings = this.pings.filter(p => now - p.t < 9000);
     for (const p of this.pings) if (p.l === lv && (MODE.v === 'dive')) list.push({ p, t: (ROLE(p.k) ? ROLE(p.k).ic + ' ' : '') + p.who + ' 신호', c: ROLE(p.k) ? ROLE(p.k).col : '#fff', ping: true });
@@ -2570,6 +2587,94 @@ const CARD_FIG = {
   2: () => { const rows = [[0, 15], [400, 39], [1000, 75], [2000, 135], [3000, 195]]; return `<svg viewBox="0 0 320 150" class="fig"><defs><linearGradient id="gT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a6a55"/><stop offset="1" stop-color="#5a1d0e"/></linearGradient></defs><rect x="10" y="10" width="120" height="130" rx="6" fill="url(#gT)"/>${rows.map(([d, t]) => { const y = 14 + d / 3000 * 122; return `<line x1="130" x2="180" y1="${y}" y2="${y}" stroke="#aaa" stroke-dasharray="3 3"/><text x="16" y="${y + 4}" fill="#fff" font-size="11">${d} m</text><text x="186" y="${y + 4}" fill="#ffb37a" font-size="13" font-weight="700">${t} ℃</text>`; }).join('')}<text x="250" y="80" fill="#ddd" font-size="11">1 km마다</text><text x="250" y="96" fill="#ff8a4a" font-size="15" font-weight="700">+60 ℃</text></svg>`; },
   4: () => `<svg viewBox="0 0 320 150" class="fig"><rect x="0" y="0" width="320" height="40" fill="#203040"/><rect x="0" y="40" width="320" height="110" fill="#4a3a2e"/><path d="M0 110 Q80 95 160 112 T320 105 L320 150 L0 150Z" fill="#7a3a20"/>${[30, 70, 120, 200, 260].map(x => `<path d="M${x} 118 l8 10 l-6 8" stroke="#3ab0ff" fill="none" opacity=".7"/>`).join('')}<rect x="90" y="10" width="10" height="110" fill="#c0603a"/><rect x="220" y="10" width="10" height="110" fill="#3a8ad0"/><text x="58" y="34" fill="#ffd" font-size="11">생산정 ↑ 뜨거운 물</text><text x="196" y="34" fill="#dff" font-size="11">주입정 ↓ 식은 물</text><text x="110" y="142" fill="#ffd8b0" font-size="12">저류층 (뜨거운 물이 스민 암반)</text></svg>`
 };
+
+/* ===== nav.js — 길 찾기: 생명줄(지나온 길 표시등) · 굴 지도(위에서 본 작은 지도) · 승강장으로 돌아가기 =====
+   실제 광산에서도 굴 안에서 길을 잃지 않게 '생명줄'(가이드 로프)을 따라 다님. */
+const NAV = { trail: {}, mesh: null, cv: null, g: null, air: null, airG: null, airT: 0, airY: -99, lastLv: -1, maxPts: 420 };
+const liftHome = () => ({ x: GEO.LIFT.x, y: GEO.LAND_Y, z: GEO.LIFT.z });
+function navInit() {
+  // 생명줄 표시등: 바닥 가까이 작은 빛 구슬이 줄지어 있고, 빛이 승강장 쪽으로 흘러감
+  const geo = new THREE.OctahedronGeometry(0.07, 0), mat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  NAV.mesh = new THREE.InstancedMesh(geo, mat, NAV.maxPts); NAV.mesh.count = 0; NAV.mesh.frustumCulled = false;
+  NAV.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NAV.maxPts * 3), 3);
+  R3.scene.add(NAV.mesh);
+  NAV.cv = $('#navMap'); NAV.g = NAV.cv.getContext('2d');
+  NAV.air = document.createElement('canvas'); NAV.air.width = NX; NAV.air.height = NZ; NAV.airG = NAV.air.getContext('2d');
+  $('#navHome').onclick = askGoHome;
+}
+function askGoHome() {
+  if (MODE.v !== 'dive' || MODE.modal) return;
+  modal(`<h2>승강장으로 돌아갈까요?</h2><p>길을 잃었을 때는 먼저 바닥의 <b style="color:#F2C14E">노란 생명줄 불빛</b>을 따라가 보세요. 불빛이 흐르는 쪽이 승강장이에요.<br>그래도 모르겠으면 구조대를 불러 승강장으로 바로 돌아갈 수 있어요.</p><div class="row end"><button class="btn ghost" data-close>계속 찾아볼게요</button><button class="btn pri" id="goHome">구조대 부르기</button></div>`, m => {
+    $('#goHome', m).onclick = () => { closeModal(); ME.pos = { x: GEO.LIFT.x + 2.8, y: GEO.LAND_Y + 0.1, z: GEO.LIFT.z + 2.4 }; ME.vel = { x: 0, y: 0, z: 0 }; NAV.trail[ME.lv] = []; toast('🛗 구조대가 승강장까지 데려다줬어요.', 2600, 'ok'); };
+  });
+}
+/* 지나온 길 기록: 1 m마다 점. 예전에 지난 곳으로 돌아오면 고리를 잘라 '가장 짧은 돌아가는 길'만 남김 */
+function navTrack() {
+  const lv = ME.lv, p = ME.pos, H = liftHome(); let T = NAV.trail[lv] || (NAV.trail[lv] = []);
+  if (Math.hypot(p.x - H.x, p.z - H.z) < 4.6 && Math.abs(p.y - H.y) < 2) { T.length = 0; return; }
+  const q = { x: p.x, y: p.y + 0.12, z: p.z }, last = T[T.length - 1];
+  if (last && Math.hypot(q.x - last.x, q.y - last.y, q.z - last.z) < 1.0) return;
+  for (let i = 0; i < T.length - 3; i++) { const a = T[i]; if (Math.hypot(q.x - a.x, q.y - a.y, q.z - a.z) < 0.9) { T.length = i + 1; return; } }
+  T.push(q); if (T.length > NAV.maxPts) T.shift();
+}
+const _nm = new THREE.Matrix4(), _nc = new THREE.Color();
+function navUpdate(dt, t) {
+  const on = MODE.v === 'dive' && F && ME.lv > 0;
+  NAV.mesh.visible = !!on; $('#navBox').hidden = !on;
+  if (!on) return;
+  navTrack();
+  const T = NAV.trail[ME.lv] || [], n = T.length;
+  for (let i = 0; i < n; i++) {
+    const a = T[i]; _nm.makeTranslation(a.x, a.y + Math.sin(t * 2 + i) * 0.02, a.z); NAV.mesh.setMatrixAt(i, _nm);
+    const w = 0.5 + 0.5 * Math.sin(t * 5 + i * 0.7);        // 빛이 승강장(앞번호) 쪽으로 흐름
+    const k = 0.9 + 2.6 * Math.pow(w, 6);
+    _nc.setRGB(1.0 * k, 0.72 * k, 0.18 * k); NAV.mesh.setColorAt(i, _nc);
+  }
+  NAV.mesh.count = n; NAV.mesh.instanceMatrix.needsUpdate = true; if (n) NAV.mesh.instanceColor.needsUpdate = true;
+  NAV.airT -= dt;
+  if (NAV.airT <= 0 || NAV.lastLv !== ME.lv || Math.abs(ME.pos.y - NAV.airY) > 0.8) navAirMap();
+  navDraw();
+}
+/* 굴 지도 바탕: 내 키 높이 둘레(-1.5 ~ +2.5 m)의 빈 공간 = 밝게, 다른 높이에만 있는 굴 = 흐리게 */
+function navAirMap() {
+  NAV.airT = 0.35; NAV.lastLv = ME.lv; NAV.airY = ME.pos.y;
+  const f = F.f, g = NAV.airG, img = g.createImageData(NX, NZ), d = img.data;
+  const j0 = Math.max(0, Math.floor((ME.pos.y - 1.5) / CS)), j1 = Math.min(NY - 1, Math.ceil((ME.pos.y + 2.5) / CS));
+  for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++) {
+    let near = false, any = false;
+    for (let j = 1; j < NY - 1; j++) { if (f[i + NX * (j + NY * k)] < 0) { any = true; if (j >= j0 && j <= j1) { near = true; break; } } }
+    const o = (i + NX * k) * 4;
+    if (near) { d[o] = 214; d[o + 1] = 196; d[o + 2] = 168; d[o + 3] = 235; } else if (any) { d[o] = 120; d[o + 1] = 104; d[o + 2] = 88; d[o + 3] = 120; } else d[o + 3] = 0;
+  }
+  g.putImageData(img, 0, 0);
+}
+function navDraw() {
+  const c = NAV.cv, g = NAV.g, S = c.width, R = S / 2, ppm = S / 26;   // 지름 26 m가 보임
+  const p = ME.pos, H = liftHome();
+  g.clearRect(0, 0, S, S);
+  g.save(); g.beginPath(); g.arc(R, R, R - 2, 0, Math.PI * 2); g.fillStyle = 'rgba(14,12,10,.78)'; g.fill(); g.clip();
+  // 지도는 '내가 보는 쪽이 위'가 되도록 돌림
+  g.translate(R, R); g.rotate(ME.yaw); g.scale(ppm, ppm); g.translate(-p.x, -p.z);
+  g.imageSmoothingEnabled = true; g.drawImage(NAV.air, -CS / 2, -CS / 2, NX * CS, NZ * CS);
+  // 생명줄
+  const T = NAV.trail[ME.lv] || [];
+  if (T.length) { g.beginPath(); g.moveTo(H.x, H.z); for (const a of T) g.lineTo(a.x, a.z); g.lineTo(p.x, p.z); g.lineJoin = g.lineCap = 'round'; g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 5 / ppm; g.stroke(); g.strokeStyle = '#FFB020'; g.lineWidth = 2.6 / ppm; g.setLineDash([4 / ppm, 3 / ppm]); g.stroke(); g.setLineDash([]); }
+  // 승강장
+  g.fillStyle = '#F2C14E'; g.strokeStyle = '#1b1407'; g.lineWidth = 1.5 / ppm; g.beginPath(); g.arc(H.x, H.z, GEO.LIFT.r + 0.4, 0, Math.PI * 2); g.fill(); g.stroke();
+  // 친구
+  for (const [, m] of ST.mates) { if (!m.a || m.a[0] !== ME.lv || !m.p) continue; const r = ROLE(GEO.RID[m.a[7]]); g.fillStyle = r ? r.col : '#fff'; g.beginPath(); g.arc(m.p.x, m.p.z, 0.7, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  g.restore();
+  // 화면 밖이면 테두리에 승강장 방향 표시
+  const dx = H.x - p.x, dz = H.z - p.z, dist = Math.hypot(dx, dz);
+  const ang = Math.atan2(dz, dx) + ME.yaw, sx = Math.cos(ang), sy = Math.sin(ang);
+  if (dist * ppm > R - 10) { g.save(); g.translate(R + sx * (R - 11), R + sy * (R - 11)); g.rotate(ang + Math.PI / 2); g.fillStyle = '#F2C14E'; g.beginPath(); g.moveTo(0, -8); g.lineTo(6, 5); g.lineTo(-6, 5); g.closePath(); g.fill(); g.restore(); }
+  // 나 (가운데 화살표, 항상 위쪽)
+  g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(R, R - 9); g.lineTo(R + 6, R + 6); g.lineTo(R, R + 3); g.lineTo(R - 6, R + 6); g.closePath(); g.fill(); g.stroke();
+  g.beginPath(); g.arc(R, R, R - 2, 0, Math.PI * 2); g.strokeStyle = 'rgba(242,193,78,.6)'; g.lineWidth = 2; g.stroke();
+  // 글: 승강장까지 거리·높낮이
+  const dy = H.y - p.y, d3 = Math.hypot(dx, dz, dy);
+  $('#navTxt').textContent = d3 < 4.5 ? '🛗 승강장 바로 옆' : `🛗 승강장 ${Math.round(d3)} m` + (Math.abs(dy) >= 1.5 ? ` · ${Math.round(Math.abs(dy))} m ${dy > 0 ? '위' : '아래'}` : '');
+}
 
 /* ===== surf3d.js — 지상 3D 현장: 케냐 올카리아·헬스게이트 분위기 (가상의 생산정 W-7) =====
    하늘·햇빛 = 실제 사진 하늘(Poly Haven CC0). 땅·풀·나무·배관·발전소·김·동물 = 직접 만든 3D.
@@ -3498,7 +3603,7 @@ function frame(ts) {
     R3.fx.update(dt); R3.glow.update(dt); R3.gasFx.update(dt);
     R3.motes.material.uniforms.uCam.value.copy(R3.cam.position); R3.motes.material.uniforms.uDir.value.copy(_dir);
     viewModel(dt, t);
-    HUD.markersUpdate(dt);
+    HUD.markersUpdate(dt); navUpdate(dt, t);
     if ((t * 4 | 0) !== (HUD._gt || 0)) { HUD._gt = t * 4 | 0; HUD.gauge(); if ((t | 0) !== HUD._mt) { HUD._mt = t | 0; HUD.mission(); } }
     const lk = LV_LOOK[ME.lv] || {};
     autoExposure(dt, lk);
@@ -3537,8 +3642,8 @@ function autoExposure(dt, lk) {
 function lavaHaze() { const L = LVS.lava; if (!L) return 0.25; const d = Math.hypot(ME.pos.x - L.x, ME.pos.z - L.z); return clamp(1.4 - d / 12, 0.25, 1.2); }
 function boot() {
   initRenderer($('#cv')); POST.init(R3.r); initMats(); initParticles(); initMotes();
-  HUD.init(); SURF.init(); initInput();
-  if (QA) window.__geo = { ME, ST, GEO, LVS, R3, SURF, HUD, NET, LOCAL, send, loadLevel, rideLift, applyRemoteDig, getF: () => F, setMode, enterGame, showCert, PHOTOS, rockTex, photoTex, IN, POST, QUAL, ASSET, setTier, LV_LOOK, S3 };
+  HUD.init(); SURF.init(); initInput(); navInit();
+  if (QA) window.__geo = { ME, ST, GEO, LVS, R3, SURF, HUD, NET, LOCAL, send, loadLevel, rideLift, applyRemoteDig, getF: () => F, setMode, enterGame, showCert, PHOTOS, rockTex, photoTex, IN, POST, QUAL, ASSET, setTier, LV_LOOK, S3, NAV };
   showTitle();
   requestAnimationFrame(frame);
 }
