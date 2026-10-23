@@ -19,7 +19,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:3px solid var(--hi);outline-offset:2px}
 #app{position:fixed;inset:0}
 #cv,#cv canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-#touchLayer{position:absolute;inset:0}
+#touchLayer{position:absolute;inset:0;touch-action:none}
 .key{font-family:var(--f-num);font-size:11px;border:1px solid currentColor;border-radius:4px;padding:0 4px;opacity:.75}
 .muted{color:var(--ink2)} .small{font-size:12px}
 .btn{border:1.5px solid var(--line);background:rgba(255,255,255,.06);border-radius:10px;padding:10px 16px;font-weight:700;min-height:44px}
@@ -3212,13 +3212,12 @@ const SURF = {
   init() {
     this.scene = new THREE.Scene(); this.cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 100);
     addEventListener('resize', () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); });
-    const el = R3.r.domElement;
-    const down = (x, y) => { if (MODE.v !== 'surface' || MODE.modal) return; this.drag = { x, y }; };
-    const move = (x, y) => { if (!this.drag) return; this.yaw += (x - this.drag.x) * 0.0045; this.pitch = clamp(this.pitch + (y - this.drag.y) * 0.0045, -1.1, 1.1); this.drag = { x, y }; };
-    el.addEventListener('mousedown', e => down(e.clientX, e.clientY)); addEventListener('mousemove', e => move(e.clientX, e.clientY)); addEventListener('mouseup', () => { this.drag = null; });
-    $('#touchLayer').addEventListener('touchstart', e => { const t = e.touches[0]; down(t.clientX, t.clientY); }, { passive: true });
-    $('#touchLayer').addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
-    $('#touchLayer').addEventListener('touchend', () => { this.drag = null; });
+    // 끌어서 둘러보기: 화면 맨 위 #touchLayer가 캔버스를 덮고 있으므로 거기서 받음 (마우스·손가락·펜 모두 pointer 이벤트로)
+    const layer = $('#touchLayer');
+    const down = e => { if (MODE.v !== 'surface' || MODE.modal || this.drag) return; this.drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; try { layer.setPointerCapture(e.pointerId); } catch (_) { } };
+    const move = e => { const d = this.drag; if (!d || e.pointerId !== d.id) return; const k = 0.0045 * (this.cam.fov / 62); this.yaw += (e.clientX - d.x) * k; this.pitch = clamp(this.pitch + (e.clientY - d.y) * k, -1.1, 1.1); d.x = e.clientX; d.y = e.clientY; if (MODE.v === 'surface') e.preventDefault(); };
+    const up = e => { if (this.drag && e.pointerId === this.drag.id) this.drag = null; };
+    layer.addEventListener('pointerdown', down); layer.addEventListener('pointermove', move); layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
     if (PHOTOS.olkaria.url) { this.load('olkaria'); return; }
     // 진짜 사진이 없으면 직접 만든 3D 현장
     this.photo = PHOTOS.olkaria; this.is3d = true;
