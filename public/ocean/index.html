@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>물빛섬 전력 관제실</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2306121f'/%3E%3Cpath d='M3 20q6.5-7 13 0t13 0v9H3z' fill='%234aa8ff'/%3E%3Cpath d='M17 4l-6 11h5l-2 8 7-12h-5z' fill='%23ffd166'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 물빛섬 전력 관제실 — 학생 화면. 밤바다 관제실 느낌: 짙은 남색 + 발전소마다 정해진 색 */
+:root{
+  --bg:#06121f;--bg2:#0b1d30;--panel:#0f2438;--panel2:#132c44;--line:rgba(190,225,255,.14);--line2:rgba(190,225,255,.26);
+  --ink:#eaf4ff;--ink2:#9fb7cc;--ink3:#6f8aa3;
+  --tidal:#4aa8ff;--stream:#2fd3c0;--wave:#a08bff;--otec:#ff9a55;--diesel:#c9ccd1;--batt:#f6c445;--bad:#ff5a5f;--ok:#7be08a;--hi:#ffd166;
+  --f-disp:"Black Han Sans","IBM Plex Sans KR",sans-serif;--f-body:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;--f-num:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark}
+*{box-sizing:border-box} [hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:radial-gradient(120% 80% at 50% -10%,#123150 0%,var(--bg) 55%) fixed,var(--bg);color:var(--ink);font-family:var(--f-body);word-break:keep-all;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:1.5px solid var(--line2);background:rgba(255,255,255,.05);border-radius:12px;padding:10px 14px;font-weight:700;touch-action:manipulation;transition:transform .08s,background .15s,border-color .15s}
+button:active{transform:scale(.97)} button:disabled{opacity:.4;cursor:default;transform:none}
+button.pri{background:var(--hi);border-color:var(--hi);color:#1b1400}
+input{font:inherit;font-size:18px;background:#041019;color:var(--ink);border:1.5px solid var(--line2);border-radius:12px;padding:12px 14px;width:100%}
+.num{font-family:var(--f-num)}
+.muted{color:var(--ink2)} .small{font-size:13px}
+.disp{font-family:var(--f-disp);font-weight:400;letter-spacing:.01em}
+.screen{display:none;min-height:100%;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.screen.on{display:block}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:18px;padding:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:99px;padding:3px 10px;font-size:13px;color:var(--ink2)}
+.c-tidal{--c:var(--tidal)} .c-stream{--c:var(--stream)} .c-wave{--c:var(--wave)} .c-otec{--c:var(--otec)} .c-diesel{--c:var(--diesel)}
+
+/* ---------- 들어가기 ---------- */
+#login{display:none;place-items:center}
+#login.on{display:grid}
+.login{width:min(520px,100%);display:grid;gap:14px;margin:4vh auto}
+.brand{display:grid;gap:4px;text-align:center;margin-bottom:6px}
+.brand h1{font-family:var(--f-disp);font-weight:400;font-size:clamp(34px,7vw,52px);margin:0;line-height:1.05;background:linear-gradient(180deg,#fff,#9fd6ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand p{margin:0;color:var(--ink2)}
+.teams{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.teams button{padding:10px 0;font-family:var(--f-num)}
+.teams button.on{background:var(--tidal);border-color:var(--tidal);color:#001629}
+.lbl{font-size:13px;color:var(--ink2);margin-bottom:-6px}
+#lmsg{min-height:20px;color:var(--bad);font-size:14px;text-align:center}
+.waves-deco{height:60px;opacity:.9}
+
+/* ---------- 공통 머리띠 ---------- */
+.top{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.top h2{margin:0;font-family:var(--f-disp);font-weight:400;font-size:24px}
+.who{font-size:13px;color:var(--ink2)}
+
+/* ---------- 대기실 ---------- */
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0}
+.role{position:relative;text-align:left;display:grid;gap:6px;padding:14px;border-radius:16px;border:1.5px solid var(--line2);background:rgba(255,255,255,.03)}
+.role::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;border-radius:16px 0 0 16px;background:var(--c)}
+.role b{font-size:19px;color:var(--c)} .role .mine{justify-self:start;font-size:12px;background:var(--c);color:#001629;border-radius:99px;padding:2px 8px}
+.role.sel{border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
+.role p{margin:0;font-size:14px;color:var(--ink2);font-weight:500}
+.role .hold{font-size:13px;color:var(--ink)}
+.mates{display:flex;gap:8px;flex-wrap:wrap}
+.mate{padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.06);font-size:14px}
+.mate.off{opacity:.4}
+
+/* ---------- 작전 설명 ---------- */
+.brief{display:grid;gap:14px;max-width:980px;margin:0 auto}
+.op-no{font-family:var(--f-num);color:var(--hi);font-size:14px;letter-spacing:.1em}
+.op-title{font-family:var(--f-disp);font-weight:400;font-size:clamp(30px,5vw,44px);margin:2px 0}
+.goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.goal{padding:12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.goal b{display:block;font-size:15px;margin-bottom:2px}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{text-align:left;display:grid;gap:4px;padding:14px;border-radius:14px}
+.opt.sel{border-color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}
+.opt b{font-size:17px} .opt span{font-size:13px;color:var(--ink2);font-weight:500}
+.setupbox{border-left:4px solid var(--c);padding-left:14px;display:grid;gap:10px}
+.readyrow{display:flex;gap:8px;flex-wrap:wrap}
+.rd{padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.06);font-size:14px} .rd.ok{background:color-mix(in srgb,var(--ok) 25%,transparent);color:#d9ffe0}
+.bigbtn{font-size:20px;padding:16px 22px;border-radius:16px}
+
+/* ---------- 작전 중 ---------- */
+#run{padding-top:max(10px,env(safe-area-inset-top))}
+.hud{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;margin-bottom:10px}
+.clock{display:grid;gap:2px}
+.clock .t{font-family:var(--f-num);font-size:34px;line-height:1;font-weight:600}
+.clock .s{font-size:12px;color:var(--ink2)}
+.grid-bar{display:grid;gap:6px}
+.gb-row{display:flex;justify-content:space-between;font-size:13px;color:var(--ink2);gap:10px;flex-wrap:wrap}
+.gb-row b{color:var(--ink);font-family:var(--f-num);font-weight:600}
+.meter{position:relative;height:16px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden;display:flex}
+.meter i{display:block;height:100%;transition:width .5s}
+.meter .dem{position:absolute;top:-3px;bottom:-3px;width:3px;background:#fff;border-radius:2px;box-shadow:0 0 0 2px rgba(0,0,0,.4);transition:left .5s}
+.share{display:grid;gap:2px;text-align:right}
+.share .v{font-family:var(--f-num);font-size:30px;line-height:1;font-weight:600}
+.share .v small{font-size:14px;color:var(--ink2)}
+.dayline{height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:10px}
+.dayline i{display:block;height:100%;background:linear-gradient(90deg,var(--tidal),var(--stream));transition:width .5s}
+.blackout{display:none;background:var(--bad);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;margin-bottom:10px;animation:blink 1s infinite;text-align:center;font-size:18px}
+.blackout.on{display:block}
+@keyframes blink{50%{opacity:.6}}
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:12px;align-items:start}
+.plant{position:relative;padding:12px}
+.ptabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.ptab{padding:7px 12px;font-size:14px;border-radius:99px}
+.ptab.on{background:var(--c);border-color:var(--c);color:#001629}
+.ptab.alert{animation:blink .8s infinite;border-color:var(--bad)}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.phead h3{margin:0;font-family:var(--f-disp);font-weight:400;font-size:24px;color:var(--c)}
+.phead .mw{font-family:var(--f-num);font-size:30px;font-weight:600}
+.phead .mw small{font-size:14px;color:var(--ink2)}
+.cv{width:100%;height:clamp(200px,34vh,320px);display:block;border-radius:14px;background:#04101b}
+.reads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.read{padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.read span{display:block;font-size:12px;color:var(--ink2)}
+.read b{font-family:var(--f-num);font-size:20px;font-weight:600}
+.ctls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ctl{padding:14px 8px;font-size:16px;border-radius:14px;display:grid;gap:2px;justify-items:center}
+.ctl small{font-size:12px;color:var(--ink2);font-weight:500}
+.ctl.on{background:var(--c);border-color:var(--c);color:#001629} .ctl.on small{color:#0b2a3d}
+.ctl.warn{border-color:var(--bad);background:rgba(255,90,95,.18);animation:blink .7s infinite}
+.slider{display:grid;gap:6px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+input[type=range]{width:100%;padding:0;height:34px;accent-color:var(--otec);background:none;border:0}
+.tip{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.05);font-size:15px;line-height:1.45}
+.tip .face{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#001629;font-weight:700;font-size:13px}
+.fault{position:absolute;inset:auto 12px 12px 12px;display:none;background:rgba(36,8,10,.94);border:2px solid var(--bad);border-radius:16px;padding:14px;gap:10px;z-index:3}
+.fault.on{display:grid}
+.fault b{font-size:18px}
+.fault button{font-size:20px;padding:16px;background:var(--bad);border-color:var(--bad);color:#fff}
+.alarm{position:absolute;left:12px;right:12px;top:56px;display:none;background:var(--bad);color:#fff;border-radius:14px;padding:12px;font-weight:700;font-size:18px;text-align:center;z-index:4;animation:blink .7s infinite}
+.alarm.on{display:block}
+.side{display:grid;gap:12px}
+.plants{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pc{padding:8px 6px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line);text-align:center;position:relative}
+.pc::before{content:"";position:absolute;left:8px;right:8px;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--c)}
+.pc span{display:block;font-size:12px;color:var(--ink2)}
+.pc b{font-family:var(--f-num);font-size:17px}
+.pc em{display:block;font-style:normal;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc.warn{border-color:var(--bad);background:rgba(255,90,95,.14)}
+.minichart{width:100%;height:150px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;background:var(--c)}
+.says{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.says button{font-size:13px;padding:8px 6px;font-weight:500;border-radius:10px;text-align:left;line-height:1.3}
+.gridpanel{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;display:grid;gap:10px}
+.gridpanel h4{margin:0;font-size:16px}
+.battbar{height:22px;border-radius:7px;background:rgba(255,255,255,.08);overflow:hidden;position:relative}
+.battbar i{display:block;height:100%;background:var(--batt);transition:width .5s}
+.battbar span{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-num);font-size:13px;font-weight:600;color:#111;mix-blend-mode:normal}
+
+/* 말풍선 · 알림 */
+#toasts{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);display:grid;gap:6px;z-index:50;width:min(560px,92vw);pointer-events:none}
+.toast{background:rgba(10,30,48,.96);border:1px solid var(--line2);border-radius:14px;padding:10px 14px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:tin .25s ease-out}
+.toast.bad{border-color:var(--bad);background:rgba(60,10,14,.96)} .toast.good{border-color:var(--ok)}
+.toast b{color:var(--hi)}
+@keyframes tin{from{transform:translateY(-8px);opacity:0}}
+
+/* ---------- 퀴즈 · 결과 ---------- */
+.mid{max-width:860px;margin:0 auto;display:grid;gap:14px}
+.qopts{display:grid;gap:8px}
+.qopts button{text-align:left;font-size:17px;padding:14px 16px;font-weight:500}
+.qopts button.right{background:color-mix(in srgb,var(--ok) 30%,transparent);border-color:var(--ok)}
+.qopts button.wrong{background:rgba(255,90,95,.18);border-color:var(--bad)}
+.why{padding:12px 14px;border-radius:14px;background:rgba(123,224,138,.12);border:1px solid rgba(123,224,138,.4);line-height:1.5}
+.stars{display:flex;gap:12px;flex-wrap:wrap}
+.star{flex:1 1 200px;display:grid;gap:4px;padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.star .s{font-size:30px;line-height:1;color:#3c4f61} .star.got .s{color:var(--hi);text-shadow:0 0 18px rgba(255,209,102,.5)}
+.star b{font-size:15px}
+.bigchart{width:100%;height:clamp(220px,38vh,340px);display:block}
+.genbars{display:grid;gap:6px}
+.gbar{display:grid;grid-template-columns:120px minmax(0,1fr) 70px;gap:8px;align-items:center;font-size:14px}
+.gbar .b{height:14px;border-radius:7px;background:rgba(255,255,255,.06);overflow:hidden}
+.gbar .b i{display:block;height:100%;background:var(--c)}
+.gbar .n{font-family:var(--f-num);text-align:right}
+.acc{color:#ffb3b5;font-size:14px;margin:0;padding-left:18px}
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl td,.tbl th{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+.tbl th{color:var(--ink2);font-weight:500;font-size:13px}
+
+@media (max-width:900px){.main{grid-template-columns:1fr}.hud{grid-template-columns:auto minmax(0,1fr)}.share{grid-column:1/-1;text-align:left;display:flex;gap:10px;align-items:baseline}}
+@media (max-width:560px){.opts{grid-template-columns:1fr}.ctls{grid-template-columns:1fr 1fr 1fr}.ctl{font-size:14px;padding:12px 4px}.reads{grid-template-columns:1fr 1fr 1fr}.read b{font-size:16px}.plants{grid-template-columns:repeat(5,1fr)}.pc b{font-size:14px}.says{grid-template-columns:1fr 1fr}.clock .t{font-size:28px}.teams{grid-template-columns:repeat(4,1fr)}.gbar{grid-template-columns:90px minmax(0,1fr) 60px}}
+</style></head><body>
+
+<!-- 들어가기 -->
+<div id="login" class="screen on">
+  <div class="login">
+    <svg class="waves-deco" viewBox="0 0 520 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 34 Q 32 18 65 34 T 130 34 T 195 34 T 260 34 T 325 34 T 390 34 T 455 34 T 520 34 V60 H0Z" fill="#164a74" opacity=".55"/><path d="M0 42 Q 40 28 80 42 T 160 42 T 240 42 T 320 42 T 400 42 T 480 42 T 560 42 V60 H0Z" fill="#1d6aa6" opacity=".6"/></svg>
+    <div class="brand"><h1>물빛섬 전력 관제실</h1><p>네 가지 바다 발전소를 모둠이 함께 운전해 섬의 불을 지켜요</p></div>
+    <div class="card" style="display:grid;gap:14px">
+      <div class="lbl">이름</div><input id="iname" maxlength="10" autocomplete="off" placeholder="이름만 (예: 가은)">
+      <div class="lbl">모둠 번호</div><div class="teams" id="iteams"></div>
+      <div class="lbl">입장 코드 (TV 화면의 네 자리)</div><input id="icode" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="0000">
+      <button class="pri bigbtn" id="igo">관제실 들어가기</button>
+      <div id="lmsg"></div>
+    </div>
+    <p class="muted small" style="text-align:center">「물빛섬 바다 발전소」 혼자 실험실에서 배운 것을 모둠이 실제로 운전해 보는 곳이에요.</p>
+  </div>
+</div>
+
+<!-- 대기실: 역할 고르기 -->
+<div id="lobby" class="screen">
+  <div class="top"><h2 id="lb-team">모둠</h2><span class="who" id="lb-who"></span></div>
+  <div class="card" style="display:grid;gap:10px">
+    <div><b>준수 소장</b> <span class="muted">· 물빛섬 해양에너지 연구소</span></div>
+    <div style="line-height:1.55">태풍처럼 갑자기 디젤 연료가 끊길 수도 있는 섬이에요. 오늘부터 여러분이 <b>바다 발전소 네 곳</b>을 맡아 섬 전기를 지켜 줘요. 각자 맡은 발전소 화면만 보이니까, <b>서로 말해야</b> 정전을 막을 수 있어요!</div>
+    <div class="mates" id="lb-mates"></div>
+  </div>
+  <div class="roles" id="lb-roles"></div>
+  <div class="row" style="justify-content:space-between">
+    <span class="muted small" id="lb-note">한 사람이 하나씩 고르면 좋아요. 비어 있는 발전소는 출발할 때 자동으로 나눠 맡아요.</span>
+    <button class="pri bigbtn" id="lb-go">모두 모였어요 · 출발!</button>
+  </div>
+</div>
+
+<!-- 작전 설명 + 장비 고르기 -->
+<div id="brief" class="screen">
+  <div class="brief">
+    <div class="top" style="margin:0"><span class="who" id="bf-who"></span><span class="chip" id="bf-stars"></span></div>
+    <div class="card" style="display:grid;gap:8px">
+      <div class="op-no" id="bf-no">작전 1 / 3</div>
+      <div class="op-title" id="bf-title"></div>
+      <div class="muted" id="bf-sub"></div>
+      <div style="line-height:1.6;font-size:17px" id="bf-text"></div>
+      <div class="goals" id="bf-goals"></div>
+    </div>
+    <div class="card" id="bf-setup"></div>
+    <div class="card" style="display:grid;gap:10px">
+      <div class="readyrow" id="bf-ready"></div>
+      <div class="muted small" id="bf-wait"></div>
+      <button class="pri bigbtn" id="bf-go">준비 완료</button>
+    </div>
+  </div>
+</div>
+
+<!-- 작전 중 -->
+<div id="run" class="screen">
+  <div class="hud">
+    <div class="clock"><span class="s" id="rn-op">작전 1</span><span class="t" id="rn-clock">06:00</span><span class="s" id="rn-day"></span></div>
+    <div class="grid-bar">
+      <div class="gb-row"><span>섬 전력 수요 <b id="rn-dem">0</b> MW</span><span>바다 발전 <b id="rn-sup">0</b> MW</span><span>배터리 <b id="rn-batt">0</b>%</span><span>디젤 연료 <b id="rn-fuel">0</b> MWh</span></div>
+      <div class="meter" id="rn-meter"></div>
+    </div>
+    <div class="share"><span class="small muted">바다 에너지</span><span class="v" id="rn-share">0<small>%</small></span><span class="small muted" id="rn-target"></span></div>
+  </div>
+  <div class="dayline"><i id="rn-day-bar"></i></div>
+  <div class="blackout" id="rn-black">⚠ 정전! 섬 전기가 모자라요 — 디젤을 켜거나 발전을 늘려요</div>
+  <div class="main">
+    <div class="card plant" id="rn-plant">
+      <div class="ptabs" id="rn-tabs"></div>
+      <div class="alarm" id="rn-alarm"></div>
+      <div id="rn-body"></div>
+      <div class="fault" id="rn-fault"><b id="rn-fault-t"></b><span class="muted small">고칠 때까지 출력이 40%로 줄어요. 버튼을 여러 번 눌러 고쳐요!</span><button id="rn-fix">🔧 고치기</button></div>
+    </div>
+    <div class="side">
+      <div class="card" style="padding:12px">
+        <div class="plants" id="rn-plants"></div>
+        <canvas class="minichart" id="rn-mini"></canvas>
+        <div class="legend" id="rn-legend"></div>
+      </div>
+      <div class="card" style="padding:12px;display:grid;gap:8px">
+        <div class="row" style="justify-content:space-between"><b>모둠에게 빨리 말하기</b><span class="muted small" id="rn-mates"></span></div>
+        <div class="says" id="rn-says"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 회의 퀴즈 -->
+<div id="quiz" class="screen"><div class="mid">
+  <div class="top" style="margin:0"><h2 id="qz-head">작전 회의</h2><span class="who" id="qz-who"></span></div>
+  <div class="card" style="display:grid;gap:12px">
+    <span class="chip" id="qz-role"></span>
+    <div style="font-size:21px;font-weight:700;line-height:1.45" id="qz-q"></div>
+    <div class="qopts" id="qz-opts"></div>
+    <div class="why" id="qz-why" hidden></div>
+  </div>
+  <div class="card"><b>모둠 친구들</b><div class="readyrow" id="qz-mates" style="margin-top:8px"></div><p class="muted small" style="margin:8px 0 0">모두 맞히면 결과가 나와요. ★ 별은 모두 <b>처음에</b> 맞혀야 받아요. 모르면 친구에게 물어봐요!</p></div>
+</div></div>
+
+<!-- 작전 결과 -->
+<div id="result" class="screen"><div class="mid">
+  <div class="top" style="margin:0"><h2 id="rs-head">작전 결과</h2><span class="who" id="rs-who"></span></div>
+  <div class="stars" id="rs-stars"></div>
+  <div class="card"><b>하루 동안 누가 섬 전기를 만들었을까?</b><p class="muted small" style="margin:4px 0 8px">흰 선 = 섬 전력 수요. 색 칸 = 발전소별 전기. 한 발전소가 쉬는 시간을 다른 발전소가 메웠나요?</p><canvas class="bigchart" id="rs-chart"></canvas><div class="legend" id="rs-legend"></div></div>
+  <div class="card" style="display:grid;gap:10px"><b>발전소별 하루 발전량</b><div class="genbars" id="rs-gen"></div><div id="rs-more" class="muted small"></div><ul class="acc" id="rs-acc"></ul></div>
+  <div class="card" id="rs-quiz"></div>
+  <button class="pri bigbtn" id="rs-next">다음 작전으로</button>
+</div></div>
+
+<!-- 모두 끝 -->
+<div id="clear" class="screen"><div class="mid">
+  <div class="card" style="text-align:center;display:grid;gap:8px;padding:26px">
+    <div class="op-no">ALL CLEAR</div>
+    <div class="op-title" id="cl-title"></div>
+    <div style="font-size:44px;color:var(--hi)" id="cl-stars"></div>
+    <div class="muted" id="cl-time"></div>
+    <div class="num" style="font-size:22px" id="cl-clock"></div>
+  </div>
+  <div class="card"><table class="tbl" id="cl-tbl"></table></div>
+  <div class="card" style="line-height:1.6"><b>준수 소장의 정리</b><br>조력은 밀물 때, 조류는 물살이 빠를 때, 파력은 파도가 높은 겨울에, 온도차는 표층 바닷물이 따뜻한 여름에 잘 돼요. <b>잘 되는 시간과 계절이 서로 달라서</b>, 여러 바다 에너지를 섞고 배터리로 이어 주면 디젤을 훨씬 덜 쓸 수 있어요. 바다 에너지는 날마다 미리 계산할 수 있다는 것도 큰 장점이에요!</div>
+  <div class="card" id="cl-mates"></div>
+</div></div>
+
+<div id="toasts"></div>
+<script src="/ocean/rules.js"></script>
+<script>
+'use strict';
+const OR = window.OceanRules;
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PLANT = {
+  tidal: { name: '조력', full: '조력발전소', where: '북쪽 옛 방조제 · 물빛호', mentor: '가은', icon: '🌊', job: '밀물·썰물 높이 차를 이용해요. 수문과 터빈을 열고 닫는 타이밍이 핵심!' },
+  stream: { name: '조류', full: '조류발전소', where: '남쪽 휘몰이 해협', mentor: '우진', icon: '🌀', job: '빠른 물살로 물속 풍차를 돌려요. 물살 방향이 바뀌면 터빈도 맞춰야 해요.' },
+  wave: { name: '파력', full: '파력발전소', where: '서쪽 방파제 (진동수주형)', mentor: '서윤', icon: '〰', job: '파도가 밀어 올리는 공기로 터빈을 돌려요. 폭풍이 오면 안전 밸브!' },
+  otec: { name: '온도차·전력망', full: '온도차 발전소 + 섬 전력망', where: '동쪽 깊은바다 · 관제 센터', mentor: '지후', icon: '🌡', job: '따뜻한 표층수와 차가운 깊은 물의 온도 차로 발전해요. 배터리와 디젤도 맡아요.' }
+};
+const ROLES = ['tidal', 'stream', 'wave', 'otec'];
+const SAYS = ['🌊 곧 밀물 발전 시작해요', '⏸ 지금은 발전이 안 돼요', '🔋 배터리가 부족해요!', '⛽ 디젤 켜 주세요!', '✋ 디젤 꺼도 돼요', '🌪 폭풍이 와요! 조심!', '🛠 고치는 중이에요', '⚡ 전기가 남아요', '📈 곧 수요가 늘어요', '🆘 도와줘요!', '👍 좋아요!', '✅ 준비 끝!'];
+const COLORS = { tidal: '#4aa8ff', stream: '#2fd3c0', wave: '#a08bff', otec: '#ff9a55', diesel: '#c9ccd1', batt: '#f6c445', bad: '#ff5a5f' };
+const KEY = 'oceanCtl1';
+let ws = null, ME = null, ST = null, LV = null, LVat = 0, HIST = [], RES_HIST = {}, RULES = null, tab = null, pickTeam = 0, quizPicked = -1, lastPhase = '', reconnectT = 0, closedByServer = false;
+const pref = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } })();
+const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) { } };
+
+/* ---------- 들어가기 ---------- */
+$('#iteams').innerHTML = Array.from({ length: 12 }, (_, i) => `<button data-t="${i + 1}">${i + 1}</button>`).join('');
+$('#iteams').onclick = e => { const b = e.target.closest('button'); if (!b) return; pickTeam = +b.dataset.t; [...$('#iteams').children].forEach(x => x.classList.toggle('on', x === b)); };
+if (pref.name) $('#iname').value = pref.name;
+if (pref.team) { pickTeam = pref.team; const b = $('#iteams').children[pref.team - 1]; if (b) b.classList.add('on'); }
+const qs = new URLSearchParams(location.search); if (qs.get('code')) $('#icode').value = qs.get('code');
+$('#igo').onclick = () => {
+  const name = $('#iname').value.trim(), code = $('#icode').value.trim();
+  if (!name) return lmsg('이름을 적어 주세요.'); if (!pickTeam) return lmsg('모둠 번호를 골라 주세요.'); if (!code) return lmsg('입장 코드를 적어 주세요.');
+  pref.name = name; pref.team = pickTeam; pref.tok = ''; savePref();
+  connect({ c: 'hi', name, team: pickTeam, code });
+};
+$('#icode').onkeydown = e => { if (e.key === 'Enter') $('#igo').click(); };
+function lmsg(s) { $('#lmsg').textContent = s; }
+
+/* ---------- 연결 ---------- */
+function connect(hi) {
+  closedByServer = false;
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { }
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/wsocean');
+  ws.onopen = () => { reconnectT = 0; ws.send(JSON.stringify(hi)); };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (er) { return; } recv(m); };
+  ws.onclose = () => {
+    if (closedByServer || !ME) return;
+    reconnectT = Math.min(8000, (reconnectT || 800) * 1.6);
+    toast('연결이 끊겼어요. 다시 잇는 중…', 'bad');
+    setTimeout(() => connect({ c: 'hi', tok: pref.tok, name: pref.name, team: pref.team }), reconnectT);
+  };
+}
+function sendc(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+if (pref.tok && pref.name && pref.team) connect({ c: 'hi', tok: pref.tok, name: pref.name, team: pref.team });
+
+function recv(m) {
+  if (m.t === 'err') {
+    if (m.fatal) { closedByServer = true; ME = null; pref.tok = ''; savePref(); show('login'); lmsg(m.s); return; }
+    if (!ME) { lmsg(m.s); pref.tok = ''; savePref(); return; }
+    return toast(m.s, 'bad');
+  }
+  if (m.t === 'w') { ME = { id: m.id, name: m.name, gm: m.gm }; pref.tok = m.tok; savePref(); RULES = m.rules; setState(m.st); return; }
+  if (m.t === 'reset') { HIST = []; RES_HIST = {}; return; }
+  if (m.t === 'st') return setState(m.st);
+  if (m.t === 'ev') { setState(m.st); m.e.forEach(evt); return; }
+  if (m.t === 'lv') { LV = m.lv; LVat = performance.now(); if (m.smp) HIST.push(...m.smp); if (ST && ST.phase === 'run') drawRunHud(); return; }
+  if (m.t === 'say') { const who = ST && ST.members.find(x => x.id === m.by); toast(`<b>${esc(who ? who.name : '?')}</b> ${esc(SAYS[m.i] || '')}`, m.i === 2 || m.i === 3 || m.i === 5 || m.i === 9 ? 'bad' : ''); beep(m.i === 9 ? 2 : 0); return; }
+}
+function setState(st) {
+  ST = st;
+  if (st.hist) HIST = st.hist.slice();
+  (st.results || []).forEach((r, i) => { if (r && r.hist) RES_HIST[i] = r.hist; });
+  if (st.live) { LV = st.live; LVat = performance.now(); }
+  const me = myMember(); if (me && me.roles.length && (!tab || !me.roles.includes(tab))) tab = me.roles[0];
+  const ph = st.started ? st.phase : 'lobby';
+  if (ph !== lastPhase) { if (ph === 'quiz') quizPicked = -1; lastPhase = ph; window.scrollTo(0, 0); }
+  show(ph); render();
+}
+function myMember() { return ST && ME ? ST.members.find(m => m.id === ME.id) : null; }
+function myRoles() { const m = myMember(); return m ? m.roles : []; }
+function holderNames(role) { return ST.members.filter(m => m.roles.includes(role)).map(m => m.name + (m.on ? '' : '(나감)')); }
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+function R() { return OR.ROUNDS[ST.round]; }
+function hhmm(c) { c = ((c % 24) + 24) % 24; const h = Math.floor(c), m = Math.floor((c - h) * 60 / 10) * 10; return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+function tfmt(ms) { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + '분 ' + String(s % 60).padStart(2, '0') + '초'; }
+function whoLine() { return `${esc(ST.name)} · ${esc(ME.name)}${myRoles().length ? ' · ' + myRoles().map(r => PLANT[r].name).join('+') + ' 담당' : ''}`; }
+
+function render() {
+  if (!ST) return;
+  const ph = ST.started ? ST.phase : 'lobby';
+  if (ph === 'lobby') renderLobby();
+  else if (ph === 'brief') renderBrief();
+  else if (ph === 'run') renderRun();
+  else if (ph === 'quiz') renderQuiz();
+  else if (ph === 'result') renderResult();
+  else if (ph === 'clear') renderClear();
+}
+
+/* ---------- 대기실 ---------- */
+function renderLobby() {
+  $('#lb-team').textContent = ST.name + ' 관제실'; $('#lb-who').innerHTML = esc(ME.name) + (ME.gm ? ' (선생님)' : '');
+  $('#lb-mates').innerHTML = ST.members.map(m => `<span class="mate${m.on ? '' : ' off'}">${esc(m.name)}${m.id === ME.id ? ' (나)' : ''}</span>`).join('');
+  $('#lb-roles').innerHTML = ROLES.map(r => {
+    const P = PLANT[r], hold = ST.members.filter(m => m.roles.includes(r)), mine = hold.some(m => m.id === ME.id);
+    return `<button class="role c-${r}${mine ? ' sel' : ''}" data-r="${r}">${mine ? '<span class="mine">내 발전소</span>' : ''}<b>${P.icon} ${P.full}</b><span class="small muted">${P.where} · 도움: ${P.mentor}</span><p>${P.job}</p><span class="hold">${hold.length ? '담당: ' + hold.map(m => esc(m.name)).join(', ') : '<span class="muted">아직 비어 있어요</span>'}</span></button>`;
+  }).join('');
+  document.querySelectorAll('#lb-roles .role').forEach(b => b.onclick = () => sendc({ c: 'role', r: b.dataset.r }));
+  const n = ST.members.filter(m => m.on).length;
+  $('#lb-go').textContent = n < 4 ? `${n}명이 출발! (남는 발전소는 나눠 맡기)` : '모두 모였어요 · 출발!';
+}
+$('#lb-go').onclick = () => sendc({ c: 'go' });
+
+/* ---------- 작전 설명 ---------- */
+const SETUP = {
+  stream: { title: '조류 터빈 고르기', a: ['one', '한 방향 터빈', '물살이 한쪽에서 올 때만 돌아요. 밀물↔썰물로 물살이 바뀔 때마다 터빈을 돌려 맞춰야 해요. 출력 100%'], b: ['bi', '양방향 터빈', '나선형 날개라 물살이 어느 쪽에서 와도 돌아요. 돌릴 필요가 없어요. 출력 95%'] },
+  wave: { title: '파력 터빈 고르기', a: ['plain', '일반 터빈', '공기가 한쪽으로 지날 때만 돌아요. 공기가 드나드는 진동수주형에선 절반만 써요.'], b: ['wells', '웰스 터빈', '공기가 들어올 때도 나갈 때도 같은 방향으로 돌아요.'] },
+  otec: { title: '작동 유체 고르기', a: ['water', '물', '익숙한 물! 그런데 표층 바닷물(약 25 ℃)로 물을 끓일 수 있을까요?'], b: ['nh3', '암모니아', '약 −33 ℃에서 끓어요. 따뜻한 바닷물로도 끓어서 가스가 돼요.'] }
+};
+function nextTides(Rd) {   // 작전 시간 안의 다음 만조·간조 시각
+  const out = []; let prev = OR.seaAt(Rd, 0), dir = OR.seaAt(Rd, 0.05) > prev ? 1 : -1;
+  for (let h = 0.05; h <= 24; h += 0.05) { const s = OR.seaAt(Rd, h), d = s > prev ? 1 : -1; if (d !== dir) { out.push({ h, high: dir > 0 }); dir = d; } prev = s; }
+  return out;
+}
+function renderBrief() {
+  const Rd = R();
+  $('#bf-who').innerHTML = whoLine(); $('#bf-stars').textContent = '★ ' + ST.stars + ' / ' + OR.STAR_MAX;
+  $('#bf-no').textContent = `작전 ${ST.round + 1} / ${OR.ROUNDS.length}`; $('#bf-title').textContent = Rd.title; $('#bf-sub').textContent = Rd.sub; $('#bf-text').textContent = Rd.brief;
+  $('#bf-goals').innerHTML = `<div class="goal"><b>★ 정전 0분</b><span class="muted small">배터리·디젤로 빈틈 메우기</span></div><div class="goal"><b>★ 바다 에너지 ${Math.round(Rd.target * 100)}% 이상</b><span class="muted small">디젤을 덜 쓸수록 높아져요</span></div><div class="goal"><b>★ 작전 회의 퀴즈</b><span class="muted small">모두 처음에 맞히기</span></div><div class="goal"><b>⛽ 디젤 연료 ${Rd.fuel} MWh</b><span class="muted small">다 쓰면 디젤도 멈춰요${Rd.extra ? ' · ' + hhmm(Rd.extra.from) + '~' + hhmm(Rd.extra.to) + ' ' + esc(Rd.extra.label) + ' +' + Rd.extra.mw + ' MW' : ''}</span></div>`;
+  // 내 장비 고르기
+  const mine = myRoles(), tides = nextTides(Rd);
+  let html = '';
+  for (const r of mine) {
+    const S = SETUP[r], P = PLANT[r];
+    if (!S) {
+      html += `<div class="setupbox c-${r}"><b style="color:var(--c);font-size:18px">${P.icon} ${P.full}</b><div class="tip c-${r}" style="margin:0"><span class="face">${P.mentor}</span><span>조력은 장비 대신 <b>타이밍</b>! 오늘 물때: ${tides.map(t => (t.high ? '만조 ' : '간조 ') + hhmm(Rd.hour0 + t.h)).join(' · ')}<br>간조 무렵 <b>수문을 열어 물빛호 물을 빼 두고</b>, 밀물로 바다가 호수보다 충분히 높아지면 <b>터빈</b>을 켜요. 물빛호가 +1 m를 넘으면 마을이 위험해요!</span></div></div>`;
+      continue;
+    }
+    const cur = ST.setup[r];
+    html += `<div class="setupbox c-${r}"><b style="color:var(--c);font-size:18px">${P.icon} ${S.title}</b><div class="opts">${[S.a, S.b].map(o => `<button class="opt${cur === o[0] ? ' sel' : ''}" data-k="${r}" data-v="${o[0]}"><b>${o[1]}</b><span>${o[2]}</span></button>`).join('')}</div>${r === 'otec' ? `<div class="muted small">오늘 표층 바닷물 약 ${Rd.ts} ℃ · 깊은 바닷물 5 ℃ → 온도 차 약 ${Rd.ts - 5} ℃ (20 ℃ 이상이면 발전이 잘 돼요)</div>` : ''}</div>`;
+  }
+  const others = ['stream', 'wave', 'otec'].filter(k => !mine.includes(k)).map(k => `${PLANT[k].name}: ${ST.setup[k] ? SETUP[k][ST.setup[k] === SETUP[k].a[0] ? 'a' : 'b'][1] : '<span class="muted">고르는 중</span>'}`);
+  $('#bf-setup').innerHTML = `<div style="display:grid;gap:14px">${html || '<span class="muted">장비 고르기는 담당 친구가 해요.</span>'}${others.length ? `<div class="muted small">친구들 장비 — ${others.join(' · ')}</div>` : ''}</div>`;
+  document.querySelectorAll('#bf-setup .opt').forEach(b => b.onclick = () => sendc({ c: 'setup', k: b.dataset.k, v: b.dataset.v }));
+  const on = ST.members.filter(m => m.on);
+  $('#bf-ready').innerHTML = on.map(m => `<span class="rd${ST.ready[m.id] ? ' ok' : ''}">${ST.ready[m.id] ? '✓ ' : ''}${esc(m.name)} · ${m.roles.map(r => PLANT[r].name).join('+')}</span>`).join('');
+  const miss = ['stream', 'wave', 'otec'].filter(k => !ST.setup[k]);
+  $('#bf-wait').textContent = miss.length ? '아직 고르지 않은 장비: ' + miss.map(k => PLANT[k].name).join(', ') : '모두 "준비 완료"를 누르면 작전이 시작돼요. 하루 24시간 = 4분이에요.';
+  $('#bf-go').textContent = ST.ready[ME.id] ? '준비 취소' : '준비 완료';
+}
+$('#bf-go').onclick = () => sendc({ c: 'ready' });
+
+/* ---------- 작전 중 ---------- */
+function hNow() { if (!LV) return 0; return Math.min(24, LV.h + (performance.now() - LVat) / 1000 / (RULES ? RULES.secPerH : 10)); }
+function renderRun() {
+  const mine = myRoles();
+  $('#rn-tabs').innerHTML = mine.length > 1 ? mine.map(r => `<button class="ptab c-${r}${r === tab ? ' on' : ''}" data-r="${r}">${PLANT[r].icon} ${PLANT[r].name}</button>`).join('') : '';
+  document.querySelectorAll('#rn-tabs .ptab').forEach(b => b.onclick = () => { tab = b.dataset.r; renderRun(); });
+  $('#rn-says').innerHTML = SAYS.map((s, i) => `<button data-i="${i}">${s}</button>`).join('');
+  document.querySelectorAll('#rn-says button').forEach(b => b.onclick = () => sendc({ c: 'say', i: +b.dataset.i }));
+  $('#rn-legend').innerHTML = legendHtml();
+  if (panelRole !== tab || !$('#r-cv')) buildPanel();
+  drawRunHud();
+}
+function legendHtml() { return ['tidal', 'stream', 'wave', 'otec', 'diesel'].map(k => `<span class="c-${k}"><i></i>${k === 'diesel' ? '디젤' : PLANT[k].name.replace('·전력망', '')}</span>`).join('') + '<span><i style="background:#fff;height:2px;vertical-align:3px"></i>수요</span><span><i style="background:var(--batt);height:2px;vertical-align:3px"></i>배터리</span>'; }
+let panelRole = null;
+function buildPanel() {
+  const r = tab; panelRole = r; const body = $('#rn-body'); $('#rn-plant').className = 'card plant c-' + r;
+  if (!r) { body.innerHTML = '<p class="muted">맡은 발전소가 없어요. 잠깐 기다리면 자동으로 정해져요.</p>'; return; }
+  const P = PLANT[r];
+  let ctl = '', reads = '';
+  if (r === 'tidal') {
+    reads = rd('바다 높이', 'r-sea') + rd('물빛호 높이', 'r-lake') + rd('낙차 (바다−호수)', 'r-head');
+    ctl = `<div class="ctls"><button class="ctl" data-v="turbine">⚡ 터빈 발전<small>바다 → 호수</small></button><button class="ctl" data-v="gate">🚪 수문 열기<small>물 빼기·채우기</small></button><button class="ctl" data-v="close">⛔ 모두 닫기<small>기다리기</small></button></div>`;
+  } else if (r === 'stream') {
+    reads = rd('물살 속도', 'r-v') + rd('물살 방향', 'r-dir') + rd('터빈', 'r-face');
+    ctl = `<div class="ctls"><button class="ctl" data-v="turn">↻ 터빈 돌리기<small>${ST.setup.stream === 'bi' ? '양방향이라 필요 없음' : '물살 방향에 맞추기'}</small></button><button class="ctl" data-v="brake">🛑 브레이크<small>너무 빠를 때</small></button><button class="ctl" data-v="release">▶ 브레이크 풀기<small>다시 발전</small></button></div>`;
+  } else if (r === 'wave') {
+    reads = rd('파도 높이', 'r-H') + rd('터빈', 'r-tb') + rd('안전 밸브', 'r-valve');
+    ctl = `<div class="ctls" style="grid-template-columns:1fr 1fr"><button class="ctl" data-v="open">🧯 안전 밸브 열기<small>폭풍 때 터빈 지키기</small></button><button class="ctl" data-v="close">✅ 밸브 닫기<small>다시 발전</small></button></div>`;
+  } else {
+    reads = rd('표층 바닷물', 'r-ts') + rd('만든 전기', 'r-gross') + rd('펌프 전기', 'r-pump');
+    ctl = `<div class="slider"><div class="row" style="justify-content:space-between"><b>찬물 펌프 세기</b><span class="num" id="r-pv">0%</span></div><input type="range" min="0" max="100" step="5" id="r-pumpin"><span class="muted small">펌프를 세게 돌리면 찬물이 많이 올라와 전기를 더 만들지만, 펌프도 전기를 먹어요. <b>남는 전기</b>가 가장 큰 곳을 찾아요!</span></div>
+      <div class="gridpanel"><h4>🔋 섬 전력망</h4><div class="battbar"><i id="g-batt"></i><span id="g-batt-t"></span></div>
+      <div class="ctls" style="grid-template-columns:1fr 1fr"><button class="ctl c-diesel" id="g-don">⛽ 디젤 켜기<small>예열 30분 · 최소 2 MW</small></button><button class="ctl c-diesel" id="g-doff">✋ 디젤 끄기<small>연료 아끼기</small></button></div>
+      <div class="muted small" id="g-note"></div></div>`;
+  }
+  body.innerHTML = `<div class="phead"><h3>${P.icon} ${P.full}</h3><span class="mw"><span id="r-mw">0</span> <small>MW</small></span></div>
+    <canvas class="cv" id="r-cv"></canvas><div class="reads">${reads}</div>${ctl}
+    <div class="tip"><span class="face">${P.mentor}</span><span id="r-tip"></span></div>`;
+  body.querySelectorAll('.ctl[data-v]').forEach(b => b.onclick = () => { sendc({ c: 'ctl', d: r, v: b.dataset.v }); });
+  if (r === 'otec') {
+    const inp = $('#r-pumpin'); inp.value = Math.round((LV ? LV.otec.pump : 0) * 100);
+    let tm = 0; inp.oninput = () => { $('#r-pv').textContent = inp.value + '%'; clearTimeout(tm); tm = setTimeout(() => sendc({ c: 'ctl', d: 'otec', v: inp.value / 100 }), 120); };
+    $('#g-don').onclick = () => sendc({ c: 'ctl', d: 'diesel', v: 'on' }); $('#g-doff').onclick = () => sendc({ c: 'ctl', d: 'diesel', v: 'off' });
+  }
+  drawRunHud();
+}
+function rd(label, id) { return `<div class="read"><span>${label}</span><b id="${id}">-</b></div>`; }
+$('#rn-fix').onclick = () => { if (panelRole) { sendc({ c: 'fix', d: panelRole }); $('#rn-fix').animate([{ transform: 'scale(.94)' }, { transform: 'scale(1)' }], 140); } };
+const f1 = v => (Math.round(v * 10) / 10).toFixed(1), sgn = v => (v > 0 ? '+' : '') + f1(v);
+
+function drawRunHud() {
+  if (!ST || ST.phase !== 'run' || !LV) return;
+  const Rd = R(), o = LV.out, ocean = o.tidal + o.stream + o.wave + Math.max(0, o.otec);
+  $('#rn-op').textContent = `작전 ${ST.round + 1} · ${Rd.title}`; $('#rn-clock').textContent = hhmm(LV.clock);
+  $('#rn-day').textContent = `하루 ${Math.round(LV.h / 24 * 100)}% 지남`; $('#rn-day-bar').style.width = (LV.h / 24 * 100) + '%';
+  $('#rn-dem').textContent = f1(o.demand); $('#rn-sup').textContent = f1(ocean); $('#rn-batt').textContent = Math.round(LV.batt / OR.CAP.battMWh * 100); $('#rn-fuel').textContent = f1(LV.fuel);
+  const full = Math.max(12, o.demand * 1.25, ocean + o.diesel);
+  $('#rn-meter').innerHTML = ['tidal', 'stream', 'wave', 'otec', 'diesel'].map(k => `<i style="width:${Math.max(0, k === 'diesel' ? o.diesel : o[k]) / full * 100}%;background:${COLORS[k]}"></i>`).join('') + (o.batt < 0 ? `<i style="width:${-o.batt / full * 100}%;background:repeating-linear-gradient(45deg,${COLORS.batt} 0 6px,#a8841c 6px 12px)"></i>` : '') + `<span class="dem" style="left:calc(${o.demand / full * 100}% - 1px)"></span>`;
+  const sh = Math.round(LV.share * 100); $('#rn-share').innerHTML = `${sh}<small>%</small>`; $('#rn-share').style.color = LV.share >= Rd.target ? 'var(--ok)' : 'var(--ink)';
+  $('#rn-target').textContent = `목표 ${Math.round(Rd.target * 100)}% · 정전 ${LV.blackMin}분`;
+  $('#rn-black').classList.toggle('on', !!LV.black);
+  // 팀 발전소 카드
+  const warn = { tidal: LV.tidal.lock || LV.fault.tidal != null, stream: LV.stream.alarm || LV.stream.broken || LV.fault.stream != null, wave: LV.wave.alarm || LV.wave.broken || LV.fault.wave != null, otec: LV.fault.otec != null || o.otec < -0.05, diesel: LV.fuel < Rd.fuel * 0.2 };
+  $('#rn-plants').innerHTML = ['tidal', 'stream', 'wave', 'otec', 'diesel'].map(k => `<div class="pc c-${k}${warn[k] ? ' warn' : ''}"><span>${k === 'diesel' ? '디젤' : PLANT[k].name.replace('·전력망', '')}</span><b>${f1(k === 'diesel' ? o.diesel : o[k])}</b><em>${k === 'diesel' ? (LV.diesel.on ? (LV.diesel.warm ? '예열 중' : '켜짐') : '꺼짐') : esc(holderNames(k).join(', '))}</em></div>`).join('');
+  $('#rn-mates').textContent = ST.members.filter(m => m.on).map(m => m.name).join(' · ');
+  drawStack($('#rn-mini'), HIST, Rd, true);
+  updatePanelText();
+}
+function updatePanelText() {
+  const r = panelRole; if (!r || !LV || !$('#r-mw')) return;
+  const Rd = R(), o = LV.out, h = hNow();
+  $('#r-mw').textContent = f1(r === 'otec' ? o.otec : o[r]);
+  let tip = '', alarm = '';
+  const fault = LV.fault[r];
+  $('#rn-fault').classList.toggle('on', fault != null || (r === 'stream' && LV.stream.broken > 0) || (r === 'wave' && LV.wave.broken > 0));
+  if (fault != null) { $('#rn-fault-t').textContent = '🔧 ' + RULES.fault[r]; $('#rn-fix').textContent = `🔧 고치기 (${fault}/${RULES.fixTaps})`; }
+  else if (r === 'stream' && LV.stream.broken) { $('#rn-fault-t').textContent = '💥 날개가 상했어요! 수리 중'; $('#rn-fix').textContent = `🔧 수리하기 (${Math.round((1 - LV.stream.broken) * 100)}%)`; }
+  else if (r === 'wave' && LV.wave.broken) { $('#rn-fault-t').textContent = '💥 터빈이 상했어요! 수리 중'; $('#rn-fix').textContent = `🔧 수리하기 (${Math.round((1 - LV.wave.broken) * 100)}%)`; }
+  const mark = (v) => document.querySelectorAll('#rn-body .ctl[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (r === 'tidal') {
+    const sea = OR.seaAt(Rd, h), head = sea - LV.lake, rising = OR.seaAt(Rd, h + 0.1) > sea, m = LV.tidal.mode;
+    $('#r-sea').textContent = sgn(sea) + ' m'; $('#r-lake').textContent = sgn(LV.lake) + ' m'; $('#r-head').textContent = sgn(head) + ' m';
+    $('#r-lake').style.color = LV.lake > 0.75 ? 'var(--bad)' : '';
+    mark(m);
+    if (LV.tidal.lock) tip = '물빛호가 넘칠 뻔해서 1시간 동안 수문을 잠갔어요. 다음엔 +1 m가 되기 전에 닫아요!';
+    else if (m === 'turbine' && LV.lake > 0.7) tip = '물빛호가 거의 찼어요! 넘치기 전에 닫아요.';
+    else if (m === 'turbine' && head <= 0.2) tip = '바다가 호수보다 낮아서 터빈으로 물이 안 들어와요. 썰물이면 수문을 열어 물을 빼요.';
+    else if (m === 'turbine') tip = `낙차 ${f1(head)} m로 발전 중! 낙차가 클수록 전기가 많이 나와요.`;
+    else if (m === 'gate' && sea > LV.lake + 0.05) tip = '바닷물이 수문으로 그냥 들어오고 있어요(발전 안 됨). 닫거나 터빈으로 바꿔요!';
+    else if (m === 'gate') tip = rising ? '바다가 다시 차오르기 시작했어요. 수문을 닫아요!' : '물빛호 물을 바다로 빼는 중. 호수가 낮을수록 다음 밀물 때 낙차가 커져요.';
+    else if (LV.lake > 0.7) tip = rising ? '물빛호가 거의 가득 찼어요. 썰물이 시작되면 수문을 열어 물을 빼요.' : (sea < LV.lake - 0.3 ? '썰물이에요! 수문을 열어 가득 찬 물빛호 물을 빼요.' : '물빛호가 가득 찼어요. 바다가 호수보다 낮아지면 수문을 열어 물을 빼요.');
+    else if (head > 1.2) tip = `바다가 호수보다 ${f1(head)} m 높아요. 지금 터빈을 켜면 발전!`;
+    else if (!rising && sea < LV.lake - 0.3) tip = '썰물이에요. 수문을 열어 물빛호 물을 빼 두면 다음 밀물에 낙차가 커져요.';
+    else tip = rising ? '밀물이 들어오는 중. 낙차가 1 m를 넘으면 터빈을 켜 봐요.' : '아래 그래프로 다음 밀물·썰물 시각을 보며 기다려요.';
+  } else if (r === 'stream') {
+    const v = OR.currentAt(Rd, h), sp = Math.abs(v), bi = ST.setup.stream === 'bi';
+    $('#r-v').textContent = f1(sp) + ' m/s'; $('#r-v').style.color = sp > RULES.streamLimit ? 'var(--bad)' : '';
+    $('#r-dir').textContent = sp < 0.15 ? '정조' : v > 0 ? '밀물 →' : '← 썰물'; $('#r-face').textContent = bi ? '양방향' : LV.stream.turning ? '도는 중' : LV.stream.facing > 0 ? '→ 밀물 쪽' : '← 썰물 쪽';
+    document.querySelectorAll('#rn-body .ctl').forEach(b => { b.classList.remove('on'); if (b.dataset.v === 'brake' && LV.stream.brake) b.classList.add('on'); if (b.dataset.v === 'turn') { b.disabled = bi; b.classList.toggle('warn', !bi && Math.sign(v) !== LV.stream.facing && sp > 0.6 && !LV.stream.turning); } });
+    if (LV.stream.alarm) alarm = `⚠ 물살 ${f1(sp)} m/s! 너무 빨라요 — 브레이크!`;
+    if (LV.stream.brake && sp <= RULES.streamLimit) tip = '물살이 느려졌어요. 브레이크를 풀고 다시 발전해요.';
+    else if (LV.stream.brake) tip = '브레이크 중. 물살이 3.1 m/s 아래로 내려가면 풀어요.';
+    else if (!bi && Math.sign(v) !== LV.stream.facing && sp > 0.6) tip = '물살 방향이 바뀌었어요! 터빈을 돌려 물살 쪽으로 맞춰요.';
+    else if (sp < 0.6) tip = '정조(밀물↔썰물이 바뀌는 때)라 물살이 거의 없어요. 하루에 네 번쯤 이렇게 쉬어요.';
+    else tip = `물살 ${f1(sp)} m/s → 출력은 속도의 세제곱! ${sp >= 2.5 ? '최대 출력이에요.' : '조금만 빨라져도 출력이 확 늘어요.'}`;
+  } else if (r === 'wave') {
+    const H = OR.waveAt(Rd, h); let soon = -1; for (let x = h; x < Math.min(24, h + 3); x += 0.1) if (OR.waveAt(Rd, x) > RULES.waveAlarm) { soon = x - h; break; }
+    $('#r-H').textContent = f1(H) + ' m'; $('#r-H').style.color = H > RULES.waveAlarm ? 'var(--bad)' : '';
+    $('#r-tb').textContent = ST.setup.wave === 'wells' ? '웰스' : '일반'; $('#r-valve').textContent = LV.wave.valve ? '열림' : '닫힘';
+    mark(LV.wave.valve ? 'open' : '');
+    if (LV.wave.alarm) alarm = `⚠ 파도 ${f1(H)} m! 안전 밸브를 열어요!`;
+    if (LV.wave.valve && H < RULES.waveClear) tip = '파도가 잦아들었어요. 밸브를 닫고 다시 발전해요.';
+    else if (LV.wave.valve) tip = '폭풍이 지나갈 때까지 밸브를 열어 둬요. 터빈을 지키는 중!';
+    else if (soon > 0.2) tip = `예보: 약 ${Math.max(1, Math.round(soon))}시간 뒤 큰 파도(4.2 m 넘음)가 와요. 모둠에 알려 줘요!`;
+    else if (ST.setup.wave !== 'wells') tip = '일반 터빈은 공기가 한쪽으로 지날 때만 돌아서 출력이 절반이에요.';
+    else tip = `파도 ${f1(H)} m. 파도가 높을수록 출력이 커져요(높이의 제곱). 겨울 파도가 세요!`;
+  } else {
+    const ts = OR.surfaceTemp(Rd, h), dT = ts - 5, p = LV.otec.pump, fct = Math.min(1.2, Math.max(0, (dT - 12) / 10));
+    const gross = ST.setup.otec === 'nh3' ? OR.CAP.otecGross * fct * (1 - Math.exp(-3 * p)) : 0, pumpE = OR.CAP.otecPump * p * p;
+    $('#r-ts').textContent = f1(ts) + ' ℃'; $('#r-gross').textContent = f1(gross) + ' MW'; $('#r-pump').textContent = '−' + f1(pumpE) + ' MW';
+    const inp = $('#r-pumpin'); if (inp && document.activeElement !== inp) { inp.value = Math.round(p * 100); $('#r-pv').textContent = Math.round(p * 100) + '%'; }
+    const bp = Math.round(LV.batt / OR.CAP.battMWh * 100);
+    $('#g-batt').style.width = bp + '%'; $('#g-batt-t').textContent = `배터리 ${bp}% (${f1(LV.batt)} / ${OR.CAP.battMWh} MWh)`;
+    $('#g-don').classList.toggle('on', !!LV.diesel.on); $('#g-don').querySelector('small').textContent = LV.diesel.on ? (LV.diesel.warm ? '예열 중…' : `켜짐 · ${f1(o.diesel)} MW`) : '예열 30분 · 최소 2 MW';
+    const ocean = o.tidal + o.stream + o.wave + o.otec, gap = o.demand - ocean;
+    $('#g-note').innerHTML = `연료 <b class="num">${f1(LV.fuel)}</b> MWh 남음 · 지금 ${gap > 0 ? `바다 전기가 <b>${f1(gap)} MW 모자라요</b> (배터리${LV.diesel.on ? '·디젤' : ''}가 채움)` : `<b>${f1(-gap)} MW 남아요</b> (배터리 충전)`}`;
+    if (LV.black) alarm = '⚠ 정전! 디젤을 켜요!';
+    if (ST.setup.otec === 'water') tip = '물은 이 온도에서 끓지 않아서 터빈이 못 돌아요. 다음 작전엔 암모니아!';
+    else if (dT < 15 && p > 0) tip = `표층 바닷물이 ${f1(ts)} ℃라 온도 차가 작아요. 펌프 전기만 들어요 — 펌프를 꺼요!`;
+    else if (o.otec < 0 && p > 0) tip = '펌프 전기가 만든 전기보다 많아요! 펌프를 줄여요.';
+    else if (bp < 30 && !LV.diesel.on && gap > 0) tip = `배터리 ${bp}%! 디젤은 켜고 30분 뒤에 전기가 나와요. 미리 켜요.`;
+    else if (LV.diesel.on && bp > 60 && gap < 0) tip = '바다 전기가 넉넉해요. 디젤을 꺼서 연료를 아껴요.';
+    else if (dT < 15) tip = `겨울 바다라 온도 차가 ${f1(dT)} ℃뿐이에요. 온도차 발전은 쉬고, 배터리·디젤을 잘 지켜요.`;
+    else tip = '펌프 세기를 바꿔 보며 "만든 전기 − 펌프 전기"가 가장 큰 곳을 찾아요. 배터리도 같이 봐요!';
+  }
+  $('#r-tip').textContent = tip;
+  $('#rn-alarm').textContent = alarm; $('#rn-alarm').classList.toggle('on', !!alarm);
+  // 내 다른 발전소에 경보가 있으면 탭 깜빡이기
+  document.querySelectorAll('#rn-tabs .ptab').forEach(b => { const k = b.dataset.r; b.classList.toggle('alert', k !== r && ((k === 'stream' && LV.stream.alarm) || (k === 'wave' && LV.wave.alarm) || LV.fault[k] != null || (k === 'otec' && LV.black))); });
+}
+
+/* ---------- 그림 (캔버스) ---------- */
+function fit(cv) { const d = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== Math.round(w * d) || cv.height !== Math.round(h * d)) { cv.width = Math.round(w * d); cv.height = Math.round(h * d); } const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); return { g, w, h }; }
+function skyCol(clock) { const n = Math.cos((clock - 13) / 24 * 2 * Math.PI); const t = (n + 1) / 2; const a = [10, 22, 44], b = [70, 140, 200]; return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`; }
+let animT = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (ts - animT) / 1000 || 0); animT = ts;
+  if (!ST || ST.phase !== 'run' || !LV || !panelRole) return;
+  const cv = $('#r-cv'); if (!cv) return;
+  const Rd = R(), h = hNow(), clock = (Rd.hour0 + h) % 24, { g, w, h: H } = fit(cv);
+  g.clearRect(0, 0, w, H);
+  if (panelRole === 'tidal') drawTidal(g, w, H, Rd, h, clock, ts);
+  else if (panelRole === 'stream') drawStream(g, w, H, Rd, h, clock, ts, dt);
+  else if (panelRole === 'wave') drawWave(g, w, H, Rd, h, clock, ts);
+  else drawOtec(g, w, H, Rd, h, clock, ts);
+  if (Math.floor(ts / 250) !== Math.floor((ts - 16) / 250)) updatePanelText();
+}
+requestAnimationFrame(frame);
+function forecast(g, x, y, w, hh, Rd, h, fn, lo, hi, col, extra) {   // 아래쪽 작은 예보 그래프: 지난 3시간 ~ 앞 9시간
+  g.save(); g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(x, y, w, hh);
+  const t0 = h - 3, t1 = h + 9, X = t => x + (t - t0) / (t1 - t0) * w, Y = v => y + hh - (v - lo) / (hi - lo) * hh;
+  g.textAlign = 'left'; g.font = '11px IBM Plex Sans KR, sans-serif';
+  if (extra) { g.save(); extra(X, Y); g.restore(); }
+  g.textAlign = 'left';
+  g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+  for (let t = t0; t <= t1; t += 0.1) { const v = t < 0 || t > 24 ? null : fn(t); if (v == null) continue; const px = X(t), py = Y(v); if (t === t0 || t - 0.1 < 0) g.moveTo(px, py); else g.lineTo(px, py); }
+  g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,.7)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(h), y); g.lineTo(X(h), y + hh); g.stroke(); g.setLineDash([]);
+  g.fillStyle = 'rgba(234,244,255,.75)'; g.font = '11px IBM Plex Sans KR, sans-serif'; g.textAlign = 'left';
+  for (let t = Math.ceil(t0); t <= t1; t++) if (((Rd.hour0 + t) % 3 + 3) % 3 === 0 && t >= 0 && t <= 24) { g.fillText(hhmm(Rd.hour0 + t).slice(0, 2) + '시', X(t) + 2, y + hh - 3); }
+  g.fillText('지금', X(h) + 3, y + 26);
+  g.restore();
+}
+function drawTidal(g, w, H, Rd, h, clock, ts) {
+  const fh = 62, top = 8, bot = H - fh - 14, lo = -3.2, hi = 3.2, Y = v => top + (hi - v) / (hi - lo) * (bot - top);
+  const sea = OR.seaAt(Rd, h), lake = LV.lake, dx = w * 0.46, dw = 26;
+  // 하늘
+  const sk = g.createLinearGradient(0, top, 0, bot); sk.addColorStop(0, skyCol(clock)); sk.addColorStop(1, '#06121f'); g.fillStyle = sk; g.fillRect(0, top, w, bot - top);
+  // 바다(왼쪽), 호수(오른쪽)
+  const waveY = (x, base) => base + Math.sin(x / 18 + ts / 600) * 2.5;
+  g.fillStyle = '#1b5f99'; g.beginPath(); g.moveTo(0, bot); for (let x = 0; x <= dx; x += 6) g.lineTo(x, waveY(x, Y(sea))); g.lineTo(dx, bot); g.fill();
+  g.fillStyle = '#2a86b8'; g.beginPath(); g.moveTo(dx + dw, bot); for (let x = dx + dw; x <= w; x += 6) g.lineTo(x, Y(lake) + Math.sin(x / 30 + ts / 900) * 1.2); g.lineTo(w, bot); g.fill();
+  // 방조제
+  g.fillStyle = '#5b6b78'; g.beginPath(); g.moveTo(dx - 14, bot); g.lineTo(dx, Y(3.0)); g.lineTo(dx + dw, Y(3.0)); g.lineTo(dx + dw + 14, bot); g.fill();
+  // 터빈 구멍·수문
+  const m = LV.tidal.mode, head = sea - lake;
+  g.fillStyle = '#0a1520'; g.fillRect(dx - 4, Y(-2.6), dw + 8, 16); g.fillRect(dx - 4, Y(0.4), dw + 8, 12);
+  g.save(); g.translate(dx + dw / 2, Y(-2.6) + 8); g.rotate(m === 'turbine' && head > 0.2 ? ts / 120 : 0); g.strokeStyle = '#ffd166'; g.lineWidth = 2.5; for (let i = 0; i < 3; i++) { g.rotate(Math.PI * 2 / 3); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 7); g.stroke(); } g.restore();
+  g.fillStyle = m === 'gate' ? '#7be08a' : '#8a96a3'; g.fillRect(dx + dw / 2 - 3, Y(0.4) + (m === 'gate' ? -14 : 0), 6, 12);
+  // 흐름 화살표
+  const arrow = (y, dir, col) => { g.save(); g.fillStyle = col; const ph = (ts / 300) % 1; for (let i = 0; i < 3; i++) { const x = dx + dw / 2 + dir * ((i + ph) * 22 - 30); g.beginPath(); g.moveTo(x + dir * 8, y); g.lineTo(x - dir * 4, y - 6); g.lineTo(x - dir * 4, y + 6); g.fill(); } g.restore(); };
+  if (m === 'turbine' && head > 0.2) arrow(Y(-2.6) + 8, 1, '#ffd166');
+  if (m === 'gate' && Math.abs(head) > 0.05) arrow(Y(0.4) + 6, head > 0 ? 1 : -1, '#7be08a');
+  // 위험선
+  g.strokeStyle = '#ff5a5f'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(dx + dw, Y(RULES.lakeMax)); g.lineTo(w, Y(RULES.lakeMax)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#ffb3b5'; g.font = '12px IBM Plex Sans KR, sans-serif'; g.textAlign = 'right'; g.fillText('침수 위험 +1 m', w - 6, Y(RULES.lakeMax) - 4);
+  // 눈금과 이름
+  g.fillStyle = 'rgba(234,244,255,.6)'; g.textAlign = 'left'; for (let v = -3; v <= 3; v++) g.fillText((v > 0 ? '+' : '') + v + ' m', 4, Y(v) + 4);
+  g.font = 'bold 14px IBM Plex Sans KR, sans-serif'; g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText('바다', dx / 2, top + 18); g.fillText('물빛호', dx + dw + (w - dx - dw) / 2, top + 18);
+  // 낙차 표시
+  if (head > 0) { const x = dx - 26; g.strokeStyle = '#ffd166'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, Y(sea)); g.lineTo(x, Y(lake)); g.stroke(); g.fillStyle = '#ffd166'; g.font = '12px IBM Plex Mono, monospace'; g.textAlign = 'right'; g.fillText('낙차 ' + f1(head), x - 4, (Y(sea) + Y(lake)) / 2 + 4); }
+  forecast(g, 0, H - fh, w, fh, Rd, h, t => OR.seaAt(Rd, t), -3, 3, '#4aa8ff', (X, Yf) => { g.strokeStyle = 'rgba(42,134,184,.9)'; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(h - 3), Yf(lake)); g.lineTo(X(h + 9), Yf(lake)); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(234,244,255,.6)'; g.font = '11px IBM Plex Sans KR'; g.fillText('바다 높이 예보 (점선 = 지금 호수)', X(h - 3) + 4, H - fh + 12); });
+}
+const parts = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random() }));
+function drawStream(g, w, H, Rd, h, clock, ts, dt) {
+  const fh = 62, bot = H - fh - 10, v = OR.currentAt(Rd, h), sp = Math.abs(v);
+  // 위에서 본 좁은 해협
+  g.fillStyle = '#0d3b5e'; g.fillRect(0, 0, w, bot);
+  g.fillStyle = '#3b4a36'; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0); g.lineTo(w, bot * 0.12); g.quadraticCurveTo(w / 2, bot * 0.36, 0, bot * 0.12); g.fill();
+  g.beginPath(); g.moveTo(0, bot); g.lineTo(w, bot); g.lineTo(w, bot * 0.88); g.quadraticCurveTo(w / 2, bot * 0.64, 0, bot * 0.88); g.fill();
+  g.fillStyle = 'rgba(234,244,255,.7)'; g.font = '12px IBM Plex Sans KR'; g.textAlign = 'left'; g.fillText('← 바깥 바다', 8, bot * 0.5 - 30); g.textAlign = 'right'; g.fillText('섬 안쪽 바다 →', w - 8, bot * 0.5 - 30);
+  // 물살 입자
+  g.strokeStyle = 'rgba(160,230,255,.75)'; g.lineWidth = 1.6;
+  for (const p of parts) {
+    const yy = 0.3 + p.y * 0.4, narrow = 1 + 0.9 * Math.exp(-Math.pow((p.x - 0.5) / 0.2, 2));
+    p.x += v * narrow * dt * 0.09; if (p.x > 1) p.x -= 1; if (p.x < 0) p.x += 1;
+    const x = p.x * w, y = yy * bot, len = Math.min(26, 4 + sp * narrow * 5) * Math.sign(v || 1);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x - len, y); g.stroke();
+  }
+  // 터빈 (물속 풍차)
+  const cx = w / 2, cy = bot / 2, face = ST.setup.stream === 'bi' ? 0 : LV.stream.facing, spin = LV.stream.brake || LV.stream.broken || LV.stream.turning ? 0 : (LV.out.stream > 0 ? ts / (220 - Math.min(150, sp * 50)) : 0);
+  g.save(); g.translate(cx, cy);
+  g.fillStyle = '#c9d3dc'; g.fillRect(-28, -6, 56, 12);
+  if (face) { g.fillStyle = '#ffd166'; g.beginPath(); g.moveTo(face * 40, 0); g.lineTo(face * 28, -8); g.lineTo(face * 28, 8); g.fill(); }
+  g.strokeStyle = LV.stream.broken ? '#ff5a5f' : '#2fd3c0'; g.lineWidth = 6; const ex = Math.cos(spin) * 30;
+  g.beginPath(); g.moveTo(face >= 0 ? -24 : 24, -ex); g.lineTo(face >= 0 ? -24 : 24, ex); g.stroke();
+  if (!face) { g.beginPath(); g.moveTo(24, ex); g.lineTo(24, -ex); g.stroke(); }
+  g.restore();
+  g.fillStyle = '#fff'; g.font = 'bold 15px IBM Plex Sans KR'; g.textAlign = 'center'; g.fillText(sp < 0.15 ? '정조 · 물살 멈춤' : (v > 0 ? '밀물 →  ' : '←  썰물 ') + f1(sp) + ' m/s', cx, cy + 50);
+  if (LV.stream.brake) { g.fillStyle = '#ff5a5f'; g.fillText('브레이크', cx, cy - 40); }
+  forecast(g, 0, H - fh, w, fh, Rd, h, t => OR.currentAt(Rd, t), -3.6, 3.6, '#2fd3c0', (X, Yf) => { g.strokeStyle = 'rgba(255,90,95,.6)'; g.setLineDash([4, 4]); [RULES.streamLimit, -RULES.streamLimit].forEach(L => { g.beginPath(); g.moveTo(X(h - 3), Yf(L)); g.lineTo(X(h + 9), Yf(L)); g.stroke(); }); g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.moveTo(X(h - 3), Yf(0)); g.lineTo(X(h + 9), Yf(0)); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(234,244,255,.6)'; g.font = '11px IBM Plex Sans KR'; g.fillText('물살 예보 (위 = 밀물, 아래 = 썰물, 빨간 점선 = 위험)', X(h - 3) + 4, H - fh + 12); });
+}
+function drawWave(g, w, H, Rd, h, clock, ts) {
+  const fh = 62, bot = H - fh - 10, Hm = OR.waveAt(Rd, h), amp = Math.min(46, 6 + Hm * 8), base = bot * 0.62;
+  const sk = g.createLinearGradient(0, 0, 0, bot); sk.addColorStop(0, skyCol(clock)); sk.addColorStop(1, '#0a1a2a'); g.fillStyle = sk; g.fillRect(0, 0, w, bot);
+  if (Hm > RULES.waveAlarm) { g.fillStyle = 'rgba(40,40,60,.55)'; g.fillRect(0, 0, w, bot); }
+  const ph = ts / 700, ch = w * 0.62, cw = w * 0.3, inner = base - Math.sin(ph) * amp * 0.8, roof = bot * 0.24;
+  // 바깥 파도
+  g.fillStyle = '#1b5f99'; g.beginPath(); g.moveTo(0, bot); for (let x = 0; x <= ch; x += 5) g.lineTo(x, base - Math.sin(ph - x / 60) * amp); g.lineTo(ch, bot); g.fill();
+  // 방(진동수주)
+  g.fillStyle = '#5b6b78'; g.fillRect(ch, roof, cw, 10); g.fillRect(ch + cw, roof, 12, bot - roof); g.fillRect(ch - 10, roof, 12, bot * 0.7 - roof);
+  g.fillStyle = '#2a86b8'; g.fillRect(ch + 2, inner, cw - 2, bot - inner);
+  g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(ch + 2, roof + 10, cw - 2, inner - roof - 10);
+  // 터빈·밸브
+  const tx = ch + cw * 0.55, ty = roof - 26, flow = Math.cos(ph);
+  g.fillStyle = '#c9d3dc'; g.fillRect(tx - 10, ty, 20, 28);
+  g.save(); g.translate(tx, ty + 6); g.rotate(LV.wave.valve || LV.wave.broken ? 0 : (ST.setup.wave === 'wells' ? ts / 90 : ts / 90 * Math.max(0, flow))); g.strokeStyle = LV.wave.broken ? '#ff5a5f' : '#a08bff'; g.lineWidth = 3; for (let i = 0; i < 4; i++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 12); g.stroke(); } g.restore();
+  g.fillStyle = LV.wave.valve ? '#7be08a' : '#8a96a3'; g.fillRect(ch + cw * 0.15, roof - 10 - (LV.wave.valve ? 8 : 0), 16, 8);
+  g.fillStyle = 'rgba(234,244,255,.6)'; g.font = '11px IBM Plex Sans KR'; g.textAlign = 'center'; g.fillText('밸브', ch + cw * 0.15 + 8, roof - 22); g.fillText(ST.setup.wave === 'wells' ? '웰스 터빈' : '일반 터빈', tx, ty - 6);
+  // 공기 화살표
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '13px IBM Plex Sans KR'; g.textAlign = 'center';
+  const up = flow > 0, airTxt = LV.wave.valve ? '공기가 밸브로 빠져요' : up ? '↑ 물기둥이 올라가며 공기를 밀어내요' : '↓ 물기둥이 내려가며 공기를 빨아들여요';
+  g.textAlign = 'left'; g.fillText(airTxt, 10, 44);
+  g.fillStyle = '#fff'; g.font = 'bold 15px IBM Plex Sans KR'; g.fillText('파도 ' + f1(Hm) + ' m', 10, 22);
+  forecast(g, 0, H - fh, w, fh, Rd, h, t => OR.waveAt(Rd, t), 0, 7, '#a08bff', (X, Yf) => { g.strokeStyle = 'rgba(255,90,95,.6)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(X(h - 3), Yf(RULES.waveAlarm)); g.lineTo(X(h + 9), Yf(RULES.waveAlarm)); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(234,244,255,.6)'; g.font = '11px IBM Plex Sans KR'; g.fillText('파도 높이 예보 (빨간 점선 = 폭풍 경보 4.2 m)', X(h - 3) + 4, H - fh + 12); });
+}
+function drawOtec(g, w, H, Rd, h, clock, ts) {
+  const fh = 62, bot = H - fh - 10, tsC = OR.surfaceTemp(Rd, h), p = LV.otec.pump;
+  const sg = g.createLinearGradient(0, 0, 0, bot); sg.addColorStop(0, tsC > 20 ? '#2f86c4' : '#3a6f9a'); sg.addColorStop(0.35, '#16476e'); sg.addColorStop(1, '#030b14'); g.fillStyle = sg; g.fillRect(0, 0, w, bot);
+  g.fillStyle = 'rgba(234,244,255,.75)'; g.font = '12px IBM Plex Sans KR'; g.textAlign = 'left';
+  g.fillText(`표층 ${f1(tsC)} ℃`, 8, 18); g.fillText('수심 600 m · 5 ℃', 8, bot - 8);
+  // 찬물관
+  const px = w * 0.2; g.fillStyle = '#8fb3cc'; g.fillRect(px, 30, 8, bot - 40);
+  g.fillStyle = '#9fe6ff'; const flowY = (ts / 20 * (p + 0.02)) % 30; for (let y = bot - 12 - flowY; y > 34; y -= 30) g.fillRect(px + 2, y, 4, 8);
+  // 순환 고리: 증발기 → 터빈 → 응축기 → 펌프
+  const bx = w * 0.42, by = 26, bw = w * 0.52, bh = bot * 0.58;
+  g.strokeStyle = 'rgba(255,154,85,.9)'; g.lineWidth = 3; g.strokeRect(bx, by, bw, bh);
+  const box = (x, y, t, col) => { g.fillStyle = col; g.fillRect(x - 38, y - 15, 76, 30); g.fillStyle = '#04101b'; g.font = 'bold 12px IBM Plex Sans KR'; g.textAlign = 'center'; g.fillText(t, x, y + 4); };
+  box(bx, by + bh / 2, '증발기', '#ffb27a'); box(bx + bw, by + bh / 2, '응축기', '#9fe6ff');
+  const run = ST.setup.otec === 'nh3' && tsC - 5 > 12 && p > 0;
+  g.save(); g.translate(bx + bw / 2, by); g.rotate(run ? ts / 140 : 0); g.strokeStyle = '#ffd166'; g.lineWidth = 3; for (let i = 0; i < 3; i++) { g.rotate(Math.PI * 2 / 3); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 13); g.stroke(); } g.restore();
+  g.fillStyle = '#fff'; g.font = '12px IBM Plex Sans KR'; g.textAlign = 'center'; g.fillText('터빈', bx + bw / 2, by - 16);
+  g.fillText(ST.setup.otec !== 'nh3' ? '물은 이 온도에서 안 끓어요' : tsC - 5 <= 12 ? '온도 차가 작아 안 끓어요' : p <= 0 ? '찬물 펌프를 켜 봐요' : '암모니아가 끓어 가스로!', bx + bw / 2, by + bh / 2 + 4);
+  if (run) { g.fillStyle = 'rgba(255,209,102,.9)'; const k = (ts / 600) % 1; [[bx + bw * k, by], [bx + bw, by + bh * k], [bx + bw * (1 - k), by + bh], [bx, by + bh * (1 - k)]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); }); }
+  g.fillStyle = 'rgba(234,244,255,.7)'; g.fillText('펌프 ' + Math.round(p * 100) + '%', px + 4, 22);
+  // 펌프-출력 곡선 (어디가 가장 많이 남나)
+  const dT = tsC - 5, fct = Math.min(1.2, Math.max(0, (dT - 12) / 10));
+  forecast(g, 0, H - fh, w, fh, Rd, h, t => OR.demandAt(Rd, t), 0, 14, '#ffffff', (X, Yf) => { g.fillStyle = 'rgba(234,244,255,.6)'; g.font = '11px IBM Plex Sans KR'; g.fillText('섬 전력 수요 예보 (MW) — 수요가 늘기 전에 배터리를 채워 둬요', X(h - 3) + 4, H - fh + 12); });
+  // 오른쪽 작은 곡선: 펌프 세기별 남는 전기
+  const gx = bx, gy = by + bh + 12, gw = bw, gh = bot - gy - 8;
+  if (gh > 30) {
+    g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(gx, gy, gw, gh);
+    const net = q => (ST.setup.otec === 'nh3' ? OR.CAP.otecGross * fct * (1 - Math.exp(-3 * q)) : 0) - OR.CAP.otecPump * q * q;
+    const Yn = v => gy + gh - (v + 1.3) / 3.3 * gh;
+    g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.moveTo(gx, Yn(0)); g.lineTo(gx + gw, Yn(0)); g.stroke();
+    g.strokeStyle = '#ff9a55'; g.lineWidth = 2; g.beginPath(); for (let q = 0; q <= 1.0001; q += 0.05) { const x = gx + q * gw, y = Yn(net(q)); q ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+    g.fillStyle = '#ffd166'; g.beginPath(); g.arc(gx + p * gw, Yn(net(p)), 5, 0, 7); g.fill();
+    g.fillStyle = 'rgba(234,244,255,.65)'; g.font = '11px IBM Plex Sans KR'; g.textAlign = 'left'; g.fillText('펌프 세기 → 남는 전기', gx + 4, gy + 12);
+  }
+}
+/* 쌓은 그래프: 발전소별 전기 + 수요 선 + 배터리 */
+function drawStack(cv, hist, Rd, mini) {
+  if (!cv) return; const { g, w, h } = fit(cv); g.clearRect(0, 0, w, h);
+  const padL = mini ? 14 : 48, padR = mini ? 14 : 40, padT = 8, padB = mini ? 16 : 24, W = w - padL - padR, Hh = h - padT - padB, top = 14;
+  const X = t => padL + t / 24 * W, Y = v => padT + Hh - v / top * Hh;
+  g.fillStyle = 'rgba(255,255,255,.03)'; g.fillRect(padL, padT, W, Hh);
+  g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1; for (let v = 0; v <= top; v += mini ? 7 : 2) { g.beginPath(); g.moveTo(padL, Y(v)); g.lineTo(padL + W, Y(v)); g.stroke(); }
+  g.fillStyle = 'rgba(234,244,255,.55)'; g.font = '11px IBM Plex Sans KR, sans-serif'; g.textAlign = 'center';
+  for (let t = 0; t <= 24; t += mini ? 6 : 3) g.fillText(hhmm(Rd.hour0 + t).slice(0, 2) + '시', X(t), h - 4);
+  if (!mini) { g.textAlign = 'right'; for (let v = 0; v <= top; v += 2) g.fillText(v + ' MW', padL - 4, Y(v) + 4); g.textAlign = 'left'; for (let v = 0; v <= 100; v += 50) g.fillText(v + '%', padL + W + 4, padT + Hh - v / 100 * Hh + 4); }
+  if (!hist || hist.length < 2) return;
+  const keys = [2, 3, 4, 5, 6], cols = [COLORS.tidal, COLORS.stream, COLORS.wave, COLORS.otec, COLORS.diesel];
+  let lower = hist.map(() => 0);
+  keys.forEach((k, ki) => {
+    const upper = hist.map((r, i) => lower[i] + Math.max(0, r[k]));
+    g.fillStyle = cols[ki]; g.globalAlpha = ki === 4 ? 0.75 : 0.85; g.beginPath();
+    hist.forEach((r, i) => { const x = X(r[0]), y = Y(upper[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    for (let i = hist.length - 1; i >= 0; i--) g.lineTo(X(hist[i][0]), Y(lower[i]));
+    g.closePath(); g.fill(); lower = upper;
+  });
+  g.globalAlpha = 1;
+  // 정전 표시
+  g.fillStyle = COLORS.bad; hist.forEach((r, i) => { if (r[8] > 0.05 && hist[i + 1]) g.fillRect(X(r[0]), padT + Hh - 5, X(hist[i + 1][0]) - X(r[0]), 5); });
+  // 수요 선
+  g.strokeStyle = '#fff'; g.lineWidth = mini ? 1.6 : 2.4; g.beginPath(); hist.forEach((r, i) => { const x = X(r[0]), y = Y(r[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  // 배터리 선 (0~100%)
+  g.strokeStyle = COLORS.batt; g.lineWidth = mini ? 1.2 : 2; g.setLineDash([4, 3]); g.beginPath(); hist.forEach((r, i) => { const x = X(r[0]), y = padT + Hh - r[7] / 100 * Hh; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]);
+  if (mini && ST.phase === 'run' && LV) { g.strokeStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.moveTo(X(LV.h), padT); g.lineTo(X(LV.h), padT + Hh); g.stroke(); }
+}
+
+/* ---------- 회의 퀴즈 ---------- */
+function renderQuiz() {
+  const role = ST.quiz && ST.quiz.ask[ME.id];
+  $('#qz-head').textContent = `작전 ${ST.round + 1} 회의`; $('#qz-who').innerHTML = whoLine();
+  const mates = Object.keys(ST.quiz ? ST.quiz.ask : {}).map(Number);
+  $('#qz-mates').innerHTML = mates.map(id => { const m = ST.members.find(x => x.id === id), a = ST.quiz.ans[id]; return `<span class="rd${a && a.ok ? ' ok' : ''}">${a && a.ok ? '✓ ' : a ? '다시 생각 중 · ' : '생각 중 · '}${esc(m ? m.name : '?')} (${PLANT[ST.quiz.ask[id]].name})</span>`; }).join('');
+  if (!role) { $('#qz-role').textContent = '구경 중'; $('#qz-q').textContent = '이번 회의 문제는 친구들이 풀어요. 옆에서 같이 생각해 줘요!'; $('#qz-opts').innerHTML = ''; $('#qz-why').hidden = true; return; }
+  const Q = RULES.quiz[role][ST.round], my = ST.quiz.ans[ME.id];
+  $('#qz-role').className = 'chip c-' + role; $('#qz-role').innerHTML = `${PLANT[role].icon} ${PLANT[role].name} 담당 질문`;
+  $('#qz-q').textContent = Q.q;
+  $('#qz-opts').innerHTML = Q.o.map((o, i) => `<button data-a="${i}" class="${my && my.ok && i === Q.a ? 'right' : my && !my.ok && my.a === i ? 'wrong' : ''}" ${my && my.ok ? 'disabled' : ''}>${'①②③④'[i]} ${esc(o)}</button>`).join('');
+  document.querySelectorAll('#qz-opts button').forEach(b => b.onclick = () => sendc({ c: 'qa', a: +b.dataset.a }));
+  $('#qz-why').hidden = !(my && my.ok); $('#qz-why').textContent = '✓ ' + Q.why;
+}
+
+/* ---------- 결과 ---------- */
+function renderResult() {
+  const r = ST.results[ST.round], Rd = R(); if (!r) return;
+  $('#rs-head').textContent = `작전 ${ST.round + 1} 결과 · ${Rd.title}`; $('#rs-who').innerHTML = whoLine();
+  const st = [[`정전 ${r.blackMin}분`, r.blackMin < 1 ? '섬의 불을 끝까지 지켰어요!' : '전기가 모자란 때가 있었어요. 배터리와 디젤을 미리 준비해요.'],
+    [`바다 에너지 ${Math.round(r.share * 100)}%`, `목표 ${Math.round(r.target * 100)}% · 디젤 ${r.diesel} MWh 사용 · 연료 ${r.fuelLeft} MWh 남음`],
+    ['회의 퀴즈', r.star[2] ? '모두 처음에 맞혔어요!' : '다음엔 모두 처음에 맞혀 봐요.']];
+  $('#rs-stars').innerHTML = st.map((s, i) => `<div class="star${r.star[i] ? ' got' : ''}"><span class="s">★</span><b>${s[0]}</b><span class="muted small">${s[1]}</span></div>`).join('');
+  $('#rs-legend').innerHTML = legendHtml() + '<span><i style="background:var(--bad)"></i>정전</span>';
+  requestAnimationFrame(() => drawStack($('#rs-chart'), RES_HIST[ST.round] || [], Rd, false));
+  const mx = Math.max(1, ...ROLES.map(k => Math.abs(r.gen[k])), r.diesel);
+  $('#rs-gen').innerHTML = ROLES.map(k => `<div class="gbar c-${k}"><span>${PLANT[k].icon} ${PLANT[k].name.replace('·전력망', '')}</span><span class="b"><i style="width:${Math.max(0, r.gen[k]) / mx * 100}%"></i></span><span class="n">${r.gen[k]} MWh</span></div>`).join('') + `<div class="gbar c-diesel"><span>⛽ 디젤</span><span class="b"><i style="width:${r.diesel / mx * 100}%"></i></span><span class="n">${r.diesel} MWh</span></div>`;
+  $('#rs-more').textContent = `섬이 하루 쓴 전기 ${r.demand} MWh · 배터리가 가득 차서 버린 바다 전기 ${r.curtail} MWh · 고친 고장 ${r.faultsDone}번`;
+  $('#rs-acc').innerHTML = r.accidents.map(a => `<li>${esc(a)}</li>`).join('');
+  $('#rs-quiz').innerHTML = '<b>회의 퀴즈 정리</b>' + (r.quiz || []).map(q => { const Q = RULES.quiz[q.role][ST.round], m = ST.members.find(x => x.id === q.id); return `<div style="margin-top:10px;line-height:1.5"><span class="chip c-${q.role}">${PLANT[q.role].name} · ${esc(m ? m.name : '')} ${q.first ? '✓ 한 번에!' : '다시 풀어 맞힘'}</span><br><b>${esc(Q.q)}</b><br>→ ${esc(Q.o[Q.a])}<br><span class="muted small">${esc(Q.why)}</span></div>`; }).join('');
+  $('#rs-next').textContent = ST.round < OR.ROUNDS.length - 1 ? `다음 작전: ${OR.ROUNDS[ST.round + 1].title} →` : '모든 작전 끝! 최종 결과 보기 →';
+}
+$('#rs-next').onclick = () => sendc({ c: 'next' });
+
+/* ---------- 모두 끝 ---------- */
+let clockTimer = 0;
+function renderClear() {
+  $('#cl-title').textContent = ST.name + ' · 물빛섬 전력 관제 성공'; $('#cl-stars').textContent = '★'.repeat(ST.stars) + '☆'.repeat(OR.STAR_MAX - ST.stars);
+  $('#cl-time').textContent = `별 ${ST.stars} / ${OR.STAR_MAX} · 걸린 시간 ${tfmt(ST.tEnd - ST.t0)}`;
+  $('#cl-tbl').innerHTML = '<tr><th>작전</th><th>바다 에너지</th><th>정전</th><th>디젤</th><th>별</th></tr>' + ST.results.map((r, i) => r ? `<tr><td>${i + 1}. ${esc(OR.ROUNDS[i].title)}</td><td class="num">${Math.round(r.share * 100)}%</td><td class="num">${r.blackMin}분</td><td class="num">${r.diesel} MWh</td><td style="color:var(--hi)">${'★'.repeat(r.star.filter(Boolean).length)}</td></tr>` : '').join('');
+  $('#cl-mates').innerHTML = '<b>함께한 관제사</b><div class="mates" style="margin-top:8px">' + ST.members.map(m => `<span class="mate">${esc(m.name)} · ${m.roles.map(r => PLANT[r].name).join('+')}</span>`).join('') + '</div>';
+  clearInterval(clockTimer); const tick = () => { const d = new Date(); $('#cl-clock').textContent = '지금 ' + d.toLocaleTimeString('ko-KR', { hour12: false }); }; tick(); clockTimer = setInterval(tick, 1000);
+}
+
+/* ---------- 알림 ---------- */
+const PN = k => PLANT[k] ? PLANT[k].name.replace('·전력망', '') : k;
+function evt(e) {
+  const mine = myRoles();
+  if (e.k === 'alarm') { toast(e.p === 'stream' ? '⚠ <b>조류</b>: 물살이 너무 빨라요! 브레이크!' : '⚠ <b>파력</b>: 폭풍 파도! 안전 밸브를 열어요!', 'bad'); if (mine.includes(e.p)) { beep(2); if (tab !== e.p) { tab = e.p; renderRun(); } } }
+  else if (e.k === 'acc') { toast(`💥 <b>${PN(e.p)}</b> 사고! 결과에 기록돼요.`, 'bad'); beep(1); }
+  else if (e.k === 'fault') { toast(`🔧 <b>${PN(e.p)}</b>: ${esc(RULES.fault[e.p])}`, 'bad'); if (mine.includes(e.p)) beep(1); }
+  else if (e.k === 'fixed') toast(`✅ <b>${PN(e.p)}</b> 고장을 고쳤어요!`, 'good');
+  else if (e.k === 'repaired') toast(`✅ <b>${PN(e.p)}</b> 수리 끝! 다시 발전할 수 있어요.`, 'good');
+  else if (e.k === 'black') { if (e.on) { toast('⚡ 정전! 섬 전기가 모자라요!', 'bad'); beep(2); } else toast('💡 다시 불이 들어왔어요!', 'good'); }
+  else if (e.k === 'diesel') toast(e.on ? '⛽ 디젤 켬 — 30분 예열 뒤 전기가 나와요' : '✋ 디젤을 껐어요');
+  else if (e.k === 'dieselReady') toast('⛽ 디젤 예열 끝! 전기가 나와요');
+  else if (e.k === 'fuelLow') { toast('⛽ 디젤 연료가 20% 아래예요! 아껴 써요', 'bad'); beep(1); }
+  else if (e.k === 'fuelOut') { toast('⛽ 디젤 연료가 다 떨어졌어요!', 'bad'); beep(2); }
+  else if (e.k === 'run') { HIST = (ST.hist || []).slice(); panelRole = null; renderRun(); toast(`🚀 작전 ${e.r + 1} 시작! 하루 24시간 = 4분`, 'good'); }
+  else if (e.k === 'qa' && e.by !== ME.id && e.ok) { const m = ST.members.find(x => x.id === e.by); toast(`✓ ${esc(m ? m.name : '')} 정답!`, 'good'); }
+  else if (e.k === 'roles') toast('친구가 오래 나가 있어서 맡은 발전소를 다시 나눴어요.');
+}
+function toast(html, kind) {
+  const d = document.createElement('div'); d.className = 'toast' + (kind ? ' ' + kind : ''); d.innerHTML = html; const box = $('#toasts'); box.prepend(d);
+  while (box.children.length > 3) box.lastChild.remove();
+  setTimeout(() => { d.style.transition = 'opacity .4s'; d.style.opacity = '0'; setTimeout(() => d.remove(), 400); }, kind === 'bad' ? 4200 : 2800);
+}
+let actx = null;
+function beep(level) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), gn = actx.createGain();
+    o.frequency.value = level >= 2 ? 880 : level === 1 ? 620 : 520; o.type = 'triangle'; gn.gain.value = 0.0001; o.connect(gn); gn.connect(actx.destination);
+    const t = actx.currentTime; gn.gain.exponentialRampToValueAtTime(0.12, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t + (level >= 2 ? 0.35 : 0.18)); o.start(t); o.stop(t + 0.4);
+  } catch (e) { }
+}
+window.addEventListener('resize', () => { if (ST && ST.phase === 'result') drawStack($('#rs-chart'), RES_HIST[ST.round] || [], R(), false); if (ST && ST.phase === 'run') drawRunHud(); });
+document.addEventListener('keydown', e => {
+  if (!ST || e.target.tagName === 'INPUT') return;
+  if (ST.phase === 'quiz' && /^[1-4]$/.test(e.key)) sendc({ c: 'qa', a: +e.key - 1 });
+  if (e.key === 'Enter') { if (ST.phase === 'brief') $('#bf-go').click(); else if (ST.phase === 'result') $('#rs-next').click(); }
+});
+</script>
+</body></html>

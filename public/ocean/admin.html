@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>물빛섬 전력 관제실 TV</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 선생님 TV 화면: 왼쪽 입장 코드·반 전체 기록, 오른쪽 모둠 카드. 교실 TV에서 멀리서도 보이게 크게. */
+:root{--bg:#06121f;--panel:#0f2438;--line:rgba(190,225,255,.14);--ink:#eaf4ff;--ink2:#9fb7cc;--hi:#ffd166;--ok:#7be08a;--bad:#ff5a5f;
+  --tidal:#4aa8ff;--stream:#2fd3c0;--wave:#a08bff;--otec:#ff9a55;--diesel:#c9ccd1;--batt:#f6c445;
+  --f-disp:"Black Han Sans","IBM Plex Sans KR",sans-serif;--f-body:"IBM Plex Sans KR","Malgun Gothic",sans-serif;--f-num:"IBM Plex Mono",monospace;color-scheme:dark}
+*{box-sizing:border-box} [hidden]{display:none!important}
+body{margin:0;background:radial-gradient(120% 80% at 50% -10%,#123150 0%,var(--bg) 55%) fixed,var(--bg);color:var(--ink);font-family:var(--f-body);word-break:keep-all;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+button{font:inherit;color:inherit;cursor:pointer;border:1.5px solid var(--line);background:rgba(255,255,255,.06);border-radius:10px;padding:8px 14px;font-weight:700}
+button.pri{background:var(--hi);color:#1b1400;border-color:var(--hi)} button.danger{border-color:var(--bad);color:var(--bad)}
+input{font:inherit;font-size:18px;background:#000;color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px}
+.wrap{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:16px;align-items:start}
+.side{display:grid;gap:12px;position:sticky;top:16px}
+.card{background:linear-gradient(180deg,#132c44,var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px}
+h1{font-family:var(--f-disp);font-weight:400;font-size:28px;margin:0}
+.code{font-family:var(--f-num);font-size:clamp(56px,7vw,92px);letter-spacing:.08em;color:var(--hi);line-height:1}
+.muted{color:var(--ink2);font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.big{font-family:var(--f-num);font-size:40px;font-weight:600;line-height:1}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.tm h2{margin:0;font-size:22px;display:flex;justify-content:space-between;gap:8px;align-items:baseline} .tm h2 small{font-family:var(--f-num);font-size:14px;color:var(--ink2)}
+.stg{color:var(--hi);font-weight:700;margin:4px 0} .stg.clear{color:var(--ok)}
+.mem{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.mem span{font-size:13px;padding:3px 9px;border-radius:99px;background:rgba(255,255,255,.07)} .mem span.off{opacity:.4}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:0}
+.bar{height:12px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;display:flex;margin:6px 0}
+.bar i{display:block;height:100%}
+.kv{display:flex;justify-content:space-between;font-size:14px;color:var(--ink2)} .kv b{color:var(--ink);font-family:var(--f-num)}
+.black{color:#fff;background:var(--bad);border-radius:8px;padding:4px 8px;font-weight:700;text-align:center;margin:6px 0;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.55}}
+.stars{display:flex;gap:6px;margin-top:6px;font-size:14px}
+.stars span{padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.06)}
+.stars b{color:var(--hi)}
+.tools{margin-top:8px} .tools button{font-size:12px;padding:5px 8px}
+.rank li{font-size:16px;margin:4px 0} .rank b{color:var(--hi)}
+#login{max-width:420px;margin:12vh auto;display:grid;gap:12px}
+.confirm{display:none} .confirm.on{display:flex}
+@media (max-width:760px){.wrap{grid-template-columns:1fr}.side{position:static}}
+</style></head><body>
+<div id="login" class="card"><h1>물빛섬 전력 관제실 · 선생님 화면</h1><p class="muted">Render에 정한 관리자 비밀번호(ADMIN_KEY)를 넣어요.</p><input id="key" type="password" placeholder="관리자 비밀번호"><button class="pri" id="go">들어가기</button><p id="lmsg" class="muted"></p></div>
+<div class="wrap" id="main" hidden>
+  <div class="side">
+    <div class="card"><div class="muted">학생 주소</div><div style="font-size:20px;font-weight:700" id="url"></div><div class="muted" style="margin-top:10px">입장 코드</div><div class="code" id="code">----</div>
+      <div class="row" style="margin-top:8px"><button id="newCode">새 코드</button><button id="lock"></button></div></div>
+    <div class="card"><div class="muted">반 전체가 바다로 만든 전기</div><div class="big" id="total">0</div><div class="muted">MWh (끝난 작전 합계)</div></div>
+    <div class="card"><h1 style="font-size:22px">🏆 ALL CLEAR</h1><ol class="rank" id="rank"></ol><p class="muted">별이 많은 순서, 같으면 걸린 시간이 짧은 순서</p></div>
+    <div class="card"><div class="row"><button id="startAll">▶ 대기 중인 모둠 모두 출발</button></div>
+      <div class="row" style="margin-top:8px"><button class="danger" id="end">🚪 수업 끝 · 모두 내보내기</button></div><div class="row confirm" id="endC" style="margin-top:8px"><span>정말 모두 내보낼까요? 기록도 지워져요.</span><button class="danger" id="endY">예, 내보내기</button><button id="endN">취소</button></div>
+      <p class="muted" id="stat"></p></div>
+  </div>
+  <div class="teams" id="teams"></div>
+</div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const RC = { tidal: 'var(--tidal)', stream: 'var(--stream)', wave: 'var(--wave)', otec: 'var(--otec)' }, RN = { tidal: '조력', stream: '조류', wave: '파력', otec: '온도차' };
+let ws = null, key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('oceanKey') || '';
+const tfmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const hhmm = c => { c = ((c % 24) + 24) % 24; const h = Math.floor(c), m = Math.floor((c - h) * 6) * 10; return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/wsocean');
+  ws.onopen = () => { if (key) op('snap'); };
+  ws.onmessage = e => { const m = JSON.parse(e.data); if (m.t === 'err') { $('#lmsg').textContent = m.s; $('#login').hidden = false; $('#main').hidden = true; return; } if (m.t === 'admin') { sessionStorage.setItem('oceanKey', key); $('#login').hidden = true; $('#main').hidden = false; draw(m); } };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+function op(o, extra) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(Object.assign({ c: 'admin', key, op: o }, extra || {}))); }
+function phaseText(t, m) {
+  const R = m.rounds[t.round] || {};
+  if (t.clear) return '🏆 ALL CLEAR';
+  if (!t.started) return '대기실 · 역할 고르는 중';
+  if (t.phase === 'brief') return `작전 ${t.round + 1} 준비 · ${esc(R.title)}`;
+  if (t.phase === 'run') return `작전 ${t.round + 1} 진행 · ${t.live ? hhmm(t.live.clock) : ''} · ${esc(R.title)}`;
+  if (t.phase === 'quiz') return `작전 ${t.round + 1} 회의 퀴즈`;
+  if (t.phase === 'result') return `작전 ${t.round + 1} 결과 보는 중`;
+  return t.phase;
+}
+function draw(m) {
+  $('#url').textContent = location.host + '/ocean'; $('#code').textContent = m.code; $('#total').textContent = m.oceanMWh.toLocaleString('ko-KR');
+  $('#lock').textContent = m.locked ? '🔒 입장 잠김 (풀기)' : '🔓 입장 열림 (잠그기)'; $('#lock').onclick = () => op('lock', { on: !m.locked });
+  $('#stat').textContent = `서버 켜진 지 ${tfmt(m.up)} · 이 게임이 보낸 데이터 약 ${(m.kb / 1024).toFixed(1)} MB`;
+  const clear = m.teams.filter(t => t.clear).sort((a, b) => b.stars - a.stars || (a.tEnd - a.t0) - (b.tEnd - b.t0));
+  $('#rank').innerHTML = clear.map(t => `<li><b>${esc(t.name)}</b> ★${t.stars} · ${tfmt(t.tEnd - t.t0)}</li>`).join('') || '<li class="muted">아직 없음</li>';
+  $('#teams').innerHTML = m.teams.map(t => {
+    const el = t.started ? (t.clear ? t.tEnd : m.now) - t.t0 : 0, L = t.live, R = m.rounds[t.round] || {};
+    let live = '';
+    if (L) {
+      const o = L.out, full = Math.max(12, o.demand * 1.25);
+      live = `${L.black ? '<div class="black">⚡ 정전 중!</div>' : ''}<div class="bar">${['tidal', 'stream', 'wave', 'otec'].map(k => `<i style="width:${Math.max(0, o[k]) / full * 100}%;background:${RC[k]}"></i>`).join('')}<i style="width:${o.diesel / full * 100}%;background:var(--diesel)"></i></div>
+        <div class="kv"><span>바다 에너지</span><b style="color:${L.share >= R.target ? 'var(--ok)' : 'var(--ink)'}">${Math.round(L.share * 100)}% / ${Math.round(R.target * 100)}%</b></div>
+        <div class="kv"><span>배터리 · 연료</span><b>${Math.round(L.batt / 20 * 100)}% · ${L.fuel} MWh</b></div><div class="kv"><span>정전 · 디젤</span><b>${L.blackMin}분 · ${L.diesel ? '켜짐' : '꺼짐'}</b></div>`;
+    }
+    const stars = m.rounds.map((r, i) => { const x = t.results[i]; return `<span>${i + 1}. ${x ? '<b>' + '★'.repeat(x.star.filter(Boolean).length) + '</b>' + '☆'.repeat(3 - x.star.filter(Boolean).length) + ' ' + Math.round(x.share * 100) + '%' : '-'}</span>`; }).join('');
+    return `<div class="card tm"><h2>${esc(t.name)} <small>${t.started ? tfmt(el) : ''} · ★${t.stars}/${m.starMax}</small></h2>
+      <div class="stg${t.clear ? ' clear' : ''}">${phaseText(t, m)}</div>
+      <div class="mem">${t.members.map(x => `<span class="${x.on ? '' : 'off'}">${x.roles.map(r => `<i class="dot" style="background:${RC[r]}" title="${RN[r]}"></i>`).join('')}${esc(x.name)}</span>`).join('')}</div>
+      ${live}<div class="stars">${stars}</div>
+      <div class="row tools">${!t.started ? `<button data-op="skip" data-t="${t.id}">바로 출발</button>` : !t.clear ? `<button data-op="skip" data-t="${t.id}">이 단계 넘기기</button>` : ''}<button data-op="resetTeam" data-t="${t.id}">처음부터</button></div></div>`;
+  }).join('') || '<div class="card muted">아직 들어온 모둠이 없어요. 학생 화면에서 이름·모둠 번호·입장 코드를 넣으면 여기에 나타나요.</div>';
+  document.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { if (b.dataset.op === 'resetTeam' && !confirm('이 모둠을 처음부터 다시 할까요?')) return; op(b.dataset.op, { team: +b.dataset.t }); });
+}
+$('#go').onclick = () => { key = $('#key').value.trim(); op('snap'); };
+$('#key').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#newCode').onclick = () => op('code');
+$('#startAll').onclick = () => op('startAll');
+$('#end').onclick = () => $('#endC').classList.add('on'); $('#endN').onclick = () => $('#endC').classList.remove('on');
+$('#endY').onclick = () => { op('kickall'); $('#endC').classList.remove('on'); };
+connect();
+</script>
+</body></html>
