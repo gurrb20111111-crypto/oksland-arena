@@ -281,8 +281,12 @@ const OBS_ALL = [];
 const OBS_BATTLE = OBS_ALL.filter(o => o[3] !== 'station');
 const GTS = OBS_ALL.filter(o => o[3] === 'turbine').map((o, i) => ({ id: i, x: o[0], z: o[1] }));   // 섬의 풍력발전기 6기 = 돌풍 발전기
 function addresses() {
+  // iSH 등에서는 네트워크 인터페이스 조회가 지원되지 않을 수 있어요.
+  if (require('net').isIP(process.env.ARENA_IP || '') === 4) return [`http://${process.env.ARENA_IP}:${PORT}`];
   const out = [];
-  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
+  try {
+    for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
+  } catch (_) { /* 주소 조회 실패가 서버 시작·관리자 로그인을 막지 않도록 해요. */ }
   return out;
 }
 function kstYmd(offsetDays = 0) { return new Date(Date.now() + 9 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10).replace(/-/g, ''); }
