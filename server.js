@@ -1417,7 +1417,7 @@ function adminCmd(c, msg) {
   else if (msg.c === 'dbg' && process.env.ARENA_TEST) { const p = players.get(+msg.id); if (p) Object.assign(p, msg.set); }
   else if (msg.c === 'code') { c.send({ t: 'code', name: cleanName(msg.name), code: clearCode(cleanName(msg.name), kstYmd(0), SALT) }); }
 }
-return { onConnect, step, conns, MODE, broadcast, count: () => [...players.values()].filter(p => !p.gm && online(p)).length };
+return { onConnect, step, conns, MODE, broadcast, mons: () => mons.size, count: () => [...players.values()].filter(p => !p.gm && online(p)).length };
 }
 const ROOMS = { battle: makeRoom('battle'), coop: makeRoom('coop') };
 
@@ -1463,6 +1463,7 @@ HUB.hooks.load = () => ({ scale: Math.round(LOAD.scale * 100), lag: LOAD.lag, cp
       console.log(`[load] 버거움 — ${LOAD.note} (cpu ${LOAD.cpu}% · 멈칫 ${LOAD.lag}ms · 아레나 ${n}명)`);
       adminSay(loadMsg());
     } else if (LOAD.heavy && LOAD.heavySec === 0) { LOAD.heavy = false; LOAD.note = ''; console.log('[load] 다시 괜찮아졌어요'); adminSay(loadMsg()); }
+    if (process.env.BENCH) console.log('[bench] ' + JSON.stringify({ cpu: LOAD.cpu, lag: LOAD.lag, scale: Math.round(LOAD.scale * 100), n: arenaCount(), mons: Object.values(ROOMS).reduce((a, r) => a + r.mons(), 0) }));
     if (Math.abs(LOAD.scale - lastScale) >= .2 || (LOAD.scale === 1 && lastScale !== 1)) { lastScale = LOAD.scale; adminSay(loadMsg()); if (isLocal) console.log(`[load] 몬스터 ${Math.round(LOAD.scale * 100)}%`); }
   }, 2000).unref();
   // 교실 서버 상태 한 줄 (1분마다)

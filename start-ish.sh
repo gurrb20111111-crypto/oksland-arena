@@ -1,10 +1,11 @@
 #!/bin/sh
 # 아이폰 iSH(Alpine)에서 아레나 서버 켜기:  sh start-ish.sh
+# 이 아이폰이 몇 명까지 버티는지 재기:      sh start-ish.sh bench   (수업용 서버는 먼저 끄기)
 #  1) 처음 한 번: apk add nodejs git  →  git clone https://github.com/gurrb20111111-crypto/oksland-arena
 #  2) ish.env.example 을 ish.env 로 복사해서 비밀번호·열쇠를 적기 (ish.env는 GitHub에 안 올라감)
 cd "$(dirname "$0")" || exit 1
 
-if [ ! -f ish.env ]; then
+if [ "$1" != "bench" ] && [ ! -f ish.env ]; then
   cp ish.env.example ish.env
   echo ""
   echo "  ish.env 를 새로 만들었어요. 비밀번호와 열쇠를 적은 뒤 다시 실행해 주세요:"
@@ -12,7 +13,7 @@ if [ ! -f ish.env ]; then
   echo ""
   exit 1
 fi
-. ./ish.env
+[ -f ish.env ] && . ./ish.env
 
 # 앱을 내려도 iOS가 iSH를 멈추지 않게 (iSH 위치 권한을 '항상'으로)
 if [ -e /dev/location ] && ! pgrep -f "cat /dev/location" >/dev/null 2>&1; then
@@ -26,4 +27,5 @@ if command -v git >/dev/null 2>&1 && [ -d .git ]; then
   else echo "  업데이트를 못 받았어요 (인터넷 또는 이 기기에서 고친 파일 때문) → 지금 버전으로 켜요"; fi
 fi
 
+if [ "$1" = "bench" ]; then exec node bench.js; fi
 exec node server.js
