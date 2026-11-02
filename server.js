@@ -98,6 +98,8 @@ setInterval(() => { for (const r of Object.values(ROOMS)) for (const c of r.conn
 
 /* ======================= game constants ======================= */
 const R = 62;
+// 서버 부하 (2026-11-02): 버거우면 몬스터를 자동으로 줄임. 교실 서버(아이폰)에서 오래 버거우면 Render로 넘기기 판단
+const LOAD = { scale: 1, lag: 0, cpu: 0, heavySec: 0, heavy: false, note: '' };
 const MON_CAP = +process.env.MON_CAP || 55, MON_PER = +process.env.MON_PER || 2.8;   // 몬스터 최대 수 · 학생 1명당 몬스터 (2026-10-15 렉 때문에 다시 절반으로)
 const VIEW_R = 40;   // 학생 화면에는 40m 안 몬스터만 자세히 보냄(통신량·태블릿 부담 줄이기), 먼 몬스터는 미니맵 점만                          // island radius
 const TICK = 1 / 20;
@@ -1194,7 +1196,12 @@ function step(dt) {
   monT -= dt;
   const alive = [...players.values()].filter(p => p.alive && online(p));
   { const lp = live(); lvAvg = lp.length ? lp.reduce((a, q) => a + q.lv, 0) / lp.length : 1; }
-  const cap = Math.min(MON_CAP, 8 + Math.ceil(alive.length * MON_PER));   // 접속 인원에 따라 늘어남
+  const cap = Math.max(4, Math.round(Math.min(MON_CAP, 8 + Math.ceil(alive.length * MON_PER)) * LOAD.scale));   // 접속 인원에 따라 늘어남 · 서버가 버거우면 LOAD.scale로 줄임
+  if (mons.size > cap + 6 && Math.random() < dt * 3) {   // 줄어든 몬스터 수에 맞춰 학생에게서 가장 먼(누구도 노리지 않는) 몬스터를 조용히 정리
+    let far = null, fd = -1;
+    for (const m of mons.values()) { if (m.type === 'boss' || m.tgt || m.boss) continue; let d = 1e9; for (const p of alive) d = Math.min(d, Math.hypot(p.x - m.x, p.z - m.z)); if (d > fd) { fd = d; far = m; } }
+    if (far && fd > 18) { far.dead = true; mons.delete(far.id); }
+  }
   if (monT <= 0 && alive.length && mons.size < cap) {
     monT = .6;
     const studs = alive.filter(p => !p.gm), anchor = studs.length ? studs[Math.floor(Math.random() * studs.length)] : null;   // 한 학생 근처에, 그 학생 레벨에 맞는 몬스터
@@ -1358,7 +1365,7 @@ function onConnect(c) {
     }
     if (msg.t === 'admin') {
       if (msg.key !== ADMIN_KEY) return c.send({ t: 'err', s: '관리자 비밀번호가 틀렸어요.' });
-      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, teams: COOP ? sqDefs() : TEAMS, sqm: COOP ? SQM : null, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); sendBoard(rankList());
+      c.admin = true; c.send({ t: 'adminok', R, obs: OBS, gate, locked, teamsOn, teams: COOP ? sqDefs() : TEAMS, sqm: COOP ? SQM : null, stations: STN, structs: STRUCTS, shops: SHOPS, mode: MODE, ph: round.phase, addr: addresses() }); c.send(loadMsg()); sendBoard(rankList());
       return;
     }
     if (c.admin && msg.t === 'cmd') return adminCmd(c, msg);
@@ -1394,6 +1401,7 @@ function adminCmd(c, msg) {
   else if (msg.c === 'free') { round.phase = 'free'; broadcast({ t: 'msg', s: '자유 대전 모드예요.' }); }
   else if (msg.c === 'reset') { boss = null; bossStrikes.length = 0; if (COOP) sqResetAll(); for (const p of players.values()) resetPlayer(p); for (const t of teamSt) Object.assign(t, { pts: 0, lvups: 0, tasks: 0, kills: 0, buffUntil: 0 }); mons.clear(); picks.clear(); broadcast({ t: 'msg', s: '선생님이 모두의 기록을 초기화했어요.' }); }
   else if (msg.c === 'boss') { bossCd = 0; spawnBoss('teacher'); }
+  else if (msg.c === 'moveAll') { if (isLocal) moveAll(); }
   else if (msg.c === 'bossoff') { if (boss) { mons.delete(boss.id); boss = null; bossStrikes.length = 0; broadcast({ t: 'boss', s: 'gone' }); } bossCd = Date.now() + 365 * 864e5; c.send({ t: 'msg', s: '태풍 마수를 없앴어요. 선생님이 [소환]을 누르기 전에는 자동으로 나오지 않아요.' }); }
   else if (msg.c === 'chest') { if (chest) { broadcast({ t: 'chest', s: 'gone' }); chest = null; } dropChest('teacher'); }
   else if (msg.c === 'qreset') { if (COOP) { sqResetAll(); sendBoard(rankList()); } }
@@ -1409,7 +1417,7 @@ function adminCmd(c, msg) {
   else if (msg.c === 'dbg' && process.env.ARENA_TEST) { const p = players.get(+msg.id); if (p) Object.assign(p, msg.set); }
   else if (msg.c === 'code') { c.send({ t: 'code', name: cleanName(msg.name), code: clearCode(cleanName(msg.name), kstYmd(0), SALT) }); }
 }
-return { onConnect, step, conns, MODE };
+return { onConnect, step, conns, MODE, broadcast, count: () => [...players.values()].filter(p => !p.gm && online(p)).length };
 }
 const ROOMS = { battle: makeRoom('battle'), coop: makeRoom('coop') };
 
@@ -1417,6 +1425,53 @@ const ROOMS = { battle: makeRoom('battle'), coop: makeRoom('coop') };
 let last = Date.now();
 setInterval(() => { const now = Date.now(), dt = Math.min(.1, (now - last) / 1000); last = now; for (const r of Object.values(ROOMS)) { try { r.step(dt); } catch (e) { console.error(r.MODE, e); } } }, TICK * 1000);
 process.on('uncaughtException', e => console.error('uncaught', e));
+/* ======================= 서버 부하 살피기 (2026-11-02) =======================
+ * 2초마다 멈칫(이벤트 루프 지연)·CPU를 재서
+ *  - 버거우면 몬스터 수를 10%씩 줄이고(최저 30%), 여유가 생기면 5%씩 되돌림 (Render·아이폰 모두)
+ *  - 교실 서버(아이폰)에서 몬스터를 최저로 줄여도 40초 넘게 버거우면:
+ *      학생이 5명 이하(수업 전) → 학생 넘기기를 스스로 끔 → 반 전체가 Render에서 진행
+ *      학생이 더 많으면(수업 중) → TV·/hub에 경고 + [모두 Render로 옮기기] 버튼 (반이 갈라지지 않게 선생님이 결정)
+ */
+const isLocal = HUB.MODE !== 'hub';
+function adminSay(obj) { for (const r of Object.values(ROOMS)) for (const c of r.conns) if (c.open && c.admin) c.send(obj); }
+function arenaCount() { return Object.values(ROOMS).reduce((s, r) => s + r.count(), 0); }
+function loadMsg() { return { t: 'load', scale: Math.round(LOAD.scale * 100), heavy: LOAD.heavy, s: LOAD.note, local: isLocal, canMove: isLocal && HUB.announceOn, hub: HUB.HUB_URL }; }
+function moveAll() {
+  HUB.setRoute(false, '선생님이 반 전체를 Render로 옮겼어요');
+  for (const r of Object.values(ROOMS)) r.broadcast({ t: 'move', url: HUB.HUB_URL });
+  LOAD.note = '반 전체를 Render로 옮겼어요. 아이폰 서버는 꺼도 돼요.'; adminSay(loadMsg());
+  console.log('[load] 반 전체를 Render로 옮김');
+}
+HUB.hooks.moveAll = moveAll;
+HUB.hooks.load = () => ({ scale: Math.round(LOAD.scale * 100), lag: LOAD.lag, cpu: LOAD.cpu, heavy: LOAD.heavy, note: LOAD.note, players: arenaCount() });
+{
+  let tick0 = Date.now(), lagWin = 0, cpu0 = process.cpuUsage(), t0 = Date.now(), lastScale = 1;
+  setInterval(() => { const n = Date.now(); lagWin = Math.max(lagWin, n - tick0 - 250); tick0 = n; }, 250).unref();
+  setInterval(() => {
+    const c = process.cpuUsage(cpu0), dt = Date.now() - t0; cpu0 = process.cpuUsage(); t0 = Date.now();
+    LOAD.cpu = Math.round((c.user + c.system) / 1000 / dt * 100); LOAD.lag = lagWin; lagWin = 0;
+    const busy = LOAD.lag > 150 || LOAD.cpu > 85, calm = LOAD.lag < 60 && LOAD.cpu < 60;
+    if (busy) LOAD.scale = Math.max(.3, LOAD.scale - .1); else if (calm) LOAD.scale = Math.min(1, LOAD.scale + .05);
+    const over = LOAD.scale <= .31 && (LOAD.lag > 250 || LOAD.cpu > 95);
+    LOAD.heavySec = over ? LOAD.heavySec + 2 : Math.max(0, LOAD.heavySec - 2);
+    if (!LOAD.heavy && LOAD.heavySec >= 40) {
+      LOAD.heavy = true;
+      const n = arenaCount();
+      if (isLocal && HUB.announceOn && HUB.st.route && n <= 5) { HUB.setRoute(false, '아이폰이 버거워서 스스로 껐어요 (Render에서 진행)'); LOAD.note = '아이폰 서버가 버거워서 학생 넘기기를 껐어요. 학생은 Render에서 진행해요.'; }
+      else if (isLocal && HUB.announceOn && HUB.st.route) LOAD.note = `서버가 버거워요(몬스터 최저로 줄임). 렉이 심하면 [모두 Render로 옮기기] — 레벨은 Render에서 새로 시작해요.`;
+      else LOAD.note = '서버가 버거워요. 몬스터를 최저로 줄였어요.';
+      console.log(`[load] 버거움 — ${LOAD.note} (cpu ${LOAD.cpu}% · 멈칫 ${LOAD.lag}ms · 아레나 ${n}명)`);
+      adminSay(loadMsg());
+    } else if (LOAD.heavy && LOAD.heavySec === 0) { LOAD.heavy = false; LOAD.note = ''; console.log('[load] 다시 괜찮아졌어요'); adminSay(loadMsg()); }
+    if (Math.abs(LOAD.scale - lastScale) >= .2 || (LOAD.scale === 1 && lastScale !== 1)) { lastScale = LOAD.scale; adminSay(loadMsg()); if (isLocal) console.log(`[load] 몬스터 ${Math.round(LOAD.scale * 100)}%`); }
+  }, 2000).unref();
+  // 교실 서버 상태 한 줄 (1분마다)
+  if (isLocal) setInterval(() => {
+    const mem = Math.round(process.memoryUsage().heapUsed / 1048576);   // iSH는 rss를 0으로 줘서 heap 사용량을 씀
+    console.log(`[stat] cpu ${LOAD.cpu}% · 멈칫 ${LOAD.lag}ms · 몬스터 ${Math.round(LOAD.scale * 100)}% · 메모리 ${mem}MB · 아레나 학생 ${arenaCount()}명${lanIp ? ' · ' + lanIp : ''}`);
+  }, 60e3).unref();
+}
+
 server.listen(PORT, () => {
   const onRender = HUB.MODE === 'hub';
   const keyShown = !process.env.ADMIN_KEY || process.env.SHOW_KEY === '1' ? ADMIN_KEY : '•'.repeat(Math.min(8, ADMIN_KEY.length)) + '  (정해 둔 ADMIN_KEY 값)';
@@ -1435,16 +1490,5 @@ server.listen(PORT, () => {
   if (onRender) return show();
   HUB.detectIp(ip => { lanIp = ip; show(); HUB.start(); });
   setInterval(() => HUB.detectIp(ip => { lanIp = ip || lanIp; }), 60e3).unref();
-  // 교실 서버 상태 한 줄 (1분마다): CPU · 멈칫(이벤트 루프 지연) · 메모리 · 접속 인원
-  let cpu0 = process.cpuUsage(), t0 = Date.now(), lagMax = 0, tick0 = Date.now();
-  setInterval(() => { const n = Date.now(); lagMax = Math.max(lagMax, n - tick0 - 500); tick0 = n; }, 500).unref();
-  setInterval(() => {
-    const c = process.cpuUsage(cpu0), dt = Date.now() - t0; cpu0 = process.cpuUsage(); t0 = Date.now();
-    const pct = Math.round((c.user + c.system) / 1000 / dt * 100);
-    const mem = Math.round(process.memoryUsage().heapUsed / 1048576);   // iSH는 rss를 0으로 줘서 heap 사용량을 씀
-    const ppl = Object.values(ROOMS).reduce((s, r) => s + r.conns.size, 0);
-    console.log(`[stat] cpu ${pct}% · 멈칫 최대 ${lagMax}ms · 메모리 ${mem}MB · 아레나 접속 ${ppl}명${lanIp ? ' · ' + lanIp : ''}`);
-    lagMax = 0;
-  }, 60e3).unref();
 });
 module.exports = { clearCode, kstYmd, ROOMS };

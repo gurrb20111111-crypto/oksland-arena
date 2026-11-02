@@ -37,6 +37,7 @@ input{height:50px;border-radius:12px;border:1px solid #2F4C55;background:#0E2128
   <p id="lead"></p>
   <div id="rows"></div>
   <button class="btn" id="toggle" hidden></button>
+  <button class="btn r" id="moveAll" hidden>지금 학생 모두 Render로 옮기기</button>
   <button class="btn g" id="refresh">새로 고침</button>
   <p class="dim" id="foot"></p>
 </div>
@@ -67,12 +68,20 @@ function draw(s) {
       h += row('안내소', esc(s.hub));
       h += row('안내소 연결', s.stopped ? '<span class="no">열쇠가 달라 멈춤</span>' : s.linked ? '<span class="ok">연결됨</span>' : s.linked === false ? `<span class="no">${esc(s.err || '실패')}</span>` : '<span class="dim">확인 중…</span>');
       h += row('학생 넘기기', s.route ? '<span class="ok">켜짐 — Render로 온 학생을 이 서버로</span>' : '<span class="dim">꺼짐 — 학생은 Render에서 진행</span>');
+      if (s.why) h += row('까닭', esc(s.why), 'dim');
       if (s.ago != null) h += row('마지막 알림', s.ago + '초 전', 'dim');
       t.hidden = false; t.className = s.route ? 'btn r' : 'btn'; t.textContent = s.route ? '학생 넘기기 끄기 (Render에서 진행)' : '학생 넘기기 켜기 (이 서버로)';
     } else {
       h += row('안내소 알림', '<span class="dim">꺼짐 (ish.env에 HUB_KEY를 적으면 켜져요)</span>');
       t.hidden = true;
     }
+    const L = s.load;
+    if (L) {
+      h += row('서버 상태', `${L.heavy ? '<span class="no">버거움</span>' : L.scale < 100 ? '<span class="dim">조금 버거움</span>' : '<span class="ok">여유</span>'} · 몬스터 ${L.scale}% · CPU ${L.cpu}% · 멈칫 ${L.lag}ms`);
+      h += row('아레나 학생', L.players + '명', 'dim');
+      if (L.note) h += row('알림', esc(L.note), 'no');
+    }
+    $('#moveAll').hidden = !(L && L.heavy && s.announce && s.route && L.players > 0);
     $('#rows').innerHTML = h;
     $('#foot').textContent = '안내가 안 되는 날에도 학생이 위 교실 주소를 직접 열면 들어올 수 있어요.';
   } else {
@@ -94,6 +103,7 @@ async function load(extra) {
 $('#enter').onclick = () => { key = $('#key').value.trim(); load(); };
 $('#key').addEventListener('keydown', e => { if (e.key === 'Enter') $('#enter').click(); });
 $('#refresh').onclick = () => load();
+$('#moveAll').onclick = () => { if (confirm('지금 이 서버의 학생을 모두 Render 아레나로 옮길까요? 레벨·코인은 Render에서 새로 시작해요.')) load({ moveAll: true }); };
 $('#toggle').onclick = () => { if (!last) return; load(last.mode === 'local' ? { route: !last.route } : last.held ? { resume: true } : { off: true }); };
 if (key) load();
 setInterval(() => { if (!$('#main').hidden) load(); }, 10000);

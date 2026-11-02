@@ -177,14 +177,23 @@ else{try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}location.href=T;
     if (p === '/hub/status' && req.method === 'POST') {
       body(req, m => {
         if (!m || !adminOk(m.key)) return json(res, 403, { ok: false });
-        if (typeof m.route === 'boolean' && m.route !== st.route) { st.route = m.route; console.log(`[hub] 학생 안내 ${st.route ? '켬' : '끔'}`); tick(); }
-        json(res, 200, { ok: true, mode: 'local', announce: announceOn, stopped: !!st.stop, hub: HUB_URL, url: st.url, route: st.route, linked: st.ok, err: st.err, ago: st.at ? Math.round((Date.now() - st.at) / 1000) : null });
+        if (typeof m.route === 'boolean') setRoute(m.route, m.route ? '' : '선생님이 껐어요');
+        if (m.moveAll && hooks.moveAll) hooks.moveAll();
+        const ld = hooks.load ? hooks.load() : null;
+        json(res, 200, { ok: true, mode: 'local', why: st.why, load: ld, announce: announceOn, stopped: !!st.stop, hub: HUB_URL, url: st.url, route: st.route, linked: st.ok, err: st.err, ago: st.at ? Math.round((Date.now() - st.at) / 1000) : null });
       });
       return true;
     }
     return false;
   }
 
+  const hooks = {};   // server.js가 채움: load() → 부하 상태, moveAll() → 학생 모두 Render로
+  function setRoute(v, why) {
+    if (st.route === v) return;
+    st.route = v; st.why = why || '';
+    console.log(`[hub] 학생 넘기기 ${v ? '켬' : '끔'}${why ? ' — ' + why : ''}`);
+    if (announceOn && !st.stop) tick();
+  }
   function start() {
     if (!announceOn) return;
     if (KEY.length < 12) { st.stop = true; st.err = 'HUB_KEY가 너무 짧아요(12자 이상)'; console.log('[hub] HUB_KEY는 12자 이상이어야 해요 → 안내소에 알리지 않아요 (교실 주소로 직접 접속은 돼요)'); return; }
@@ -199,7 +208,7 @@ else{try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}location.href=T;
   }
 
   return {
-    MODE, HUB_URL, announceOn, st,
+    MODE, HUB_URL, announceOn, st, hooks, setRoute,
     http: MODE === 'hub' ? hubHttp : localHttp,
     start,
     detectIp,

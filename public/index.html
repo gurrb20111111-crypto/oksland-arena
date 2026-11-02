@@ -782,6 +782,13 @@ function onMsg(m) {
     try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ }
     location.replace(location.pathname); return;
   }
+  if (m.t === 'move') {   // 교실 서버(아이폰)가 버거워 선생님이 반 전체를 Render로 옮김 → 이름·코드를 채운 채 Render 입장 화면으로
+    const n = $('#jName').value || '', cd = /^\d{4}$/.test($('#jCode').value) ? $('#jCode').value : '';
+    try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ }
+    toast('🚚 <b>서버를 옮겨요!</b> 잠시 뒤 클라우드 아레나로 다시 들어가요. (레벨은 새로 시작)', 4000);
+    setTimeout(() => { location.href = m.url + location.pathname + '?stay=1&name=' + encodeURIComponent(n) + (cd ? '&code=' + cd : ''); }, 2200);
+    return;
+  }
   if (m.t === 'gq') { gqMsg(m); return; }
   if (m.t === 'sq') { sqMsgH(m); return; }
   if (m.t === 'shop') {

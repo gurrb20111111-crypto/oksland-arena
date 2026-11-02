@@ -54,6 +54,10 @@ canvas{width:100%;aspect-ratio:1;border-radius:50%;background:#4FA3D1}
   </div>
 </div>
 <div class="wrap" id="main" hidden>
+  <div class="panel" id="loadBar" hidden style="grid-column:1/-1;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#3A2A12;border:1px solid #8A6420">
+    <div><b id="loadT" style="font-size:20px;color:#FFD45A">⚠ 서버가 버거워요</b><div id="loadS" style="color:#F1DDB0;margin-top:4px"></div></div>
+    <button class="btn r" id="moveAll" hidden>모두 Render로 옮기기</button>
+  </div>
   <div class="panel big">
     <h2><span>실시간 순위</span><span class="phase" id="phase">자유 대전</span></h2>
     <div class="teams" id="teams"></div>
@@ -115,6 +119,8 @@ function go() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'err') { $('#err').textContent = m.s; return; }
+    if (m.t === 'load') { const show = m.heavy || !!m.s || m.scale < 100; $('#loadBar').hidden = !show; $('#loadT').textContent = m.heavy ? '⚠ 서버가 버거워요' : m.scale < 100 ? `몬스터 ${m.scale}%로 줄여서 돌리는 중` : '알림'; $('#loadS').textContent = m.s || (m.scale < 100 ? '서버가 조금 버거워서 몬스터 수를 자동으로 줄였어요. 괜찮아지면 다시 늘어나요.' : ''); $('#moveAll').hidden = !(m.heavy && m.canMove); return; }
+    if (m.t === 'move') { try { ws.onclose = null; ws.close(); } catch (e) {} location.href = m.url + location.pathname; return; }
     if (m.t === 'adminok') { $('#aTitle').textContent = (ROOM2 ? '2부 협동 아레나' : '1부 대결 아레나') + ' · 관리'; if (ROOM2) { $('#bossHelp').textContent = '2부: 미션 중인 팀의 절반 이상이 팀 CLEAR하면 자동으로 나타나요(쓰러뜨린 뒤 4분 쉬어요). 체력 = 5000 + 9000×접속 인원.'; $('#shuffle').textContent = '들어온 순서대로 다시 나누기'; } R = m.R; OBS = m.obs; if (m.teams) TEAMS = m.teams; if (m.stations) STN = m.stations; if (m.structs) STRUCTS = m.structs; teamsOn = m.teamsOn !== false; $('#teamsOn').checked = teamsOn; $('#login').hidden = true; $('#main').hidden = false; $('#gate').checked = m.gate; $('#locked').checked = !!m.locked; if (m.kicked != null) $('#kickMsg').textContent = `${m.kicked}명을 내보내고 입장을 잠갔어요.`; const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); $('#addr').innerHTML = (local && m.addr.length ? m.addr : [location.origin]).map(a => esc(a + (ROOM2 ? '/2' : ''))).join('<br>'); return; }
     if (m.t === 'lb') { lb = m.list; king = m.king; if (m.teams) teams = m.teams; if (m.tdefs) TEAMS = m.tdefs; if (m.teamsOn != null) teamsOn = m.teamsOn; render(); return; }
     if (m.t === 's') { last = m; renderBQ(m); const ph = m.ph === 'play' ? `결승 라운드 · ${Math.floor(m.left / 60)}:${String(m.left % 60).padStart(2, '0')}` : m.ph === 'end' ? '라운드 종료' : '자유 대전'; $('#phase').textContent = ph; draw(); return; }
@@ -133,6 +139,7 @@ function renderBQ(m) {
   $('#bossBox').innerHTML = m.bs ? `<b style="color:#FF8A7A;font-size:22px">🌪 돌개 체력 ${m.bs[1].toLocaleString()} / ${m.bs[2].toLocaleString()}${m.bs[3] ? ' · 분노!' : ''}</b>` : '보스 없음';
   $('#questBox').hidden = !ROOM2; if (ROOM2) { const on = teams.filter(t => t.n), cl = on.filter(t => t.st >= 5).length, wait = on.filter(t => !t.st).length; const rec = teams.map((t, i) => ({ t, i })).filter(x => x.t.clear && TEAMS[x.i]).sort((p, q) => p.t.clear - q.t.clear).map(x => `${x.t.clear}위 ${TEAMS[x.i].n} ${minsec(x.t.tm)}`).join(' · '); $('#qTxt').textContent = `팀 ${on.length}개 · 🏆 CLEAR ${cl} · 미션 중 ${on.length - cl - wait} · ⏳ 모으는 중 ${wait}` + (rec ? `\n🏆 CLEAR 기록(걸린 시간 순): ${rec}` : ''); $('#qTxt').style.whiteSpace = 'pre-line'; }
 }
+$('#moveAll').addEventListener('click', () => { if (confirm('지금 아이폰 서버에 있는 학생을 모두 Render 아레나로 옮길까요?\n학생은 이름·코드를 가지고 자동으로 다시 들어가요. 레벨·코인은 Render에서 새로 시작해요.')) cmd({ c: 'moveAll' }); });
 $('#bossOff').addEventListener('click', () => { if (confirm('태풍 마수를 없앨까요? [소환]을 누르기 전에는 자동으로 다시 나오지 않아요.')) cmd({ c: 'bossoff' }); });
 $('#chestGo').addEventListener('click', () => cmd({ c: 'chest' }));
 $('#bossGo').addEventListener('click', () => { if (confirm('레이드 보스 태풍 마수 돌개를 지금 소환할까요?')) cmd({ c: 'boss' }); });
