@@ -31,6 +31,47 @@ Render(https://render.com) 예시:
 5. 배포가 끝나면 `https://○○○.onrender.com` 이 학생 접속 주소, 뒤에 `/admin` 이 관리 화면입니다.
 - 무료 요금제는 한동안 접속이 없으면 잠들어서, 첫 접속에 1분 정도 걸릴 수 있습니다. 수업 시작 전에 한 번 열어 두세요.
 
+## 2-1. 아이폰(iSH) 교실 서버 + Render 안내소 (2026-11-02)
+
+아이폰 iSH 앱(Alpine Linux)에서 이 서버를 켜고, 학교 와이파이로 학생을 받는 방법입니다.
+학교 와이파이는 DHCP라 아이폰 IP가 날마다 바뀔 수 있어서, **Render를 '안내소'로 씁니다.**
+
+```
+학생 태블릿 ──(늘 쓰던 QR·게임 버튼)──▶ https://oksland-arena.onrender.com/2
+                                        │ 교실 서버가 켜져 있으면
+                                        ▼
+                                   http://192.168.x.x:3000/2  (아이폰, 같은 와이파이)
+아이폰 ──(40초마다 "내 IP는 192.168.x.x", 서명 포함)──▶ Render
+```
+
+- 아이폰 서버가 켜져 있는 동안 40초마다 지금 IP를 Render에 알립니다. IP가 바뀌어도 다음 알림에 따라갑니다.
+- 학생은 **원래 QR·게임 버튼·Render 주소를 그대로** 씁니다. Render가 페이지를 열 때 아이폰 서버로 넘겨 줍니다(주소 뒤의 `?code=…`, `#…`도 그대로). 관리·TV 화면(`/admin` 등)도 같이 넘어갑니다.
+- 아이폰 서버를 끄면(Ctrl + C) 바로 "꺼짐"을 알리고, 아이폰이 갑자기 꺼져도 **2분 뒤에는 저절로 Render에서 진행**됩니다.
+- 넘겨진 태블릿이 아이폰 서버를 못 열면 뒤로 가기 했을 때 [교실 서버로 다시 시도] / [클라우드 서버에서 그대로 하기]가 나옵니다(그 태블릿은 2시간 동안 Render에 머묾).
+- **새 게임을 이 서버에 주소(`/geo`, `/ocean`처럼)로 추가하면 따로 손대지 않아도 똑같이 넘겨집니다.**
+
+### 처음 한 번 (아이폰 iSH)
+```sh
+apk add nodejs git
+git clone https://github.com/gurrb20111111-crypto/oksland-arena
+cd oksland-arena
+sh start-ish.sh          # 처음엔 ish.env를 만들고 멈춤
+vi ish.env               # ADMIN_KEY(아이폰 관리자 비밀번호), HUB_KEY(= Render의 ADMIN_KEY) 적기
+```
+- `HUB_KEY`는 **Render → oksland-arena → Environment의 ADMIN_KEY와 똑같은 값**이어야 합니다. 맞히기 어렵게 **12자 이상**이어야 알림이 켜집니다. Render의 ADMIN_KEY가 12자보다 짧으면 Render Environment에 `HUB_KEY`(12자 이상)를 새로 추가하고 아이폰 `ish.env`에도 같은 값을 적으세요.
+- 열쇠는 그대로 보내지 않고 서명(HMAC)만 보냅니다. Render는 학교 안 주소(10.x, 172.16~31.x, 192.168.x)만 받아서, 열쇠가 새더라도 바깥 사이트로 넘기는 데는 못 씁니다.
+
+### 수업 때
+```sh
+cd oksland-arena && sh start-ish.sh
+```
+- 켤 때마다 GitHub에서 최신 버전을 받고(`git pull`), 위치 신호로 iSH가 백그라운드에서 멈추지 않게 합니다(iSH 위치 권한 '항상'). 화면 자동 잠금은 끄고 충전기를 꽂아 두세요.
+- 시작 화면에 **교실 주소**(예: `http://192.168.0.23:3000`)가 나옵니다. 비밀번호는 `••••`로 가려서 보여 줍니다(보이게 하려면 `SHOW_KEY=1`).
+- 1분마다 `[stat] cpu · 멈칫 최대 · 메모리 · 아레나 접속 인원` 한 줄이 나옵니다.
+- **넘기기 켜기·끄기**: `교실 주소/hub` (아이폰 관리자 비밀번호). Render 쪽에서 급히 멈추려면 `https://oksland-arena.onrender.com/hub` (Render 비밀번호) → [1시간 동안 넘기기 멈추기].
+- IP를 자동으로 못 찾으면: 아이폰 설정 > Wi-Fi > (i)의 IP 주소를 `ish.env`의 `LAN_IP`에 적습니다.
+- Render 코드를 바꾼 뒤에는 Render에서 **Manual Deploy**를 눌러야 안내소 기능이 반영됩니다.
+
 ## 3. 옥정섬 SOS 게임과 연결하기
 
 게임 링크 끝에 아레나 주소를 붙여 학생에게 나눠 주면, 클리어 화면에 **[클리어 아레나 입장]** 버튼이 생깁니다.

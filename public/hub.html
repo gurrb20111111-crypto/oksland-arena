@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>교실 서버 안내</title>
+<style>
+:root{--font:'Pretendard','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',system-ui,sans-serif;--mono:Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:#0B1C22;color:#F4F8F8;font-family:var(--font);min-height:100vh;display:grid;place-items:center;padding:16px}
+[hidden]{display:none!important}
+button,input{font:inherit}
+.c{width:min(460px,100%);background:#142C34;border-radius:22px;padding:24px;display:grid;gap:14px}
+h1{margin:0;font-size:24px}
+p{margin:0;color:#A9C6C4;line-height:1.55}
+input{height:50px;border-radius:12px;border:1px solid #2F4C55;background:#0E2128;color:#fff;padding:0 14px;font-size:18px;width:100%}
+.btn{min-height:48px;border-radius:12px;border:0;background:#FFC21A;color:#2A1E00;font-weight:900;padding:0 18px;cursor:pointer;width:100%}
+.btn.g{background:#21414A;color:#fff}.btn.r{background:#C9473A;color:#fff}
+.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #22424B}
+.row b{color:#8FB3B0;font-weight:600;flex:none}
+.row span{text-align:right;word-break:break-all}
+.mono{font:700 16px var(--mono);color:#7FF0E0}
+.ok{color:#5BE39B}.no{color:#FF8A7A}.dim{color:#8FB3B0}
+.err{color:#FF8A7A;min-height:1em}
+</style>
+</head>
+<body>
+<div class="c" id="login">
+  <h1>교실 서버 안내</h1>
+  <p id="lHelp">관리자 비밀번호를 넣어 주세요.</p>
+  <input id="key" type="password" autocomplete="current-password" placeholder="관리자 비밀번호">
+  <button class="btn" id="enter">들어가기</button>
+  <div class="err" id="lErr"></div>
+</div>
+<div class="c" id="main" hidden>
+  <h1 id="title">교실 서버 안내</h1>
+  <p id="lead"></p>
+  <div id="rows"></div>
+  <button class="btn" id="toggle" hidden></button>
+  <button class="btn g" id="refresh">새로 고침</button>
+  <p class="dim" id="foot"></p>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+let key = '', last = null;
+try { key = sessionStorage.getItem('hubKey') || ''; } catch (e) {}
+const qk = new URLSearchParams(location.search).get('key'); if (qk) key = qk;
+
+async function call(extra) {
+  const r = await fetch('/hub/status', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ key }, extra || {})) });
+  if (r.status === 403) throw new Error('비밀번호가 틀렸어요.');
+  if (!r.ok) throw new Error('서버 응답 ' + r.status);
+  return r.json();
+}
+const row = (k, v, cls) => `<div class="row"><b>${esc(k)}</b><span class="${cls || ''}">${v}</span></div>`;
+
+function draw(s) {
+  last = s;
+  $('#login').hidden = true; $('#main').hidden = false;
+  const t = $('#toggle');
+  if (s.mode === 'local') {
+    $('#title').textContent = '교실 서버 (이 기기)';
+    $('#lead').textContent = s.announce ? '학생은 늘 쓰던 Render 주소(QR·게임 버튼)로 들어오면 이 서버로 자동 연결돼요. IP가 바뀌어도 30~40초 안에 안내소가 따라가요.' : '안내소에 알리지 않는 중이에요. 학생에게는 아래 교실 주소를 직접 알려 주세요.';
+    let h = row('교실 주소', s.url ? `<span class="mono">${esc(s.url)}</span>` : '<span class="no">IP를 못 찾았어요</span>');
+    if (s.announce) {
+      h += row('안내소', esc(s.hub));
+      h += row('안내소 연결', s.stopped ? '<span class="no">열쇠가 달라 멈춤</span>' : s.linked ? '<span class="ok">연결됨</span>' : s.linked === false ? `<span class="no">${esc(s.err || '실패')}</span>` : '<span class="dim">확인 중…</span>');
+      h += row('학생 넘기기', s.route ? '<span class="ok">켜짐 — Render로 온 학생을 이 서버로</span>' : '<span class="dim">꺼짐 — 학생은 Render에서 진행</span>');
+      if (s.ago != null) h += row('마지막 알림', s.ago + '초 전', 'dim');
+      t.hidden = false; t.className = s.route ? 'btn r' : 'btn'; t.textContent = s.route ? '학생 넘기기 끄기 (Render에서 진행)' : '학생 넘기기 켜기 (이 서버로)';
+    } else {
+      h += row('안내소 알림', '<span class="dim">꺼짐 (ish.env에 HUB_KEY를 적으면 켜져요)</span>');
+      t.hidden = true;
+    }
+    $('#rows').innerHTML = h;
+    $('#foot').textContent = '안내가 안 되는 날에도 학생이 위 교실 주소를 직접 열면 들어올 수 있어요.';
+  } else {
+    $('#title').textContent = '안내소 (Render)';
+    const r = s.rec;
+    $('#lead').textContent = s.live ? 'Render 주소로 들어온 학생·TV를 지금 교실 서버로 넘기고 있어요.' : '지금은 아무도 넘기지 않아요. 학생은 Render에서 그대로 진행해요.';
+    let h = row('상태', s.live ? '<span class="ok">교실 서버로 넘기는 중</span>' : '<span class="dim">Render에서 진행</span>');
+    if (s.held) h += row('멈춤', `${s.held}분 남음`, 'no');
+    if (r) { h += row('교실 서버', `<span class="mono">${esc(r.url)}</span>`); h += row('마지막 알림', r.ago + '초 전' + (r.route ? '' : ' (교실 서버에서 넘기기 꺼짐)'), 'dim'); }
+    $('#rows').innerHTML = h;
+    t.hidden = !s.live && !s.held; t.className = s.held ? 'btn' : 'btn r'; t.textContent = s.held ? '멈춤 풀기' : '1시간 동안 넘기기 멈추기';
+    $('#foot').textContent = '교실 서버가 꺼지면(알림이 2분 끊기면) 저절로 Render에서 진행돼요.';
+  }
+}
+async function load(extra) {
+  try { const s = await call(extra); try { sessionStorage.setItem('hubKey', key); } catch (e) {} draw(s); $('#lErr').textContent = ''; }
+  catch (e) { $('#login').hidden = false; $('#main').hidden = true; $('#lErr').textContent = e.message; }
+}
+$('#enter').onclick = () => { key = $('#key').value.trim(); load(); };
+$('#key').addEventListener('keydown', e => { if (e.key === 'Enter') $('#enter').click(); });
+$('#refresh').onclick = () => load();
+$('#toggle').onclick = () => { if (!last) return; load(last.mode === 'local' ? { route: !last.route } : last.held ? { resume: true } : { off: true }); };
+if (key) load();
+setInterval(() => { if (!$('#main').hidden) load(); }, 10000);
+</script>
+</body>
+</html>

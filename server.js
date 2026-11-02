@@ -1,6 +1,8 @@
 /* 옥정섬 SOS · 클리어 아레나 서버
  * 실행: node server.js            (필요한 것: Node.js 18 이상. npm install 필요 없음)
  * 환경 변수: PORT(기본 3000), ADMIN_KEY(관리자 비밀번호, 없으면 실행할 때마다 새로 만듦)
+ *            교실 서버(아이폰 iSH 등) ↔ Render 안내소: HUB_KEY, LAN_IP, ROUTE, HUB_URL (hub.js 참고)
+ *            SHOW_KEY=1 이면 시작 화면에 비밀번호를 그대로 보여 줌
  */
 'use strict';
 const http = require('http');
@@ -14,11 +16,14 @@ const ADMIN_KEY = process.env.ADMIN_KEY || crypto.randomBytes(3).toString('hex')
 const PUB = path.join(__dirname, 'public');
 const GEO = require('./geo')({ ADMIN_KEY, PUB });   // 지열 정비대 (/geo) — 아레나와 따로 돌아감
 const OCEAN = require('./ocean')({ ADMIN_KEY, PUB });   // 물빛섬 전력 관제실 (/ocean) — 해양 에너지 모둠 협동
+const HUB = require('./hub')({ ADMIN_KEY, PORT, PUB });   // 교실 서버(아이폰) ↔ Render 안내소 — IP가 바뀌어도 같은 주소로 접속
+let lanIp = null;   // 교실 서버의 와이파이 IP (iSH는 networkInterfaces로 못 읽어서 hub.js 방법으로 찾음)
 
 /* ======================= tiny static server ======================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
-  let p = decodeURIComponent((req.url || '/').split('?')[0]);
+  let p; try { p = decodeURIComponent((req.url || '/').split('?')[0]); } catch (e) { res.writeHead(400); return res.end(); }
+  if (HUB.http(req, res, p)) return;   // 맨 앞: Render에서는 교실 서버로 넘기기, 교실 서버에서는 /hub 안내 화면
   if (GEO.http(req, res, p)) return;
   if (OCEAN.http(req, res, p)) return;
   if (p === '/' || p === '' || p === '/2' || p === '/2/') p = '/index.html';
@@ -282,7 +287,8 @@ const OBS_BATTLE = OBS_ALL.filter(o => o[3] !== 'station');
 const GTS = OBS_ALL.filter(o => o[3] === 'turbine').map((o, i) => ({ id: i, x: o[0], z: o[1] }));   // 섬의 풍력발전기 6기 = 돌풍 발전기
 function addresses() {
   const out = [];
-  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
+  try { for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`); } catch (e) { /* iSH */ }
+  if (lanIp && !out.includes(`http://${lanIp}:${PORT}`)) out.unshift(`http://${lanIp}:${PORT}`);
   return out;
 }
 function kstYmd(offsetDays = 0) { return new Date(Date.now() + 9 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10).replace(/-/g, ''); }
@@ -1412,12 +1418,33 @@ let last = Date.now();
 setInterval(() => { const now = Date.now(), dt = Math.min(.1, (now - last) / 1000); last = now; for (const r of Object.values(ROOMS)) { try { r.step(dt); } catch (e) { console.error(r.MODE, e); } } }, TICK * 1000);
 process.on('uncaughtException', e => console.error('uncaught', e));
 server.listen(PORT, () => {
-  const addr = addresses();
-  console.log('\n  옥정섬 SOS · 클리어 아레나 서버가 켜졌어요!\n');
-  console.log('  학생 접속 주소 (같은 와이파이):');
-  for (const a of addr) console.log('    ' + a);
-  if (!addr.length) console.log(`    http://localhost:${PORT}`);
-  console.log('\n  선생님 관리·TV 화면: 위 주소 뒤에 /admin  →  비밀번호: ' + ADMIN_KEY);
-  console.log('  (끄려면 이 창에서 Ctrl + C)\n');
+  const onRender = HUB.MODE === 'hub';
+  const keyShown = !process.env.ADMIN_KEY || process.env.SHOW_KEY === '1' ? ADMIN_KEY : '•'.repeat(Math.min(8, ADMIN_KEY.length)) + '  (정해 둔 ADMIN_KEY 값)';
+  const show = () => {
+    const addr = addresses();
+    console.log('\n  옥정섬 SOS · 클리어 아레나 서버가 켜졌어요!\n');
+    if (!onRender) {
+      console.log('  교실 주소 (같은 와이파이):');
+      for (const a of addr) console.log('    ' + a);
+      if (!addr.length) console.log('    (IP를 못 찾았어요 — 아이폰 설정 > Wi-Fi > (i)의 IP 주소 + :' + PORT + ')');
+      if (HUB.announceOn) console.log(`\n  학생은 늘 쓰던 주소 ${HUB.HUB_URL} 로 들어오면 이 서버로 자동 연결돼요.\n  (IP가 바뀌어도 괜찮아요. 넘기기 켜기/끄기: 교실 주소 뒤에 /hub)`);
+    }
+    console.log('\n  선생님 관리·TV 화면: 주소 뒤에 /admin  →  비밀번호: ' + keyShown);
+    console.log('  (끄려면 이 창에서 Ctrl + C)\n');
+  };
+  if (onRender) return show();
+  HUB.detectIp(ip => { lanIp = ip; show(); HUB.start(); });
+  setInterval(() => HUB.detectIp(ip => { lanIp = ip || lanIp; }), 60e3).unref();
+  // 교실 서버 상태 한 줄 (1분마다): CPU · 멈칫(이벤트 루프 지연) · 메모리 · 접속 인원
+  let cpu0 = process.cpuUsage(), t0 = Date.now(), lagMax = 0, tick0 = Date.now();
+  setInterval(() => { const n = Date.now(); lagMax = Math.max(lagMax, n - tick0 - 500); tick0 = n; }, 500).unref();
+  setInterval(() => {
+    const c = process.cpuUsage(cpu0), dt = Date.now() - t0; cpu0 = process.cpuUsage(); t0 = Date.now();
+    const pct = Math.round((c.user + c.system) / 1000 / dt * 100);
+    const mem = Math.round(process.memoryUsage().heapUsed / 1048576);   // iSH는 rss를 0으로 줘서 heap 사용량을 씀
+    const ppl = Object.values(ROOMS).reduce((s, r) => s + r.conns.size, 0);
+    console.log(`[stat] cpu ${pct}% · 멈칫 최대 ${lagMax}ms · 메모리 ${mem}MB · 아레나 접속 ${ppl}명${lanIp ? ' · ' + lanIp : ''}`);
+    lagMax = 0;
+  }, 60e3).unref();
 });
 module.exports = { clearCode, kstYmd, ROOMS };
