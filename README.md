@@ -72,6 +72,16 @@ cd oksland-arena && sh start-ish.sh
 - IP를 자동으로 못 찾으면: 아이폰 설정 > Wi-Fi > (i)의 IP 주소를 `ish.env`의 `LAN_IP`에 적습니다.
 - Render 코드를 바꾼 뒤에는 Render에서 **Manual Deploy**를 눌러야 안내소 기능이 반영됩니다.
 
+### 윈도우 노트북으로 돌리기 (아이폰보다 훨씬 빠름, 2026-11-02)
+iSH는 PC를 흉내 내는 방식이라 아이폰에서는 아레나가 5명 정도만 버텼어요(버티기 시험). 2018년식 i3 노트북도 Node가 제 속도로 돌아서 한 반은 넉넉합니다.
+1. Node.js LTS 설치(https://nodejs.org), 가능하면 Git for Windows도 설치(켤 때마다 최신 버전을 받음).
+2. 명령 프롬프트: `git clone https://github.com/gurrb20111111-crypto/oksland-arena` (Git이 없으면 GitHub에서 Code → Download ZIP)
+3. 폴더의 **`start-windows.bat`** 더블클릭 → 처음엔 `settings.bat`이 메모장으로 열림 → `ADMIN_KEY`, `HUB_KEY`(= Render ADMIN_KEY, 12자 이상) 적고 저장 → 다시 더블클릭. 방화벽 창이 뜨면 **허용**.
+4. **`bench-windows.bat`** 더블클릭 → 몇 명까지 버티는지 확인(수업용 서버는 먼저 닫기).
+- 학생 태블릿과 **같은 와이파이**에 연결(랜선 X). 랜선·와이파이가 둘 다 있으면 서버는 인터넷에 실제로 나가는 쪽 IP를 알리니, 다르면 `settings.bat`의 `LAN_IP`에 와이파이 IPv4를 적기.
+- 충전기 연결, 전원 설정에서 절전·덮개 닫기 '아무것도 안 함', 수업 날은 Windows 업데이트 일시 중지.
+- 시작 순서·넘기기·과부하 대처·`/hub`는 아이폰과 똑같아요.
+
 ### 이 아이폰이 몇 명까지 버티나 (버티기 시험)
 ```sh
 sh start-ish.sh bench      # 수업용 서버는 먼저 Ctrl + C로 끄기

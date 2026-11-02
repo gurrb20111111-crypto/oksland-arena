@@ -130,8 +130,13 @@ else{try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}location.href=T;
   const announceOn = MODE === 'local' && process.env.ANNOUNCE !== '0' && !!process.env.HUB_KEY;
 
   function lanFromInterfaces() {
-    try { for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal && isPrivate(a.address)) return a.address; } catch (e) { /* iSH는 여기서 못 읽는 경우가 많음 */ }
-    return null;
+    // 가상 어댑터(VirtualBox·Hyper-V·VMware·도커 등)는 빼고, 와이파이를 먼저
+    const skip = /virtual|vbox|vmware|vethernet|hyper-v|docker|loopback|bluetooth|utun|awdl|bridge|tailscale|zerotier/i;
+    const wifi = /wi-?fi|wlan|wireless|무선|en0/i;
+    const found = [];
+    try { for (const [name, list] of Object.entries(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal && isPrivate(a.address) && !skip.test(name)) found.push({ name, ip: a.address }); } catch (e) { /* iSH는 여기서 못 읽는 경우가 많음 */ }
+    found.sort((a, b) => (wifi.test(b.name) ? 1 : 0) - (wifi.test(a.name) ? 1 : 0));
+    return found.length ? found[0].ip : null;
   }
   // 바깥으로 UDP '연결'만 해 보고(패킷은 안 보냄) 내 쪽 주소를 읽음 — iSH에서도 실제 와이파이 IP가 나옴
   function lanFromUdp(cb) {
@@ -143,8 +148,8 @@ else{try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}location.href=T;
   }
   function detectIp(cb) {
     if (process.env.LAN_IP) return cb(process.env.LAN_IP);
-    const a = lanFromInterfaces(); if (a) return cb(a);
-    lanFromUdp(cb);
+    // 1순위: 실제로 인터넷에 나가는 쪽(기본 경로)의 주소 — 랜선·와이파이가 둘 다 있어도 쓰는 쪽을 고름
+    lanFromUdp(ip => cb(ip || lanFromInterfaces()));
   }
 
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });   // iSH는 TLS 연결이 느려서 한 번 연 연결을 계속 씀
