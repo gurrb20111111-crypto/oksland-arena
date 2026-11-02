@@ -14,3 +14,6 @@ rem set LAN_IP=10.20.30.45
 
 rem 켜자마자 학생을 넘기지 않으려면 (나중에 교실주소/hub 에서 켜기)
 rem set ROUTE=0
+
+rem 클리어 코드 없이 이름만으로 아레나 입장
+rem set GATE=0

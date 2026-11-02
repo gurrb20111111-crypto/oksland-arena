@@ -340,7 +340,7 @@ const picks = new Map();
 const pending = [];          // delayed strikes (thunder)
 let nextId = 1;
 const round = { phase: 'free', endsAt: 0, len: 0, zone0: 0, final: null };
-let gate = true, locked = false;
+let gate = process.env.GATE !== '0', locked = false;   // GATE=0 이면 처음부터 클리어 코드 없이 입장(관리 화면 체크로도 바꿀 수 있음)
 const IDLE_MS = 5 * 60 * 1000;   // 5분 동안 아무 조작이 없으면 자동으로 내보냄 (수업 끝나고 창을 안 닫은 학생)
 function zoneR() {
   if (round.phase !== 'play') return R;
